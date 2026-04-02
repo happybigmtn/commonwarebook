@@ -1531,6 +1531,13 @@
                 new node in the supervisor tree.
             </p>
 
+            <p>
+                That label is operational, not decorative. In the deterministic runtime it
+                anchors the task in the supervision tree and in the audited execution trace, so a
+                test can compare <code>context.auditor().state()</code> across runs and tell
+                whether the same scenario really replayed.
+            </p>
+
             <div class="callout callout--source">
                 <p class="callout__label">Source</p>
                 <p>

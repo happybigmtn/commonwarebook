@@ -1885,6 +1885,8 @@ const FINALIZE_SUFFIX: &amp;[u8] = b"_FINALIZE";</code></pre>
 
                 <p>The deterministic runtime is why the codebase can test Byzantine scenarios reproducibly: with a fixed seed, the same sequence of events always produces the same result. This is critical for testing protocols where timing matters (timeouts, view changes, competing proposals).</p>
 
+                <p>In practice the tests make that reproducibility inspectable. Validators, reporters, applications, engines, and the network are labeled with <code>with_label(...)</code>; many scenarios return <code>context.auditor().state()</code> as a compact witness of the schedule that actually ran; restart paths use <code>start_and_recover()</code>; and adversarial cases inspect <code>oracle.blocked()</code> to confirm that peers the protocol meant to quarantine were actually blocked.</p>
+
                 <h3 class="ch-s2">Actor Message Passing</h3>
 
                 <p>All simplex actors &mdash; voter, batcher, resolver &mdash; communicate via typed channels. There is no shared mutable state between actors. The voter sends vote artifacts to the batcher, which batches and broadcasts them. The resolver receives certificates from the network and provides them to the voter. This isolation means the protocol is testable in isolation: you can test the voter state machine with mock batcher and resolver.</p>

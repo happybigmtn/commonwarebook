@@ -291,6 +291,16 @@ and mean two very different things:
 That last point matters. The runtime boundary does not only abstract I/O. It also abstracts task
 lifetime.
 
+And the label is not cosmetic. In the deterministic runtime, `with_label(...)` gives the task a
+stable place in the supervision tree and in the event trace the runtime audits. Tests can then ask
+for `context.auditor().state()` and get a compact digest of what happened, not just a vague claim
+that "seed 42 failed once."
+
+That same runtime also exposes `start_and_recover()`, which returns a checkpoint carrying the
+auditor, RNG, clock, storage, and other executor state forward into the next run. Crash-recovery
+tests are therefore ordinary runtime executions: run until a checkpoint, resume from it, and verify
+that the protocol still behaves correctly.
+
 ---
 
 ## 3. Tasks, Contexts, and the Supervision Tree

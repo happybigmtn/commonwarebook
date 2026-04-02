@@ -1819,7 +1819,7 @@ pub trait AddressableManager: Provider {
               <code>p2p/src/simulated/ingress.rs</code>
             </div>
             <div class="plate-caption">
-              <strong>Determinism.</strong> <code>commonware_utils::test_rng_seeded(seed)</code> drives all randomness. Two test runs with the same seed produce identical delivery order. Latency is <code>Normal(latency, jitter)</code> per message (produces burst delays). Loss is independent <code>success_rate</code> draw per message (not burst loss).
+              <strong>Determinism.</strong> <code>commonware_utils::test_rng_seeded(seed)</code> drives all randomness. Two test runs with the same seed produce identical delivery order. Common tests label the simulator with <code>context.with_label("network")</code>, compare <code>context.auditor().state()</code> across runs, and use <code>oracle.blocked()</code> as a direct check that quarantined paths really were blocked. Latency is <code>Normal(latency, jitter)</code> per message (produces burst delays). Loss is independent <code>success_rate</code> draw per message (not burst loss).
             </div>
           </div>
         </div>

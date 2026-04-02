@@ -994,6 +994,12 @@ not expensive bandwidth accounting.
 
 **Partition simulation**: `remove_link()` removes a unidirectional link. Removing both directions creates a network partition. The `oracle.blocked()` call reveals which `(P, P)` pairs are currently blocked.
 
+That matters because the simulator is used as an assertion surface, not just as a packet shuffler.
+Common tests start it under `context.with_label("network")`, drive link changes through the oracle,
+and compare `context.auditor().state()` across seeded runs to confirm the same scenario really
+replayed. `oracle.blocked()` is the human-readable companion to that digest: a direct check that
+the paths the protocol meant to quarantine were actually blocked.
+
 ---
 
 ## 6. Failure Modes, Cancellation, and Correctness Concerns

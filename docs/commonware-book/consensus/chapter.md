@@ -845,6 +845,16 @@ All consensus actors run on `commonware_runtime::deterministic::Runner`. This is
 
 The deterministic runtime is why the codebase can test Byzantine scenarios reproducibly: with a fixed seed, the same sequence of events always produces the same result. This is critical for testing protocols where timing matters (timeouts, view changes, competing proposals).
 
+The important detail is how the tests make that reproducibility visible. They label validator,
+reporter, application, engine, and network actors with `with_label(...)`, then often return
+`context.auditor().state()` as a compact witness of the schedule that actually ran. Restart paths
+use `start_and_recover()`: run until a checkpoint, resume from that checkpoint, and keep checking
+protocol invariants instead of switching to a separate recovery harness.
+
+That same style shows up in adversarial assertions. Consensus tests do not only wait for
+finalization; they also inspect `oracle.blocked()` to ensure malicious or partitioned peers were
+quarantined when the protocol expected them to be.
+
 ### Actor Message Passing
 
 All simplex actors communicate via typed channels. There is no shared mutable state between voter,
