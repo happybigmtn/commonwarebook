@@ -1,0 +1,495 @@
+{
+  "module": "commonware-runtime",
+  "visualizations": [
+    {
+      "id": "executor-state-machine",
+      "title": "Deterministic Executor: Task Scheduling Stepper",
+      "learning_goal": "Understand how a seeded RNG selects the next task to poll, and why time only advances after a full pass through the ready queue.",
+      "why_it_matters": "Distributed system bugs are scheduling events, not code bugs. The deterministic executor lets you replay any interleaving by shipping the seed — turning a flake into a reproducible test.",
+      "source_files": [
+        "runtime/src/deterministic.rs:534-662",
+        "runtime/src/deterministic.rs:770-900",
+        "runtime/src/deterministic.rs:752-800"
+      ],
+      "default_state": "Three tasks spawned: Task A (ready), Task B (ready), Task C (sleeping, 5ms). Seed = 42. Cycle duration = 1ms. Clock at UNIX_EPOCH.",
+      "controls": [
+        {
+          "id": "seed",
+          "type": "stepper",
+          "label": "RNG Seed",
+          "values": ["0", "1", "42", "1337", "9999"]
+        },
+        {
+          "id": "cycle_duration",
+          "type": "slider",
+          "label": "Cycle Duration (ms)",
+          "values": ["1", "2", "5", "10"]
+        },
+        {
+          "id": "task_count",
+          "type": "stepper",
+          "label": "Number of Tasks",
+          "values": ["1", "2", "3", "5", "8"]
+        },
+        {
+          "id": "step_mode",
+          "type": "toggle",
+          "label": "Step Mode",
+          "values": ["Manual", "Auto"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "initial",
+          "caption": "Three tasks are spawned. Task A and Task B are immediately ready (no awaits). Task C calls sleep(5ms) and becomes a sleeper. The executor's ready queue holds [A, B] and the alarm queue holds C with deadline at 5ms.",
+          "system_events": ["context.spawn(task_a)", "context.spawn(task_b)", "context.spawn(task_c); task_c.sleep(Duration::from_millis(5))"],
+          "visual_elements": ["Ready queue: [A, B] (pill nodes, green)", "Sleepers queue: [C at t+5ms] (pill node, amber with clock icon)", "RNG state: seed=42 (shown as lock icon + number)", "Clock: UNIX_EPOCH + 0ms", "Executor loop counter: cycle 0"]
+        },
+        {
+          "id": "cycle_1",
+          "caption": "Cycle 1 begins. The executor drains the ready queue: [A, B]. The RNG shuffles it with seed=42, producing [B, A]. Task B is polled first, returns Pending (waiting on network), and re-registers its waker. Task A is polled next, also returns Pending. Both remain in the running set. The clock advances by cycle_duration (1ms). Now t=1ms. C's deadline (5ms) has not passed — no wake.",
+          "system_events": ["executor loop: drain ready, shuffle with RNG, poll B, poll A, advance_time(1ms)"],
+          "visual_elements": ["Ready queue: [] (drained and re-queued by wakers)", "Running tasks: [A(waker=TaskAWaker), B(waker=TaskBWaker)] (blue, labelled with their registered waker)", "Clock: 1ms", "Shuffle visualization: [A,B] → [B,A] with RNG arrow", "Cycle counter: 1"]
+        },
+        {
+          "id": "cycle_5",
+          "caption": "After 4 more cycles, the clock reaches 5ms. Task C's alarm fires: the executor calls C's waker, which queues C back onto the ready queue. The ready queue now holds [C]. The RNG shuffle is a no-op for a single-element queue. Task C is polled and completes.",
+          "system_events": ["clock advances to 5ms", "Alarm::fire(C)", "C's waker queues C", "poll C → Ready, remove from running"],
+          "visual_elements": ["Ready queue: [C] (single element, no shuffle arrow)", "Alarm queue: [] (C's alarm popped)", "Task C transitions: amber (sleeping) → green (ready) → struck through (complete)", "Clock: 5ms", "Executor returns: root future complete"]
+        },
+        {
+          "id": "seed_compare",
+          "caption": "Same task set, seed=1 instead of 42. On cycle 1, the shuffle produces [A, B] instead of [B, A]. Task A is polled first this time. The execution trace diverges. This is the core of seeded exploration: different seeds produce different schedules, exposing different potential interleavings.",
+          "system_events": ["seed changed to 1", "shuffle([A,B], rng(seed=1)) = [A,B]"],
+          "visual_elements": ["Ready queue order: [A, B] (reversed from seed=42)", "Execution trace diverges indicator (red dashed line showing split timeline)", "Two columns: 'seed=42' vs 'seed=1' showing divergent task poll order"]
+        }
+      ],
+      "checks": [
+        "Ready queue is empty only when all tasks are either sleeping or complete",
+        "Clock only advances after a full pass through the ready queue",
+        "Shuffle with seed=42 is identical every run",
+        "Single-element ready queue produces no shuffle (deterministic ordering)"
+      ]
+    },
+    {
+      "id": "supervision-tree-abort",
+      "title": "Supervision Tree: Abort Cascade",
+      "learning_goal": "Understand structured concurrency via weak-reference abort cascades: aborting a parent cancels all descendants, but siblings are unaffected.",
+      "why_it_matters": "The supervisor tree enforces that child tasks are cleaned up when their parent exits — preventing orphaned background work. Unlike Erlang's OTP supervision strategies, this is purely about cancellation propagation, not message passing or restart policies.",
+      "source_files": [
+        "runtime/src/utils/supervision.rs:1-200",
+        "runtime/src/utils/supervision.rs:169-190"
+      ],
+      "default_state": "Root spawns Child1 and Child2. Child1 spawns Grandchild1a and Grandchild1b. Child2 spawns Grandchild2a. A 3-level tree. No aborts triggered yet.",
+      "controls": [
+        {
+          "id": "action",
+          "type": "stepper",
+          "label": "Trigger",
+          "values": ["None", "Abort Root", "Abort Child1", "Abort Child2", "Abort Grandchild1a"]
+        },
+        {
+          "id": "show_weak_refs",
+          "type": "toggle",
+          "label": "Show Weak References",
+          "values": ["Off", "On"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "initial_tree",
+          "caption": "A 3-level task hierarchy. Root is the trunk. Child1 and Child2 are siblings branching from Root. Grandchild1a and Grandchild1b are children of Child1. Grandchild2a is a child of Child2. Each node shows its label and current state (Running/Pending/Complete). Weak references are not yet shown.",
+          "system_events": ["context.spawn(root)", "root.spawn(child1)", "root.spawn(child2)", "child1.spawn(gc1a)", "child1.spawn(gc1b)", "child2.spawn(gc2a)"],
+          "visual_elements": ["Tree diagram: Root at top, Child1 and Child2 below, grandchildren below their parents", "Node states: Root=Running (green), Child1=Running (green), Child2=Running (green), GC1a=Running, GC1b=Running, GC2a=Running (all green)", "Edge labels: parent→child shown as solid lines", "Node pills show task label and Arc reference count (e.g., 'Child1 (ref=2)')"]
+        },
+        {
+          "id": "abort_child1",
+          "caption": "Child1 is aborted. The abort cascades to Grandchild1a and Grandchild1b — both are cancelled. Child2 and Grandchild2a are untouched siblings and continue running. The weak reference mechanics are shown: each child holds a Weak reference to its parent. When Child1 is aborted, Tree::abort() upgrades each Weak<GC> and calls abort() recursively.",
+          "system_events": ["Child1::abort()", "Tree::abort() → mem::take(children) → for each child Weak::upgrade() → abort()"],
+          "visual_elements": ["GC1a and GC1b nodes turn red and are struck through", "Child2 and GC2a remain green", "Animated red dashed edges show cascade path: Child1 → GC1a, Child1 → GC1b", "Weak references shown as dotted arrows from children to parent", "Refcount on Child1 drops to 0 (node removed from parent's children list on next child() call via retain)"]
+        },
+        {
+          "id": "abort_root",
+          "caption": "Root is aborted. All descendants are cancelled: Child1 (and its entire subtree), Child2 (and its entire subtree). Every node in the tree turns red. The executor detects no tasks remain running and exits. This is structured concurrency's guarantee: no orphaned tasks.",
+          "system_events": ["Root::abort()", "cascade to all descendants"],
+          "visual_elements": ["All nodes red/struck through", "Root shows 'aborted' state", "Executor shows 'stall detection bypassed: all tasks complete'", "Final state: empty tree with Root node only, labelled 'aborted'"]
+        },
+        {
+          "id": "lazy_cleanup",
+          "caption": "Grandchild1a completes normally (without being aborted). Its future is dropped and Tree node is dropped. The parent's children list still holds Weak<Tree> pointing to the now-dropped node. The weak reference upgrade returns None on the next abort cascade. Lazy cleanup: when Tree::child() is called next, the list is pruned via retain(weak.strong_count() > 0).",
+          "system_events": ["GC1a completes", "GC1a future dropped", "Weak ref to GC1a still in Child1.children (not yet cleaned)"],
+          "visual_elements": ["GC1a node struck through with 'completed (dropped)' label", "Child1.children list shown as: [Weak(GC1a)→NONE, Weak(GC1b)→Some]", "Highlight on retain() logic: 'removing stale weak refs' animation"]
+        }
+      ],
+      "checks": [
+        "Aborting a node cancels all descendants recursively",
+        "Sibling subtrees are unaffected by abort of adjacent subtree",
+        "Normal completion (drop) of a child does NOT abort siblings",
+        "Weak references prevent refcount cycles (parent holds Arc children, child holds Weak parent)"
+      ]
+    },
+    {
+      "id": "blob-header-parser",
+      "title": "Blob Header Parser: On-Disk Structure and Crash Recovery",
+      "learning_it_matters": "Every blob on disk starts with an 8-byte header. Understanding this format is prerequisite to reasoning about crash recovery: partial writes leave a blob shorter than 8 bytes, which triggers automatic truncation and re-initialization.",
+      "source_files": [
+        "runtime/src/storage/mod.rs:62-179"
+      ],
+      "default_state": "Hex input: 43 57 49 43 00 00 00 03 (b'CWIC' + runtime v0 + blob v3). Display shows parsed fields.",
+      "controls": [
+        {
+          "id": "hex_input",
+          "type": "stepper",
+          "label": "Input Bytes",
+          "values": ["43 57 49 43 00 00 00 03 (valid CWIC v0 blob v3)", "43 57 49 43 00 00 00 01 (valid CWIC v0 blob v1)", "00 00 00 00 00 00 00 00 (invalid magic)", "43 57 49 43 00 01 00 03 (CWIC v1 blob v3 — future version)", "43 57 49 43 (partial — only 4 bytes)", "FF FF FF FF FF FF FF FF (corrupt all bits)"]
+        },
+        {
+          "id": "corruption_mode",
+          "type": "toggle",
+          "label": "Corruption Simulation",
+          "values": ["None", "Truncate to N bytes", "Flip random bits"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "valid_header",
+          "caption": "A valid 8-byte header. Bytes 0-3 are the ASCII string 'CWIC' (Commonware Is CWIC). Bytes 4-5 are the runtime version as big-endian u16 (0 = current). Bytes 6-7 are the blob version as big-endian u16 (3 = version 3). The hex bytes highlight in color bands: green for magic, blue for runtime version, orange for blob version. A checkmark indicator shows 'Valid'.",
+          "system_events": ["Header::from_bytes([43,57,49,43,0,0,0,3])", "magic = b'CWIC'", "runtime_version = 0", "blob_version = 3"],
+          "visual_elements": ["Hex grid: 8 byte cells, each showing index, hex value, and ASCII representation where printable", "Field bands: bytes 0-3 green (magic), 4-5 blue (runtime ver), 6-7 orange (blob ver)", "Parsed values panel: magic='CWIC' (valid), runtime=0, blob=3", "Validity indicator: green checkmark"]
+        },
+        {
+          "id": "truncated_header",
+          "caption": "Input is only 4 bytes (the magic, no version fields). Header::missing(4) returns true because raw_len < 8. This triggers crash recovery: the storage implementation clears the content and writes a fresh header with the latest blob version. The blob is re-initialized to a clean state. This is how the runtime recovers from an unclean shutdown (power loss during a write).",
+          "system_events": ["Header::missing(4) → true", "Recovery: clear content, write Header::new()", "Blob re-initialized to empty with fresh header"],
+          "visual_elements": ["Hex cells: 4 bytes shown, 4 cells greyed out with 'MISSING' label", "Validity: amber warning 'TRUNCATED — triggering recovery'", "Recovery animation: old content cleared (strikethrough), new header written (green pulse)", "Resulting state: blob size = 8 bytes (fresh header only)"]
+        },
+        {
+          "id": "corrupt_magic",
+          "caption": "Magic bytes are not b'CWIC'. Header::from() returns HeaderError::InvalidMagic. This is a BlobCorrupt error, NOT a recovery situation — the blob is genuinely corrupt and cannot be opened. The caller must handle this explicitly. Note the difference: truncation triggers automatic recovery; invalid magic requires explicit error handling.",
+          "system_events": ["Header::from([255,255,255,255,0,0,0,3])", "HeaderError::InvalidMagic", "Error::BlobCorrupt propagated to caller"],
+          "visual_elements": ["Magic bytes shown in red with 'INVALID' overlay", "Error callout: 'BlobCorrupt: expected CWIC (0x434F5749), found FFFFFFFF'", "Red X indicator", "Recovery path: NOT available (amber 'No automatic recovery for magic mismatch')"]
+        },
+        {
+          "id": "version_mismatch",
+          "caption": "Blob version 3 is not in the requested range [1, 2]. open_versioned returns BlobVersionMismatch { expected: 1..=2, found: 3 }. This enables forward-compatibility: a reader can specify which blob versions it understands, and the open fails explicitly rather than silently using an incompatible version.",
+          "system_events": ["open_versioned(partition, name, 1..=2) on blob v3", "Error::BlobVersionMismatch { expected: 1..=2, found: 3 }"],
+          "visual_elements": ["Blob version field highlighted in red: 'found: 3'", "Version range bar: [1====2] with 3 shown outside the range in red", "Error panel: 'BlobVersionMismatch — blob written by newer version, reader only supports 1..=2'"]
+        }
+      ],
+      "checks": [
+        "raw_len < 8 triggers Header::missing → automatic recovery (truncate and re-init)",
+        "Magic != b'CWIC' returns HeaderError::InvalidMagic → BlobCorrupt (no recovery)",
+        "Blob version outside requested RangeInclusive<u16> returns BlobVersionMismatch with expected and found values",
+        "The header is always 8 bytes regardless of logical blob content size"
+      ]
+    },
+    {
+      "id": "network-partition-simulator",
+      "title": "Network Partition Simulator: Topology, Links, and Message Routing",
+      "learning_goal": "Understand how the deterministic network simulates bind/dial/accept with in-memory channels, assigns ephemeral ports sequentially, and supports configurable link failure rates.",
+      "why_it_matters": "Testing p2p protocols requires simulating network partitions, latency, and message loss. The deterministic network does this without any host network stack involvement — every message is a memcpy across BytesMut buffers.",
+      "source_files": [
+        "runtime/src/network/deterministic.rs",
+        "runtime/src/mocks.rs:1-200"
+      ],
+      "default_state": "Four nodes in a mesh topology. All links have latency=10ms, jitter=2ms, drop_rate=0%. Port assignment starts at 32768.",
+      "controls": [
+        {
+          "id": "topology",
+          "type": "stepper",
+          "label": "Topology",
+          "values": ["Mesh (4 nodes)", "Star (1 hub + 3 leaves)", "Ring (4 nodes)", "Line (3 nodes)"]
+        },
+        {
+          "id": "drop_rate",
+          "type": "slider",
+          "label": "Link Drop Rate (%)",
+          "values": ["0", "10", "25", "50", "75", "100"]
+        },
+        {
+          "id": "latency_ms",
+          "type": "slider",
+          "label": "Link Latency (ms)",
+          "values": ["0", "10", "50", "100", "500"]
+        },
+        {
+          "id": "seed",
+          "type": "stepper",
+          "label": "Replay Seed",
+          "values": ["none", "42", "1337"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "port_assignment",
+          "caption": "Three dial operations happen in sequence. Each dial assigns the next ephemeral port from the sequential counter starting at 32768. Port 32768 → first dial, 32769 → second dial, 32770 → third dial. The deterministic port assignment means the same dial sequence always produces the same port assignments — important for reproducible testing.",
+          "system_events": ["network.dial(addr1) → port 32768 assigned", "network.dial(addr2) → port 32769 assigned", "network.dial(addr3) → port 32770 assigned"],
+          "visual_elements": ["Port counter: starts at 32768, increments", "Three 'dial' animations: Node A → ephemeral:32768, Node B → ephemeral:32769, Node C → ephemeral:32770", "In-memory channel shown as BytesMut buffer between dialer and listener", "No host ports used (no 0.0.0.0:0 or similar)"]
+        },
+        {
+          "id": "message_flow",
+          "caption": "A gossip message is sent from Node 0 to Node 3 via the mesh. The message traverses two hops: 0→2→3. Each hop applies the link's latency and drop rate. With 0% drop, the message arrives after 20ms of simulated time (2 hops × 10ms). The deterministic clock advances 20ms. Drop rate is applied per-hop: each link independently decides whether to deliver or drop.",
+          "system_events": ["Node0 sends gossip to Node3", "link 0→2: deliver after 10ms", "link 2→3: deliver after 10ms", "total simulated time: +20ms"],
+          "visual_elements": ["Animated message packet traveling along edges", "Hop counter: [0/2 hops]", "Clock showing +10ms per hop", "Packet shows: msg_id, src, dst, payload hash", "Success indicator at destination"]
+        },
+        {
+          "id": "partition",
+          "caption": "Link 1→3 is set to 100% drop rate. A partition exists between Node 1 and Node 3 — no messages can cross this link. Node 1 can still reach Node 0 and Node 2. The gossip round from Node 0 reaches all nodes except Node 1, which remains isolated. The partition is visualized as a red dashed edge with a padlock icon.",
+          "system_events": ["link 1↔3 drop_rate = 100%", "gossip from Node0", "Node1 never receives the message"],
+          "visual_elements": ["Red dashed edge between Node1 and Node3 with padlock icon", "Node1 shown in amber 'ISOLATED' state", "Message paths shown as grey dashed lines for failed deliveries", "Nodes 0, 2, 3 show green 'RECEIVED' state"]
+        },
+        {
+          "id": "seed_replay",
+          "caption": "The same gossip round is replayed with seed=42. The drop decisions (which are drawn from the shared RNG) are identical to the first run: same messages are dropped at same hops. This demonstrates deterministic replay: with the same seed, the exact same message interleaving is reproduced. The UI shows two side-by-side runs with identical outcomes.",
+          "system_events": ["same topology, same seed=42", "drop decisions identical to first run with seed=42"],
+          "visual_elements": ["Two-panel layout: 'Run 1' and 'Run 2 (seed=42)'", "Identical message delivery outcomes shown in both panels", "RNG state shown in both: 'draw from rng(seed=42) → same bits'", "Highlight: 'Reproducible: same seed = same message drop pattern'"]
+        }
+      ],
+      "checks": [
+        "Ports are assigned sequentially from 32768, never reused within a test",
+        "Drop rate is per-hop: a message may be delivered on hop 1 but dropped on hop 2",
+        "Same seed produces identical drop decisions across replays",
+        "100% drop rate creates a permanent partition on that link only"
+      ]
+    },
+    {
+      "id": "buffer-pool-allocator",
+      "title": "Buffer Pool: Zero-Copy Allocation, Pooled Return, and NUMA Locality",
+      "learning_goal": "Understand how pooled buffers are allocated, how they return to the pool on drop, and how NUMA locality affects allocation decisions.",
+      "why_it_matters": "Every network and storage operation uses IoBuf/IoBufMut. Understanding the buffer contract (read_at_buf reuses the caller-provided buffer, pooled buffers return to pool on drop) is prerequisite to reasoning about memory pressure and I/O performance.",
+      "source_files": [
+        "runtime/src/iobuf/mod.rs:33-400",
+        "runtime/src/iobuf/pool.rs:1-150"
+      ],
+      "default_state": "BufferPool with 4 slots of 4KB. Two PooledBuf allocated. NUMA node 0 has 2 buffers, node 1 has 0. Pool utilization: 2/4.",
+      "controls": [
+        {
+          "id": "action",
+          "type": "stepper",
+          "label": "Action",
+          "values": ["Allocate 4KB", "Allocate 8KB", "Free Buffer A", "Free All", "Fill Pool + 1 overflow"]
+        },
+        {
+          "id": "numa_aware",
+          "type": "toggle",
+          "label": "NUMA-Aware Allocation",
+          "values": ["On", "Off"]
+        },
+        {
+          "id": "show_alignment",
+          "type": "toggle",
+          "label": "Show Alignment",
+          "values": ["Off", "On"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "allocate",
+          "caption": "A 4KB PooledBuf is allocated from the BufferPool. The buffer is aligned to a 4KB boundary (page-aligned for storage, cache-line-aligned for network). The pool slot is marked as 'in use'. Reference count on the buffer is 1. The allocation path: find size class → pop from ArrayQueue freelist → return aligned pointer. If no slot is available, a new AlignedBuffer is allocated from the OS heap.",
+          "system_events": ["BufferPool::allocate(4096)", "PooledBuf created: aligned to 4096, refcount=1", "Pool slot 0 marked IN_USE"],
+          "visual_elements": ["Pool grid: 4 slots as rectangles, slot 0 filled (blue, labelled 'PooledBuf A: 4KB, aligned 4096, ref=1')", "NUMA node diagram: node 0 (left), node 1 (right), slot 0 highlighted on node 0", "Allocation arrow: 'alloc 4KB' pointing to slot 0", "refcount badge: '1' on slot 0"]
+        },
+        {
+          "id": "pooled_return",
+          "caption": "Buffer A's PooledBuf is dropped. The Drop impl for PooledBuf returns the buffer to the pool it came from, not a global free list. The pool slot is marked 'available' again. The buffer is NOT freed to the OS — it is reused on the next allocation. This is the key performance property: pooled allocations avoid repeated syscalls and NUMA traffic.",
+          "system_events": ["PooledBuf A dropped", "return_to_pool(slot_0)", "pool slot 0 marked AVAILABLE"],
+          "visual_elements": ["Slot 0 transitions from blue (in use) to green (available)", "Return arrow: PooledBuf A → pool with 'return to pool (not OS free)' label", "refcount badge: '0' on slot 0", "OS memory unchanged (no syscall for deallocation)"]
+        },
+        {
+          "id": "pool_exhaustion",
+          "caption": "All 4 pool slots are full. A 5th 4KB allocation is requested. With no NUMA awareness, the pool allocates from any node (typically node 0). With NUMA awareness, the allocator can either fail the allocation or evict an LRU buffer from the local node. The visualization shows the pool in red 'FULL' state with the overflow allocation failing or triggering eviction.",
+          "system_events": ["BufferPool::allocate(4096) → pool full", "Overflow: allocate from OS heap (not pooled)"],
+          "visual_elements": ["All 4 slots in red 'FULL' state", "5th allocation shown as amber arrow labelled 'overflow (non-pooled)'", "Pool metrics: 'pool_size=4, allocated=4, overflow=1'", "New buffer shown outside pool as separate element labelled 'non-pooled (OS heap)'"]
+        },
+        {
+          "id": "coalesced_buffer",
+          "caption": "An IoBuf backed by Bytes (copy-on-write) is created from a slice. The Bytes variant uses a reference-counted pointer to the underlying data — zero copy on clone. When written to, the copy-on-write triggers and a new allocation is made for the writer. The visualization contrasts PooledBuf (returns to pool on drop) vs Bytes-backed (standard refcount drop to global allocator).",
+          "system_events": ["IoBuf::Bytes(bytes.clone()) → zero copy", "write to IoBuf → COW copy triggered"],
+          "visual_elements": ["Two-panel layout: 'PooledBuf (IoBuf)' vs 'Bytes-backed (IoBuf)'", "Bytes panel: single buffer shared between two IoBuf instances with refcount=2", "COW trigger: write arrow splits the shared buffer into two separate allocations", "PooledBuf panel: buffer returns to pool on drop (no OS free)"]
+        }
+      ],
+      "checks": [
+        "PooledBuf is returned to the pool on drop, not freed to the OS",
+        "NUMA-aware allocation queries sysinfo to determine local node before allocating",
+        "Bytes-backed IoBuf uses refcount (clone is zero-copy, write triggers COW copy)",
+        "Pool exhaustion results in non-pooled (heap) allocation, not an error"
+      ]
+    },
+    {
+      "id": "clock-advancement",
+      "title": "Clock Advancement: Simulated Time vs. Virtualized Time",
+      "learning_goal": "Understand that the deterministic clock only advances when the executor calls advance_time() or when a sleeper fires — it is cooperative time, not wall-clock virtualization.",
+      "why_it_matters": "Time in the deterministic runtime is entirely under application control. A task that never calls sleep() or timeout() never advances the clock — time is frozen from the application's perspective. This is the key distinction from emulated time: the application must cooperate.",
+      "source_files": [
+        "runtime/src/deterministic.rs:1382-1430",
+        "runtime/src/deterministic.rs:1430-1500"
+      ],
+      "default_state": "Task A: sleep(10ms). Task B: sleep(5ms). Both spawned. Clock at t=0ms. Cycle=1ms. No cycles executed yet.",
+      "controls": [
+        {
+          "id": "step_mode",
+          "type": "toggle",
+          "label": "Mode",
+          "values": ["Manual cycles", "Skip to next alarm"]
+        },
+        {
+          "id": "cycle_duration",
+          "type": "slider",
+          "label": "Cycle Duration (ms)",
+          "values": ["1", "2", "5", "10"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "initial_alarms",
+          "caption": "Both tasks are spawned and immediately call sleep(). Task A registers an alarm at t=10ms. Task B registers an alarm at t=5ms. Both tasks yield (Poll::Pending). The ready queue is empty. The alarm priority queue (min-heap) shows B's alarm at the top (earliest deadline = 5ms), A's alarm below it.",
+          "system_events": ["TaskA.sleep(10ms) → Alarm(time=10ms) registered", "TaskB.sleep(5ms) → Alarm(time=5ms) registered", "Both tasks yield Pending"],
+          "visual_elements": ["Alarm priority queue visualized as inverted tree: B(5ms) at top (min), A(10ms) below", "Ready queue: [] (empty, greyed out)", "Clock: 0ms", "Both task nodes: amber (sleeping) with alarm icon", "Sleeper label: 'waiting for alarm'"]
+        },
+        {
+          "id": "cycle_advance",
+          "caption": "Manual mode: one executor cycle runs. The ready queue is empty (no wakers fired), so skip_idle_time engages: the clock jumps directly to the next alarm's deadline (5ms, B's alarm). The alarm fires, B's waker is called, and B is re-queued as ready. Time has jumped 5ms in one cycle — demonstrating skip_idle_time optimization.",
+          "system_events": ["ready queue empty → skip_idle_time", "clock jumps to 5ms", "Alarm::fire(B)", "B.waker.wake() → B queued to ready"],
+          "visual_elements": ["Clock arrow: 0ms → 5ms (jumped 5ms in one cycle)", "B transitions: amber (sleeping) → green (ready)", "A remains amber (its deadline is 10ms, not yet reached)", "skip_idle_time banner: 'No ready tasks — jumping to earliest alarm'", "Alarm queue: [A(10ms)] after B's alarm is popped"]
+        },
+        {
+          "id": "skip_idle_comparison",
+          "caption": "Same scenario, skip_idle_time disabled. The clock advances by only 1ms per cycle (the cycle duration). B's 5ms alarm requires 5 cycles to fire. Task B receives 5 polls before waking. This demonstrates the performance tradeoff: skip_idle_time makes simulations faster but loses fidelity for tight alarm deadlines.",
+          "system_events": ["5 cycles required to reach t=5ms", "B woken at cycle 5"],
+          "visual_elements": ["5 clock ticks shown: 0ms → 1ms → 2ms → 3ms → 4ms → 5ms", "B woken indicator after 5 ticks", "Comparison panel: 'skip_idle: 1 cycle' vs 'no skip_idle: 5 cycles'", "Performance delta shown: 'skip_idle is 5x faster for this scenario'"]
+        }
+      ],
+      "checks": [
+        "Clock only advances when the executor calls advance_time() or when an alarm fires",
+        "skip_idle_time only engages when the ready queue is empty (all tasks are sleeping)",
+        "Alarm priority queue uses reverse ordering (earliest deadline at top of min-heap)",
+        "cycle_duration controls how much time advances per cycle when skip_idle is NOT engaged"
+      ]
+    },
+    {
+      "id": "fault-injection-playground",
+      "title": "Fault Injection Playground: Deterministic Failure with FaultyStorage",
+      "learning_goal": "Understand how FaultyStorage injects deterministic failures based on shared RNG, and how partial writes enable testing of crash recovery paths.",
+      "why_it_matters": "Ad-hoc mocking of storage failures is fragile and unreproducible. FaultyStorage provides a deterministic, seeded fault injection layer — the same seed always produces the same fault pattern, enabling reproducible testing of recovery code.",
+      "source_files": [
+        "runtime/src/storage/faulty.rs:1-150"
+      ],
+      "default_state": "FaultyStorage wrapping MemStorage. write_rate=10%, partial_write_rate=50%, read_rate=0%. Seed=42. No operations yet.",
+      "controls": [
+        {
+          "id": "write_rate",
+          "type": "slider",
+          "label": "Write Failure Rate (%)",
+          "values": ["0", "10", "25", "50", "100"]
+        },
+        {
+          "id": "partial_write_rate",
+          "type": "slider",
+          "label": "Partial Write Rate (% of failures)",
+          "values": ["0", "25", "50", "75", "100"]
+        },
+        {
+          "id": "operation",
+          "type": "stepper",
+          "label": "Operation",
+          "values": ["Write 64 bytes at offset 0", "Write 64 bytes at offset 64", "Read 64 bytes at offset 0", "Sync blob", "Close blob"]
+        },
+        {
+          "id": "seed",
+          "type": "stepper",
+          "label": "RNG Seed",
+          "values": ["42", "1337", "0"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "happy_path",
+          "caption": "Seed=42 with 10% write failure rate. The first write operation succeeds (the RNG draw for op 1 was above the 10% threshold). The blob is written and synced. The operation log shows the RNG draw and the decision: 'draw=0.73 > threshold=0.10 → SUCCESS'.",
+          "system_events": ["FaultyStorage::write_at() → rng.draw() → 0.73 > 0.10 → inner.write_at() succeeds"],
+          "visual_elements": ["RNG draw display: '0.73 (threshold: 0.10)'", "Outcome: green 'SUCCESS' pill", "Operation log: chronological list of operations with outcomes", "Blob state: written data shown as hex dump"]
+        },
+        {
+          "id": "write_failure",
+          "caption": "Seed=42 with 10% write failure rate. The second write operation fails (the RNG draw was 0.03 < 0.10). The error is propagated to the caller. The blob may be in a partially-written state. This is the key scenario: FaultyStorage does NOT guarantee atomicity — testing recovery from partial writes is the whole point.",
+          "system_events": ["FaultyStorage::write_at() → rng.draw() → 0.03 < 0.10 → Error::FaultInjected"],
+          "visual_elements": ["RNG draw display: '0.03 (threshold: 0.10)'", "Outcome: red 'FAULT INJECTED' pill", "Error callout: 'FaultyStorage: write failed (seed=42, op=2)'", "Blob state: amber 'PARTIAL WRITE — potentially corrupt' indicator"]
+        },
+        {
+          "id": "partial_write",
+          "caption": "Seed=1337 with 10% write rate and 50% partial write rate. The RNG first determines this is a failure (0.07 < 0.10), then determines it's a partial failure (0.55 > 0.50). Some bytes are written before the failure is injected. The blob is left in a corrupted state: partial data at the target offset. When reopened, Header::missing() or Header::from() will detect the corruption.",
+          "system_events": ["write_rate check: 0.07 < 0.10 → failure", "partial_write check: 0.55 > 0.50 → partial write", "inner.write_at() called with truncated buffer → partial corruption"],
+          "visual_elements": ["RNG draws: [0.07 (fail), 0.55 (partial)]", "Outcome: red 'PARTIAL WRITE' pill with 'n bytes written before failure'", "Blob hex dump: first N bytes written, remainder zeros or garbage", "Recovery path highlighted: 'Blob reopen → Header::missing → automatic recovery'"]
+        },
+        {
+          "id": "seed_replay",
+          "caption": "Same operations with same seed=42. The RNG draws are identical: [0.73, 0.03, ...]. The same write fails at the same operation index. This is the reproducibility guarantee: ship the seed alongside the test, and CI reproduces the exact fault pattern every time.",
+          "system_events": ["rng.seed(42) → identical draws"],
+          "visual_elements": ["Two runs side-by-side: 'Run 1 (seed=42)' and 'Replay (seed=42)'", "Identical RNG draw sequences shown", "Identical failure points marked with red vertical lines aligned across both runs", "Reproducibility badge: 'Seed 42: deterministic across runs'"]
+        }
+      ],
+      "checks": [
+        "Same seed always produces identical failure pattern",
+        "partial_write_rate is applied to FAILED operations only (not all writes)",
+        "Partial write corrupts the blob by writing some bytes before failing",
+        "Corrupt blob is detected on reopen via Header validation"
+      ]
+    },
+    {
+      "id": "metric-scope-lifecycle",
+      "title": "Metric Scope Lifecycle: Registration, Encoding, and Automatic Deregistration",
+      "learning_goal": "Understand how scoped metrics are registered, how ScopeGuard ensures deregistration when a scope ends, and how MetricEncoder coalesces multiple registries into a deduplicated OpenMetrics output.",
+      "why_it_matters": "In long-running services, metrics from completed epochs/consensus-rounds must be cleaned up to prevent unbounded memory growth. The ScopeGuard ensures this cleanup happens automatically when a context scope is dropped.",
+      "source_files": [
+        "runtime/src/utils/mod.rs:232-500",
+        "runtime/src/utils/mod.rs:437-470"
+      ],
+      "default_state": "Root context with no metrics registered. Registry contains only the root scope. MetricEncoder output is empty.",
+      "controls": [
+        {
+          "id": "action",
+          "type": "stepper",
+          "label": "Action",
+          "values": ["Register metric on root", "Create scope 'epoch_1'", "Register metric on epoch_1", "Drop epoch_1 scope", "Register duplicate metric (should panic)"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "root_metric",
+          "caption": "A counter 'requests_total' is registered on the root context with label 'type=read'. The metric is added to the root scope's prometheus registry. When MetricEncoder encodes the root registry, the metric appears in the output with the full OpenMetrics format: requests_total{kind=\"Counter\", name=\"type=read\"}.",
+          "system_events": ["context.register('requests_total', 'help', counter)", "metric added to root scope registry", "MetricEncoder::encode() → OpenMetrics output"],
+          "visual_elements": ["Registry diagram: root scope contains 'requests_total'", "OpenMetrics output panel: 'requests_total{kind=\"Counter\", name=\"type=read\"} 0'", "Scope badge on metric: 'root'"]
+        },
+        {
+          "id": "scoped_metric",
+          "caption": "A scoped context 'epoch_1' is created via context.with_label('epoch_1'). A gauge 'epoch_height' is registered on this scoped context. The gauge appears in epoch_1's scoped registry, not the root registry. The metric label is prefixed with the scope: 'epoch_height{kind=\"Gauge\", name=\"epoch_1/type=read\"}'.",
+          "system_events": ["context.with_label('epoch_1')", "scoped_context.register('epoch_height', 'help', gauge)", "gauge in scoped registry (not root)"],
+          "visual_elements": ["Two-level registry diagram: root scope (top), epoch_1 scope (nested below)", "epoch_height metric in epoch_1 scope, NOT in root", "Metric label: 'epoch_1/type=read' showing scope prefix", "ScopeGuard shown as a 'gate' between epoch_1 and root"]
+        },
+        {
+          "id": "scope_drop",
+          "caption": "All clones of the epoch_1 scoped context are dropped. The ScopeGuard's Drop impl runs: it removes the scoped registry from the root registry's BTreeMap<u64, PrometheusRegistry>. The epoch_1 metrics are no longer visible in the encoded output — they have been cleanly removed. This prevents metric accumulation across epochs.",
+          "system_events": ["ScopeGuard::drop()", "cleanup(scope_id) → root.scopes.remove(scope_id)", "epoch_1 registry removed from root"],
+          "visual_elements": ["epoch_1 scope gate closing (animated)", "epoch_1 registry removed from BTreeMap", "MetricEncoder output now shows ONLY root metrics (epoch_height gone)", "Scope lifecycle badge: 'epoch_1: CLEANED UP'"]
+        },
+        {
+          "id": "duplicate_panics",
+          "caption": "Attempting to register a metric with the same name and identical attributes on the same scope causes a panic (duplicate metric). The duplicate check is done in the prometheus registry. This enforces metric discipline: use with_attribute() to add dimensions rather than re-registering identical metrics.",
+          "system_events": ["context.register('requests_total', 'help', counter1)", "context.register('requests_total', 'help', counter2) → PANIC: duplicate metric"],
+          "visual_elements": ["First register: green 'registered' pill", "Second register: red 'PANIC' pill with 'duplicate metric: requests_total{kind=\"Counter\"}'", "Stack trace excerpt shown", "Correction callout: 'Use with_attribute() to add dimensions instead'"]
+        },
+        {
+          "id": "metric_encoder_dedup",
+          "caption": "Two scopes both register a counter 'events_total' with identical HELP and TYPE but different label dimensions (scope A vs scope B). MetricEncoder collects all families, groups by metric name (not by scope), and deduplicates the HELP/TYPE headers. The output shows a single events_total family with both scope variants as separate label sets.",
+          "system_events": ["MetricEncoder::encode()", "collect all families → BTreeMap<name, Vec<Family>>", "deduplicate HELP/TYPE across scopes"],
+          "visual_elements": ["Two scope registries each with 'events_total'", "MetricEncoder merging diagram: two input families → one output family with two label sets", "Output: 'events_total {scope=\"A\"} 5\\nevents_total {scope=\"B\"} 3'", "HELP string shown once (deduplicated), not twice"]
+        }
+      ],
+      "checks": [
+        "Scoped metrics are prefixed with the context's label",
+        "ScopeGuard drop removes the scoped registry from root's BTreeMap",
+        "After scope drop, MetricEncoder output contains no metrics from that scope",
+        "Registering the same metric name with identical attributes on the same scope panics"
+      ]
+    }
+  ]
+}

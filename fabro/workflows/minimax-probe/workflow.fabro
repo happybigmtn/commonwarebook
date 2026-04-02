@@ -1,0 +1,10 @@
+digraph MinimaxProbe {
+    graph [goal="Probe Minimax model override with real tool use"]
+    start [shape=Mdiamond, label="Start"]
+    exit [shape=Msquare, label="Exit"]
+    probe [
+        label="Probe",
+        prompt="Read `runtime/README.md` and write `docs/commonware-book/probes/minimax-m27.md` containing:\n1. A one-paragraph summary of what commonware-runtime is for.\n2. Three bullets naming concrete concepts a future interactive explainer should visualize.\n3. A final line that says exactly `minimax probe ok`.\n\nWrite the file first, then respond with a short confirmation."
+    ]
+    start -> probe -> exit
+}

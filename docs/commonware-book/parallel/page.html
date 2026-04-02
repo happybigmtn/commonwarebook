@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-parallel — commonware-book</title>
+  <meta name="description" content="One Algorithm, Two Execution Policies">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / parallel
+      </span>
+      <span class="chapter-title">commonware-parallel</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../utils/page.html">← prev</a>
+        <a class="next" href="../invariants/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · parallel · Complete · 9 min read</div>
+    <h1 class="ch-title">commonware-parallel</h1>
+    <p class="ch-deck">One Algorithm, Two Execution Policies</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        One Algorithm, Two Execution Policies
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 id="opening-apparatus">Opening Apparatus</h2>
+<p><strong>Promise.</strong> This chapter shows how <code>commonware-parallel</code> lets one algorithm run sequentially or in parallel without changing what the algorithm means.</p>
+<p><strong>Crux.</strong> Parallelism is a scheduling choice, not permission to rewrite the logic into a second code path with different edge cases.</p>
+<p><strong>Primary invariant.</strong> The strategy may change partitioning, locality, and thread count, but it must not change the result the algorithm computes.</p>
+<p><strong>Naive failure.</strong> The easy mistake is to write one sequential loop and one parallel loop and call them &quot;equivalent.&quot; The loops quickly drift:</p>
+<ul><li>one path gets a bug fix that the other never receives,</li><li>one path preserves a boundary case the other drops,</li><li>one path accidentally changes meaning when a chunk boundary moves.</li></ul>
+<p><strong>Reading map.</strong></p>
+<ul><li><code>parallel/src/lib.rs</code> defines the policy boundary.</li><li><code>Strategy</code> is the abstraction the rest of the workspace writes against.</li><li><code>Sequential</code> is the reference semantics.</li><li><code>Rayon</code> shows how the same fold shape becomes partitioned work.</li><li>The property tests at the bottom are the proof that the two policies still compute the same result.</li></ul>
+<p><strong>Assumption ledger.</strong></p>
+<ul><li>The reader is comfortable with folds, reductions, and partitions.</li><li>The chapter is about CPU-bound work, not I/O concurrency.</li><li><code>Sequential</code> is not a fallback here. It is the meaning-preserving baseline.</li></ul>
+<h2 id="background">Background</h2>
+<p>Parallel work only helps when the algorithm can be split without changing its meaning. That sounds obvious, but many &quot;parallel&quot; rewrites quietly break that rule.</p>
+<p>The useful vocabulary is small:</p>
+<ul><li><strong>Partitioning</strong> splits one input into independent chunks.</li><li><strong>Local state</strong> is the scratch space owned by one partition.</li><li><strong>Reduction</strong> merges partial results back into one answer.</li><li><strong>Associativity</strong> lets the merge happen in different groupings without changing the meaning.</li><li><strong>Determinism</strong> means the answer does not depend on scheduling luck.</li></ul>
+<p>The trap is to assume that &quot;same final type&quot; means &quot;same algorithm.&quot; It does not. A parallel rewrite can preserve the type and still lose the meaning. Common failure modes include:</p>
+<ul><li>pushing order-sensitive work into a <code>par_iter</code> and hoping order falls out the same way,</li><li>sharing mutable state through locks and then pretending the lock made the algorithm equivalent,</li><li>partitioning first and only later discovering that the partition boundary split the one place where the algorithm needed context.</li></ul>
+<p>That is why this crate treats the sequential path as the reference semantics. Once the algorithm is written as a fold or reduction, the execution strategy can change how the work is scheduled without changing what the algorithm says.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>Some algorithms are obviously order-sensitive. Many are not. They look like simple loops, but they are really reductions with hidden structure:</p>
+<ul><li>parse items,</li><li>accumulate local state,</li><li>merge partial answers,</li><li>and keep the result canonical.</li></ul>
+<p>The mistake is to treat the sequential version as the &quot;real&quot; implementation and the parallel version as a later optimization. That leaves the codebase with two places where meaning can drift.</p>
+<p><code>commonware-parallel</code> prevents that split. The algorithm says what the work means. The strategy says how the work is scheduled. The whole crate is built to keep that boundary visible.</p>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>Think of the algorithm as a contract and the strategy as the kitchen.</p>
+<ul><li><code>Sequential</code> is one cook following the recipe from start to finish.</li><li><code>Rayon</code> is several cooks preparing independent chunks and then combining the plates.</li></ul>
+<p>The recipe does not change when the kitchen changes. That is the point. The policy changes. The meaning does not.</p>
+<p>This is also why the trait is small. <code>Strategy</code> does not try to model threads, work stealing, or queues. It models fold-shaped work:</p>
+<ul><li>give each partition its own local state,</li><li>process items against that state,</li><li>then combine partial results.</li></ul>
+<p>If the problem does not fit that shape, forcing it through the abstraction is usually the wrong move.</p>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-strategy-marks-the-boundary">3.1 <code>Strategy</code> Marks the Boundary</h3>
+<p><code>Strategy</code> is the center of the crate because it separates meaning from scheduling. The methods are named after common reduction shapes, but they all respect the same contract: the algorithm may describe local work and merge work, yet it may not know whether one thread or many are doing it.</p>
+<p>That is why the trait is more useful than a thread-pool wrapper. A wrapper would expose execution machinery. <code>Strategy</code> exposes the algebra of the work.</p>
+<h3 id="3-2-fold-init-is-the-primitive">3.2 <code>fold_init</code> Is the Primitive</h3>
+<p><code>fold_init</code> is the most important method in the crate.</p>
+<p>It gives each partition three things:</p>
+<ul><li>the current accumulator,</li><li>a partition-local init value,</li><li>and the next item.</li></ul>
+<p>That local init value is the honest place for scratch state:</p>
+<ul><li>a reusable buffer,</li><li>a temporary encoder,</li><li>a small cache,</li><li>or any mutable state that should not be shared across partitions.</li></ul>
+<p>This is the key move in the crate. The algorithm can say, &quot;I need mutable state,&quot; without saying anything about mutexes or shared ownership.</p>
+<h3 id="3-3-associativity-is-the-real-requirement">3.3 Associativity Is the Real Requirement</h3>
+<p>Parallelism is safe only when the reduction is lawful. In practice, that means the merge operator must be associative in the way the algorithm uses it.</p>
+<p>Simple sums are easy:</p>
+<pre><code class="language-text">(a + b) + c == a + (b + c)</code></pre>
+<p>But many real algorithms are not plain sums. They have boundary effects. That is where <code>fold_init</code> matters. It lets each partition produce a canonical local summary, and then the reduction only has to merge summaries, not raw items.</p>
+<p>If the reduction is not associative, partitioning changes the meaning. A tree of partial results is not the same as one left-to-right pass. That is not a performance detail. It is a semantic change.</p>
+<h3 id="3-4-a-worked-algorithm-coalescing-ranges">3.4 A Worked Algorithm: Coalescing Ranges</h3>
+<p>Suppose the input is a stream of possibly overlapping ranges, and the goal is to produce one canonical list of disjoint ranges.</p>
+<p>The sequential version is straightforward:</p>
+<ol><li>keep a current range,</li><li>merge the next range if it overlaps the current one,</li><li>otherwise emit the current range and start a new one,</li><li>repeat until the input ends.</li></ol>
+<p>That algorithm is reduction-shaped, but it is also boundary-sensitive. A range can start in one chunk and finish in the next.</p>
+<p>If you parallelize it badly, you get the classic drift:</p>
+<ul><li>one partition emits <code>[1, 4]</code>,</li><li>the next partition emits <code>[3, 5]</code>,</li><li>and a naive concatenation returns both, even though the canonical answer is <code>[1, 5]</code>.</li></ul>
+<p>The fix is not &quot;make it parallel anyway.&quot; The fix is to change the partition summary so it is safe to merge.</p>
+<p>One useful summary looks like this:</p>
+<ul><li><code>ranges</code>: the canonical disjoint ranges inside one partition,</li><li><code>head</code>: the first range, if any,</li><li><code>tail</code>: the last range, if any.</li></ul>
+<p>Each partition does local merging first. The reduction then only needs to look at the boundary between the left tail and the right head. If those two ranges overlap, it merges them and re-canonicalizes the seam. Everything inside each partition is already normalized.</p>
+<p>That reduction is associative because each intermediate result is itself a canonical summary. The merge step only needs to repair the edge between two summaries, and repairing that edge does not depend on whether the tree groups the partitions as <code>((a b) c)</code> or <code>(a (b c))</code>.</p>
+<p>That is the deeper lesson of the crate:</p>
+<ul><li>if you only concatenate partition outputs, you lose meaning,</li><li>if you reduce raw items without canonical summaries, you lose context,</li><li>if you summarize each partition canonically, you can preserve meaning while changing execution policy.</li></ul>
+<h3 id="3-5-sequential-is-the-reference-semantics">3.5 <code>Sequential</code> Is the Reference Semantics</h3>
+<p><code>Sequential</code> is deliberately boring.</p>
+<p>It creates one init value, walks the iterator in order, folds every item on the current thread, and ignores the reduce closure because there is only one partition.</p>
+<p>That simplicity is the point. <code>Sequential</code> is the clearest statement of what the algorithm means before any scheduling policy is applied.</p>
+<h3 id="3-6-rayon-makes-partitioning-explicit">3.6 <code>Rayon</code> Makes Partitioning Explicit</h3>
+<p>The Rayon implementation does not just &quot;use threads.&quot; It controls how work is split.</p>
+<p>It first collects the input into a <code>Vec</code>. That is a deliberate tradeoff:</p>
+<ul><li>contiguous partitions preserve local order,</li><li>each partition can accumulate privately,</li><li>and the reduction sees one summary per partition instead of one summary per item.</li></ul>
+<p>That shape matters. A streaming bridge that hands one item at a time to worker threads would produce much noisier reduction behavior. It would also make boundary-sensitive work much harder to reason about.</p>
+<p>So the <code>Vec</code> allocation is not accidental. It is the cost of buying a cleaner partition structure.</p>
+<h3 id="3-7-join-and-parallelism-hint-expose-the-same-boundary-at-two-scales">3.7 <code>join</code> and <code>parallelism_hint</code> Expose the Same Boundary at Two Scales</h3>
+<p><code>join</code> handles the small case: two independent closures.</p>
+<ul><li><code>Sequential</code> runs <code>a()</code> and then <code>b()</code>.</li><li><code>Rayon</code> can run them in parallel with the thread pool.</li></ul>
+<p><code>parallelism_hint</code> handles the larger case: how wide the strategy can plausibly run. It is only a hint, but it is still useful upstream when a caller needs to choose chunk sizes or decide whether splitting is worth it.</p>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<h3 id="4-1-the-caller-writes-once-against-strategy">4.1 The Caller Writes Once Against <code>Strategy</code></h3>
+<p>The caller writes against <code>&amp;impl Strategy</code> and is forced to make the reduction shape explicit:</p>
+<ul><li>an identity element,</li><li>a fold step,</li><li>and a reduction step.</li></ul>
+<p>That is the real win. The algorithm is described in terms of meaning, not in terms of threads.</p>
+<h3 id="4-2-the-sequential-path">4.2 The Sequential Path</h3>
+<p>The sequential path is the reference fold:</p>
+<ol><li>create the init state,</li><li>create the identity accumulator,</li><li>walk the iterator in order,</li><li>apply the fold closure for every item,</li><li>return the final accumulator.</li></ol>
+<p>There are no partial reductions because there is only one partition.</p>
+<h3 id="4-3-the-rayon-path">4.3 The Rayon Path</h3>
+<p>The Rayon path turns one fold into local folds plus one final reduction:</p>
+<ol><li>collect the items into a <code>Vec</code>,</li><li>turn the vector into a parallel iterator,</li><li>give each worker its own <code>(init_state, accumulator)</code> pair,</li><li>fold locally inside each partition,</li><li>reduce the partition outputs into the final result.</li></ol>
+<p>That means the true shape of the algorithm is:</p>
+<pre><code class="language-text">global input
+  -&gt; contiguous partitions
+  -&gt; one local fold per partition
+  -&gt; one final reduction across partition outputs</code></pre>
+<p>The property tests at the bottom of <code>parallel/src/lib.rs</code> are the contract. They check that parallel <code>fold_init</code> matches sequential <code>fold_init</code>, that <code>fold</code> matches <code>fold_init</code> when the init state is trivial, and that the helper methods preserve the same meaning.</p>
+<h2 id="5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</h2>
+<h3 id="5-1-cpu-bound-work">5.1 CPU-Bound Work</h3>
+<p>If the task is large enough to benefit from multiple cores, <code>Rayon</code> gives the caller that option without making the algorithm itself aware of threads.</p>
+<h3 id="5-2-determinism">5.2 Determinism</h3>
+<p><code>Sequential</code> keeps the execution order fixed. That matters for tests, for debugging, and for environments where threads are unavailable.</p>
+<h3 id="5-3-private-per-partition-state">5.3 Private Per-Partition State</h3>
+<p>Many algorithms need mutable scratch space, but only within one partition of the work. <code>fold_init</code> exists so that state can stay local instead of becoming a shared bottleneck.</p>
+<h3 id="5-4-reuse-across-execution-environments">5.4 Reuse Across Execution Environments</h3>
+<p>Because <code>Sequential</code> works without <code>std</code>, the same algorithm can often be reused in both threaded and non-threaded builds. The policy changes. The code stays the same.</p>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<h3 id="6-1-order-sensitive-effects-do-not-magically-parallelize">6.1 Order-Sensitive Effects Do Not Magically Parallelize</h3>
+<p>If an algorithm depends on a strict left-to-right side effect, parallelism may change its meaning. That is not a bug in the crate. It is a sign that the algorithm needs a different shape.</p>
+<h3 id="6-2-trait-bounds-are-part-of-the-contract">6.2 Trait Bounds Are Part of the Contract</h3>
+<p>Items, closures, and results need to satisfy <code>Send</code>, and some pieces need <code>Sync</code>, because the strategy may move work across threads. If a caller cannot meet those bounds, that is useful feedback: the algorithm is not shaped for this style of execution.</p>
+<h3 id="6-3-parallelism-has-overhead">6.3 Parallelism Has Overhead</h3>
+<p>For small inputs, <code>Sequential</code> is often better.</p>
+<p>The Rayon path allocates, partitions, schedules, and reduces. That overhead is worth paying only when the local fold work is large enough to amortize it.</p>
+<h3 id="6-4-the-abstraction-preserves-results-not-performance-guarantees">6.4 The Abstraction Preserves Results, Not Performance Guarantees</h3>
+<p><code>parallelism_hint</code> is only a hint. The crate promises that the same algorithm can run under different policies. It does not promise that the parallel policy always wins.</p>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>Start with <code>parallel/src/lib.rs</code> and read <code>Strategy</code> first so the policy boundary is clear before either implementation. Then read <code>Sequential</code> as the reference meaning, <code>Rayon</code> as the same meaning under partitioning, and the tests as the proof that the two policies still compute the same result.</p>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>execution policy</strong>: the rule that decides how work is scheduled.</li><li><strong>fold</strong>: an operation that accumulates a collection into one result.</li><li><strong>partition-local state</strong>: mutable scratch state owned by one worker.</li><li><strong>reduce</strong>: the operation that combines partial results into one final answer.</li><li><strong>contiguous partitioning</strong>: splitting collected items into stable chunks instead of streaming them one by one to workers.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>parallel/src/lib.rs</code></li><li><code>parallel/README.md</code></li><li><code>commonware-runtime</code> for other places where execution policy matters</li></ul></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part III. Shared Machinery</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">15 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">9 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-invariants</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../utils/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-utils</span>
+          <span class="foot-sub">utils</span>
+        </a>
+        <div class="foot-center">
+          parallel<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../invariants/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-invariants</span>
+          <span class="foot-sub">invariants</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

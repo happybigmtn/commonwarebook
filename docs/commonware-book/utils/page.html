@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-utils — commonware-book</title>
+  <meta name="description" content="Small, sharp tools for canonical shapes, coordination lifecycles, and replayable state.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / utils
+      </span>
+      <span class="chapter-title">commonware-utils</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../macros/page.html">← prev</a>
+        <a class="next" href="../parallel/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · utils · Complete · 11 min read</div>
+    <h1 class="ch-title">commonware-utils</h1>
+    <p class="ch-deck">Small, sharp tools for canonical shapes, coordination lifecycles, and replayable state.</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Small, sharp tools for canonical shapes, coordination lifecycles, and replayable state.
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 id="opening-apparatus">Opening Apparatus</h2>
+<p><strong>Promise.</strong> This chapter shows how <code>commonware-utils</code> keeps recurring invariants in one canonical place instead of letting every crate rediscover them locally.</p>
+<p><strong>Crux.</strong> The crate is not a junk drawer. It is the place where Commonware names small but important facts:</p>
+<ul><li>what a committee set looks like,</li><li>what it means for a value to be non-empty,</li><li>how completion and cancellation should behave,</li><li>how bounded concurrency should unwind,</li><li>and how a mutable bitmap can keep history without cloning itself on every commit.</li></ul>
+<p><strong>Primary invariant.</strong> Once a recurring shape gets a trusted home, the rest of the workspace should talk about that shape directly instead of re-encoding it in slightly different helpers.</p>
+<p><strong>Naive failure.</strong> The easy mistake is to say, &quot;this helper is only ten lines, I will just write it here.&quot; Enough of those decisions and the workspace starts to disagree with itself:</p>
+<ul><li>one crate sorts and deduplicates,</li><li>another preserves insertion order,</li><li>another forgets to reject emptiness,</li><li>another invents its own cancellation rule.</li></ul>
+<p><strong>Reading map.</strong></p>
+<ul><li><code>utils/src/ordered.rs</code> explains canonical collections.</li><li><code>utils/src/acknowledgement.rs</code>, <code>futures.rs</code>, <code>concurrency.rs</code>, and <code>sync/mod.rs</code> explain lifecycle and coordination.</li><li><code>utils/src/bitmap/historical/</code> is the richest state machine in the crate.</li><li><code>utils/src/vec.rs</code> shows how a small structural promise changes downstream code.</li></ul>
+<p><strong>Assumption ledger.</strong></p>
+<ul><li>The reader is comfortable with ordinary Rust collections and async control flow.</li><li>The chapter is about cross-cutting infrastructure, not domain logic.</li><li>The goal is not to catalog every helper. It is to explain the few shapes that matter most.</li></ul>
+<h2 id="background">Background</h2>
+<p>Systems code keeps running into the same small facts:</p>
+<ul><li>a collection should really be sorted and deduplicated,</li><li>a vector should not be empty if callers are going to ask for its first item,</li><li>a task should count as complete only when every participant has acknowledged it,</li><li>a limit should be enforced once instead of rechecked everywhere,</li><li>and a stateful bitmap should be able to remember history without cloning the whole thing every time it changes.</li></ul>
+<p>Those are not &quot;just helpers.&quot; They are shared assumptions. If the assumptions live only in comments and call-site checks, they drift. One caller handles an edge case one way, another caller handles it differently, and the workspace starts to lose a single shared meaning.</p>
+<p>The tradeoff is that the code gets more explicit. Callers may need a constructor, a conversion, or a small amount of ceremony before they get the value they want. That is usually the right price to pay. Up-front structure is cheaper than repeated defensive checks everywhere else.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>Across the monorepo, the same questions keep returning in different clothes:</p>
+<ul><li>How do we say a committee is canonical rather than merely stored in a <code>Vec</code>?</li><li>How do we guarantee a collection is non-empty so callers stop wrapping every access in <code>Option</code>?</li><li>How do we distinguish completion from cancellation?</li><li>How do we keep a fixed number of tasks in flight without inventing another ad hoc counter?</li><li>How do we retain historical bitmap state without cloning the full bitmap on every commit?</li></ul>
+<p><code>commonware-utils</code> exists to answer those questions once.</p>
+<p>The crate is a consistency layer. It turns recurring tiny invariants into named, reusable contracts.</p>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>The cleanest mental model is a belt of small sharp tools. That image matters because a belt is organized around recurring work, not taxonomy. You do not carry every possible helper. You carry the few tools that solve the same class of problem every time it appears.</p>
+<p>That is how this crate behaves:</p>
+<ul><li><code>ordered::Set</code> gives the workspace a canonical collection shape.</li><li><code>Participant</code> and <code>Faults</code> let committee math stay typed instead of ad hoc.</li><li><code>NonEmptyVec</code> makes a tiny structural promise that downstream code can rely on.</li><li><code>Exact</code>, <code>Pool</code>, <code>AbortablePool</code>, <code>Limiter</code>, <code>KeyedLimiter</code>, and <code>UpgradableAsyncRwLock</code> give lifecycle and coordination a common vocabulary.</li><li><code>bitmap::historical</code> is the richest tool on the belt: a snapshot-plus-diff state machine with explicit commit, abort, and prune boundaries.</li></ul>
+<p>The important part is not that these tools are fancy. The important part is that they let the rest of the monorepo stop improvising the same semantics.</p>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-canonical-collections-are-a-type-not-a-convention">3.1 Canonical Collections Are a Type, Not a Convention</h3>
+<p><code>utils/src/ordered.rs</code> is the clearest example of what this crate means by a canonical collection.</p>
+<p><code>Set&lt;T&gt;</code> is not just a wrapper around <code>Vec&lt;T&gt;</code>. It promises:</p>
+<ul><li>sorted order,</li><li>uniqueness,</li><li>stable indexing,</li><li>and binary-search lookup by value.</li></ul>
+<p>That means the collection has one agreed shape. It is not &quot;whatever order was convenient locally.&quot;</p>
+<p>The constructors make the policy visible:</p>
+<ul><li><code>from_iter_dedup</code> is tolerant and silently removes duplicates,</li><li><code>TryFromIterator</code> is strict and returns an error when duplicates appear,</li><li>codec decoding is stricter still and rejects any encoded set whose items are not already sorted and unique.</li></ul>
+<p>That last detail matters. The decoder does not sort for the caller. The sender must already have emitted the canonical form. Canonicalization happens at the boundary, not lazily after the fact.</p>
+<p><code>Participant</code> and <code>Faults</code> connect that canonical set back to committee math. <code>Participant</code> gives a stable, codec-friendly committee index. The <code>Quorum</code> extension trait turns a <code>Set</code> into explicit threshold math. The path from &quot;these keys form a committee&quot; to &quot;this committee tolerates <code>f</code> faults and requires quorum <code>q</code>&quot; stays typed and shared.</p>
+<h3 id="3-2-structural-promises-belong-in-types">3.2 Structural Promises Belong in Types</h3>
+<p><code>NonEmptyVec</code> in <code>utils/src/vec.rs</code> is a smaller example with the same idea.</p>
+<p>Once a value is a <code>NonEmptyVec&lt;T&gt;</code>, callers may:</p>
+<ul><li>ask for <code>first()</code> and <code>last()</code> without <code>Option</code>,</li><li>preserve non-emptiness across <code>map</code>, <code>resize</code>, and <code>into_vec</code>,</li><li>and rely on mutation helpers that will not quietly leave the structure empty.</li></ul>
+<p>The important move is not convenience. It is removing a whole category of local &quot;this should probably never be empty&quot; reasoning from downstream code.</p>
+<p>This is one of the crate&#x27;s recurring design moves: if the same precondition would otherwise appear in many call sites, make it part of the value&#x27;s identity.</p>
+<h3 id="3-3-lifecycle-and-coordination-objects-make-control-flow-explicit">3.3 Lifecycle and Coordination Objects Make Control Flow Explicit</h3>
+<p>Several of the crate&#x27;s most useful helpers are about lifecycle rather than raw data shape.</p>
+<p><code>Exact</code> in <code>acknowledgement.rs</code> is a tiny protocol for completion. It creates a handle plus a waiter, counts clones as additional required acknowledgements, and resolves only when every clone acknowledges. If any outstanding handle is dropped unacknowledged, the waiter resolves to cancellation instead.</p>
+<p>That is stronger than a boolean flag. It lets the code distinguish:</p>
+<ul><li>&quot;all parties finished&quot;,</li><li>from &quot;someone stopped participating.&quot;</li></ul>
+<p><code>Pool&lt;T&gt;</code> and <code>AbortablePool&lt;T&gt;</code> in <code>futures.rs</code> do something similar for collections of asynchronous work. They say:</p>
+<ul><li>keep an unordered set of in-flight futures,</li><li>always have a safe <code>next_completed()</code> even when the logical pool is empty,</li><li>optionally give each task an <code>Aborter</code> whose drop aborts only that task.</li></ul>
+<p>The dummy future inside each pool looks odd the first time you read it, but it exists for a clean reason: <code>select_next_some()</code> should not collapse instantly just because the current pool is empty. The abstraction is trying to give the rest of the code a stable control-flow shape.</p>
+<p><code>Limiter</code> and <code>KeyedLimiter</code> in <code>concurrency.rs</code> make another common pattern explicit: some work is allowed to proceed only up to a global bound, and some work is allowed at most once per key.</p>
+<ul><li><code>Limiter</code> hands out a reservation if capacity remains, and the reservation releases on drop.</li><li><code>KeyedLimiter</code> adds a second rule: a key may not be acquired twice concurrently, and the total number of active keys is also bounded.</li></ul>
+<p>That is often the difference between &quot;backpressure&quot; as a comment and backpressure as a protocol rule.</p>
+<p><code>UpgradableAsyncRwLock</code> in <code>sync/mod.rs</code> is the same idea at the lock level. It uses a gate so that an upgradable read can later become a writer without letting another writer slip in between. The point is not to prefer async locks everywhere. The point is to make the rare upgradable path honest about its invariant.</p>
+<h3 id="3-4-the-historical-bitmap-is-a-real-state-machine">3.4 The Historical Bitmap Is a Real State Machine</h3>
+<p><code>utils/src/bitmap/historical/mod.rs</code> is where the crate stops looking like a collection of wrappers and starts looking like a compact systems component.</p>
+<p>The historical bitmap maintains:</p>
+<ul><li>one full prunable bitmap as the current head state,</li><li>and historical commits as reverse diffs rather than full clones.</li></ul>
+<p>Its clean/dirty split is the key conceptual move:</p>
+<ul><li><code>CleanBitMap</code> means there are no pending mutations,</li><li><code>DirtyBitMap</code> means mutations are in progress and not yet committed.</li></ul>
+<p>That split makes the lifecycle explicit:</p>
+<ol><li><code>into_dirty()</code> opens a mutable batch,</li><li>mutate through the dirty view,</li><li><code>commit(height)</code> seals the batch into history,</li><li><code>abort()</code> discards uncommitted edits,</li><li>return to a clean state.</li></ol>
+<p>The dirty state is not a vague overlay. It tracks concrete pieces of future state:</p>
+<ul><li><code>modified_bits</code> for edits to existing bits,</li><li><code>appended_bits</code> for new tail bits,</li><li><code>chunks_to_prune</code> for data that must remain recoverable after pruning.</li></ul>
+<p>Read-through semantics make the current projected state visible before commit:</p>
+<ul><li>appended bits win first,</li><li>then modified bits,</li><li>then the base bitmap.</li></ul>
+<p>That priority order is why the type can answer &quot;what would this look like if we committed now?&quot; without actually committing yet.</p>
+<p>The edge cases are part of the design, not afterthoughts:</p>
+<ul><li>commit numbers must be strictly monotonic,</li><li><code>u64::MAX</code> is reserved,</li><li>no-op batches still record a commit if the caller asked for one,</li><li><code>prune_commits_before</code> drops old history without changing the current head.</li></ul>
+<p>The whole point is to keep current state cheap, history compact, and lifecycle boundaries visible.</p>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<h3 id="4-1-canonical-committee-data-arrives-from-the-outside">4.1 Canonical Committee Data Arrives From the Outside</h3>
+<p>Suppose a protocol decodes a committee from bytes.</p>
+<p>If it uses <code>Set&lt;T&gt;</code>, the decoder checks that the items are already sorted and unique. If the sender emitted duplicates or arbitrary order, decoding fails. Only after that does the rest of the code gain access to indexing, <code>position</code>, and quorum helpers.</p>
+<p>That is the first large pattern of the crate:</p>
+<blockquote><p>canonicalization happens at the boundary, not after the fact.</p></blockquote>
+<h3 id="4-2-completion-is-represented-as-an-object-not-a-comment">4.2 Completion Is Represented as an Object, Not a Comment</h3>
+<p>Suppose one task fans out work to several children and wants to know when all of them are finished.</p>
+<p>Instead of passing around a raw channel or shared counter, it can create an <code>Exact</code> acknowledgement handle, clone it for each required participant, and await the paired waiter.</p>
+<p>The resulting state machine is precise:</p>
+<ul><li>every clone increases the remaining count,</li><li>every <code>acknowledge()</code> decrements it,</li><li>any unacknowledged drop cancels the whole acknowledgement,</li><li>the waiter wakes only on success or cancellation.</li></ul>
+<p>That turns &quot;everyone should eventually signal completion&quot; into something the type system and tests can observe directly.</p>
+<h3 id="4-3-bounded-concurrency-becomes-declarative">4.3 Bounded Concurrency Becomes Declarative</h3>
+<p>Suppose a subsystem should allow at most <code>N</code> simultaneous operations, or at most one operation per key.</p>
+<p>The limiter types make that rule a value:</p>
+<ul><li>a slot is acquired or not,</li><li>a reservation exists or not,</li><li>and dropping the reservation is the release.</li></ul>
+<p>No extra cleanup call is required. The capacity rule is bound to lifetime.</p>
+<h3 id="4-4-the-historical-bitmap-is-the-full-lifecycle">4.4 The Historical Bitmap Is the Full Lifecycle</h3>
+<p>The historical bitmap is easiest to understand as one explicit mutation cycle:</p>
+<pre><code class="language-text">clean state
+  -&gt; into_dirty()
+  -&gt; mutate through dirty view
+  -&gt; commit(height) or abort()
+  -&gt; clean state again</code></pre>
+<p>The important part is what does <em>not</em> happen:</p>
+<ul><li>uncommitted mutations do not silently become history,</li><li>and aborted mutations do not leak into the clean view.</li></ul>
+<p>That makes the bitmap a strong example of how this crate likes to model state: through named transitions with narrow responsibilities.</p>
+<h3 id="4-5-the-fuzz-targets-show-where-the-crate-thinks-it-is-fragile">4.5 The Fuzz Targets Show Where the Crate Thinks It Is Fragile</h3>
+<p>The fuzz surface under <code>utils/fuzz/</code> clusters around the boundaries where a small mistake spreads quickly: canonical sets, sequencing helpers, acknowledgement state, future pools, channel behavior, historical bitmaps, and time math. That is the right place to spend fuzzing effort because those helpers are small and widely reused.</p>
+<h2 id="5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</h2>
+<h3 id="5-1-duplication-pressure">5.1 Duplication Pressure</h3>
+<p>The monorepo has many places where the same tiny concept could be reimplemented locally. This crate keeps that from happening.</p>
+<h3 id="5-2-validation-pressure">5.2 Validation Pressure</h3>
+<p>If a value is only valid in one shape, the shape should be encoded in the type, not rechecked by every caller.</p>
+<h3 id="5-3-shutdown-and-overflow-pressure">5.3 Shutdown and Overflow Pressure</h3>
+<p>Channels and task pools often fail at the edges: a receiver disappears, a task must be aborted, or the newest state matters more than the oldest. The crate&#x27;s coordination helpers turn those edge behaviors into explicit choices.</p>
+<h3 id="5-4-canonicalization-pressure">5.4 Canonicalization Pressure</h3>
+<p>When a shape recurs across crates, the system benefits from one stable answer instead of many almost-right ones.</p>
+<h3 id="5-5-history-pressure">5.5 History Pressure</h3>
+<p>The historical bitmap shows how the crate handles the problem of preserving current state plus reversible mutation history without cloning full structures every time.</p>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>The first limit is scope. <code>commonware-utils</code> is not where domain logic lives. It should not grow into a second place for consensus algorithms, codec policy, or application-specific workflows.</p>
+<p>The second limit is strictness. Several helpers intentionally fail or panic on misuse:</p>
+<ul><li><code>Set</code> decoding rejects non-canonical order,</li><li><code>NonEmptyVec::mutate</code> panics if the closure empties the vector,</li><li><code>NonZeroDuration::new_panic</code> rejects zero,</li><li><code>Exact</code> treats an unacknowledged drop as cancellation,</li><li><code>ring</code> channels intentionally drop the oldest buffered item when capacity is exhausted.</li></ul>
+<p>Those are not accidents. In this crate, many bad inputs are better treated as programmer errors or explicit cancellation states than as values that deserve quiet repair.</p>
+<p>The third limit is that these are support tools, not full domain abstractions. <code>KeyedLimiter</code> does not decide what keys mean. <code>HistoricalBitMap</code> does not know why a commit matters. The surrounding crates still provide the application semantics.</p>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>Start with <code>utils/src/lib.rs</code> to see the crate&#x27;s public shape and stability split. Then read the canonical collection files, the coordination files, and finish with the historical bitmap. That order keeps the recurring invariants grouped by the problem they solve instead of by file name.</p>
+<p>If you keep the belt-of-tools model in mind, the files stop feeling like an assortment and start feeling like a carefully selected kit.</p>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>canonical collection</strong>: a collection whose order and uniqueness rules are part of its contract.</li><li><strong>receiver-owned policy</strong>: the idea that a decoder should reject non- canonical input rather than silently normalize it.</li><li><strong>acknowledgement</strong>: a handle-plus-waiter pair that models task completion or cancellation explicitly.</li><li><strong>reservation</strong>: a lifetime-bound claim on limited concurrency.</li><li><strong>upgradable read</strong>: a read lock that may later become a write lock without letting another writer slip in.</li><li><strong>dirty bitmap</strong>: a projected future state that has not yet been committed.</li><li><strong>reverse diff</strong>: history data that lets the current state be rolled back to an earlier commit.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>utils/src/ordered.rs</code></li><li><code>utils/src/acknowledgement.rs</code></li><li><code>utils/src/futures.rs</code></li><li><code>utils/src/concurrency.rs</code></li><li><code>utils/src/bitmap/historical/mod.rs</code></li></ul></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part III. Shared Machinery</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">14 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">11 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-parallel</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../macros/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-macros</span>
+          <span class="foot-sub">macros</span>
+        </a>
+        <div class="foot-center">
+          utils<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../parallel/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-parallel</span>
+          <span class="foot-sub">parallel</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

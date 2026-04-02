@@ -1,0 +1,675 @@
+{
+  "module": "commonware-p2p",
+  "visualizations": [
+    {
+      "id": "bitvector-exchange",
+      "title": "Discovery Bitvector Exchange",
+      "learning_goal": "Understand how gossip-based peer discovery converges without flooding, and why log₂(N) rounds is sufficient for full connectivity in an honest network.",
+      "why_it_matters": "Peer discovery is the bootstrap problem every distributed system must solve. The bitvector approach is space-efficient (O(N) vs O(N²) for full address tables) and converges provably fast. Misunderstanding this mechanism leads to either over-engineered discovery protocols or failure to appreciate why signed attestations are necessary for security.",
+      "source_files": [
+        "p2p/src/authenticated/discovery/types.rs",
+        "p2p/src/authenticated/discovery/network.rs",
+        "p2p/src/authenticated/discovery/mod.rs"
+      ],
+      "default_state": "N=8 nodes in a ring topology, 0% failure rate, paused at round 0 with all bitvectors initialized (each node knows only itself).",
+      "controls": [
+        {
+          "id": "node_count",
+          "type": "stepper",
+          "label": "N (nodes)",
+          "values": ["4", "8", "16", "32"]
+        },
+        {
+          "id": "failure_rate",
+          "type": "slider",
+          "label": "Dial failure rate",
+          "values": ["0%", "10%", "20%", "40%", "60%"]
+        },
+        {
+          "id": "dial_fail_limit",
+          "type": "stepper",
+          "label": "dial_fail_limit",
+          "values": ["1", "2", "3", "5"]
+        },
+        {
+          "id": "topology",
+          "type": "toggle",
+          "label": "Network topology",
+          "values": ["ring", "mesh", "star"]
+        },
+        {
+          "id": "playback",
+          "type": "toggle",
+          "label": "Playback",
+          "values": ["pause", "step", "play"]
+        },
+        {
+          "id": "speed",
+          "type": "slider",
+          "label": "Round interval (ms)",
+          "values": ["200", "500", "1000", "2000"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "init",
+          "caption": "Round 0 — Initial state: each node's bitvector has only its own bit set (1 at position i for node i). The peer set is sorted by PublicKey, so position i always refers to the same logical peer across all nodes.",
+          "system_events": [],
+          "visual_elements": [
+            "N nodes arranged in selected topology (ring default)",
+            "Each node shows its bitvector as a row of colored squares (green=1, gray=0)",
+            "Bitvector label shows decimal bitmask below each row",
+            "Edge labels show 'dial attempt' counters initialized to 0"
+          ]
+        },
+        {
+          "id": "exchange",
+          "caption": "Round K — Nodes exchange bitvectors with neighbors simultaneously. For each bit position j where sender has 1 and receiver has 0, the receiver queues a Peers request for peer[j].",
+          "system_events": ["bitvec_exchange", "peers_request"],
+          "visual_elements": [
+            "Animated arrows showing bitvector messages flowing along edges",
+            "For each node, highlight newly-set bits in green pulse animation",
+            "Show 'Peers(Vec<Info>)' request popup when a node learns new peer addresses",
+            "Round counter increments"
+          ]
+        },
+        {
+          "id": "failure",
+          "caption": "Dial failure path — When a dial attempt fails (simulated by failure_rate), the dial_fail_limit counter increments. If it reaches dial_fail_limit, the bit is cleared to 0.",
+          "system_events": ["dial_attempt", "dial_fail", "bit_cleared"],
+          "visual_elements": [
+            "Red X animation on edge when dial fails",
+            "Failure counter badge on edge increments",
+            "Bit flips from green to gray with red pulse",
+            "If dial_fail_limit reached, bitvector row flashes gray"
+          ]
+        },
+        {
+          "id": "converged",
+          "caption": "Convergence — When all bitvectors are all-ones (or failure has stabilized), freeze animation. Show summary: 'Converged in K rounds (theoretical minimum: ceil(log₂(N)) = M)'.",
+          "system_events": ["convergence_detected"],
+          "visual_elements": [
+            "All-ones bitvectors glow with success color",
+            "Convergence banner with round count",
+            "Comparison vs theoretical log₂(N) bound",
+            "With non-zero failure: show which peers remain unknown (bits stuck at 0)"
+          ]
+        },
+        {
+          "id": "partition",
+          "caption": "Network partition — Remove edges crossing a chosen cut. Show isolated subgraphs. Bits for unreachable peers slowly clear as dial_fail_limit is hit.",
+          "system_events": ["link_removed", "bit_cleared", "isolation_detected"],
+          "visual_elements": [
+            "Removed edges shown as dashed gray lines",
+            "Isolated node clusters highlighted in different background tints",
+            "Stale bits (for peers in other partition) turn amber then gray",
+            "Reconnect button restores edges"
+          ]
+        }
+      ],
+      "checks": [
+        "bitvector length always equals peer set size (bit i always refers to sorted_peers[i])",
+        "with 0% failure and N=2^k, convergence occurs in exactly k rounds",
+        "with N=16 and 0% failure, round 4 shows all bits = 1",
+        "bits only clear after exactly dial_fail_limit consecutive failures",
+        "a peer in another partition has its bit cleared independently in each partition"
+      ]
+    },
+    {
+      "id": "actor-topology",
+      "title": "Actor Mailbox Topology",
+      "learning_goal": "Trace a message from application send() call through the five-actor system, understanding mailbox ownership, backpressure semantics, and where priority lanes matter.",
+      "why_it_matters": "The five-actor design isolates concerns (tracking, routing, connection management) but means a single logical send spans four message handoffs. Understanding which actor owns which mailbox explains why backpressure works the way it does, and why slow router processing blocks senders at the router mailbox, not at the application.",
+      "source_files": [
+        "p2p/src/authenticated/discovery/network.rs",
+        "p2p/src/authenticated/discovery/actors/tracker/actor.rs",
+        "p2p/src/authenticated/discovery/actors/router/actor.rs",
+        "p2p/src/authenticated/discovery/actors/spawner/actor.rs",
+        "p2p/src/authenticated/discovery/actors/listener.rs",
+        "p2p/src/authenticated/discovery/actors/dialer.rs",
+        "p2p/src/authenticated/relay.rs",
+        "p2p/src/authenticated/mailbox.rs"
+      ],
+      "default_state": "All five actors shown in a horizontal flow diagram. Tracker at left, Router center-left, Spawner center, Listener and Dialer stacked at right. All mailboxes show size=0. Idle state.",
+      "controls": [
+        {
+          "id": "mode",
+          "type": "toggle",
+          "label": "Mode",
+          "values": ["discovery", "lookup"]
+        },
+        {
+          "id": "scenario",
+          "type": "toggle",
+          "label": "Scenario",
+          "values": ["outbound_dial", "inbound_accept", "app_send", "backpressure"]
+        },
+        {
+          "id": "mailbox_size",
+          "type": "slider",
+          "label": "mailbox_size (router/spawner)",
+          "values": ["1", "8", "32", "128"]
+        },
+        {
+          "id": "speed",
+          "type": "slider",
+          "label": "Animation speed",
+          "values": ["slow", "medium", "fast"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "idle",
+          "caption": "Idle state — All five actors shown with their mailbox type (UnboundedMailbox for tracker, Mailbox for router/spawner, N/A for listener/dialer). Hover each actor to see its message types.",
+          "system_events": [],
+          "visual_elements": [
+            "Five actor boxes with icons",
+            "Mailbox badge showing 'Unbounded' or bounded size",
+            "Message type legend per actor (expandable on hover)",
+            "Dashed arrows between actors showing message flow directions"
+          ]
+        },
+        {
+          "id": "outbound_dial",
+          "caption": "Outbound dial path — dialer.tick() → tracker.dialable() → reservation → encrypted handshake → spawner → tracker.connect() → router.ready(). Select this to watch a single outbound connection being established.",
+          "system_events": ["dialer_tick", "tracker_dialable", "reservation_created", "handshake", "spawn", "tracker_connect", "router_ready"],
+          "visual_elements": [
+            "Highlighted path from dialer through tracker, spawner, to router",
+            "Step counter showing current step (1/7, 2/7, ...)",
+            "Message content shown in floating callout near each actor",
+            "Reservation badge travels along the path",
+            "Tracker directory updates in real-time as connection completes"
+          ]
+        },
+        {
+          "id": "inbound_accept",
+          "caption": "Inbound accept path — listener.accept() → handshake → tracker.listen() → spawner → tracker.connect() → router.ready(). Same step-through but for inbound.",
+          "system_events": ["listener_accept", "handshake", "tracker_listen", "spawn", "tracker_connect", "router_ready"],
+          "visual_elements": [
+            "Highlighted path from listener through tracker, spawner, to router",
+            "Egress IP shown being validated against Asymmetric address if present",
+            "Reservation badge shows Metadata::Listener(peer, observed_egress)"
+          ]
+        },
+        {
+          "id": "app_send",
+          "caption": "Application send path — sender.send() → router mailbox → relay.send() → peer actor → encrypted stream. Shows how a single app.send() fans out to multiple Relay instances in the router.",
+          "system_events": ["app_send", "router_mailbox", "relay_send", "peer_encode", "stream_write"],
+          "visual_elements": [
+            "sender (application) box at top connected to router",
+            "Router shows BTreeMap<P, Relay<EncodedData>> with multiple Relay entries",
+            "Expand one Relay to show low/high lane",
+            "Priority flag on message shown as color (green=priority, blue=normal)",
+            "Peer actor shows encoding step"
+          ]
+        },
+        {
+          "id": "backpressure",
+          "caption": "Backpressure demo — Slow the router's event loop processing. As router mailbox fills to capacity, sender.send() blocks. Show priority=true bypassing the full low lane via the high (unbounded) lane.",
+          "system_events": ["router_slow", "mailbox_filling", "low_blocked", "high_unbounded", "dropped_metric"],
+          "visual_elements": [
+            "Router mailbox progress bar from 0 to mailbox_size",
+            "Low-priority messages queue in low lane (bounded) shown as dots",
+            "When full: low-priority senders show 'blocked' state with clock icon",
+            "High-priority messages always pass via unbounded lane (no queue shown)",
+            "metrics display: 'messages_dropped_total' increments if low queue overflows"
+          ]
+        }
+      ],
+      "checks": [
+        "tracker uses UnboundedMailbox — sender never blocks on tracker",
+        "router and spawner use bounded Mailbox — senders block when full",
+        "listener and dialer use event loops (no mailbox) — rate limited via KeyedRateLimiter",
+        "priority=true messages never appear in the bounded low queue visualization",
+        "backpressure occurs at router mailbox, NOT at the application sender"
+      ]
+    },
+    {
+      "id": "wire-format-explorer",
+      "title": "Wire Format Explorer",
+      "learning_goal": "Read a real multi-frame p2p connection at the byte level, understanding how the codec encodes each Payload variant, why varints are used for length fields, and what happens when bytes are corrupted.",
+      "why_it_matters": "Distributed systems must agree on wire formats. Misunderstanding varint encoding leads to off-by-one bugs; not knowing which bytes are signed leads to security failures. This visualization makes the encoding concrete before students read the codec source.",
+      "source_files": [
+        "p2p/src/types.rs",
+        "p2p/src/authenticated/discovery/types.rs",
+        "p2p/src/authenticated/mod.rs"
+      ],
+      "default_state": "A single connection establishment sequence loaded: Greeting → BitVec → Peers → Data. First frame (Greeting) expanded to show field-level hex bytes.",
+      "controls": [
+        {
+          "id": "frame_index",
+          "type": "stepper",
+          "label": "Frame",
+          "values": ["1 (Greeting)", "2 (BitVec)", "3 (Peers)", "4 (Data)"]
+        },
+        {
+          "id": "ingress_type",
+          "type": "toggle",
+          "label": "Ingress type",
+          "values": ["Socket", "Dns"]
+        },
+        {
+          "id": "byte_corruption",
+          "type": "stepper",
+          "label": "Corrupt byte at offset",
+          "values": ["none", "0", "1", "2", "5", "10", "20"]
+        },
+        {
+          "id": "show_signatures",
+          "type": "toggle",
+          "label": "Show signature coverage",
+          "values": ["hex_only", "signature_coverage"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "greeting_frame",
+          "caption": "Greeting frame — First frame on every new connection. Contains the sender's self-signed Info: ingress (Socket or Dns), timestamp (epoch ms), public_key, and signature under _COMMONWARE_P2P_TRACKER namespace.",
+          "system_events": [],
+          "visual_elements": [
+            "Hex dump rows: offset | hex bytes | ascii",
+            "Current field highlighted in both hex view and field tree",
+            "Field tree: Info { ingress (2 variants), timestamp (u64), public_key (bls12_381_g1 or ed25519), signature }",
+            "Ingress::Socket: [00] prefix + 4-byte ip + 2-byte port",
+            "Ingress::Dns: [01] prefix + varint hostname_len + hostname bytes + varint port",
+            "Signature coverage bracket shows which bytes are covered by the signature (all fields except signature itself)"
+          ]
+        },
+        {
+          "id": "bitvec_frame",
+          "caption": "BitVec frame — Periodic keepalive and discovery message. Contains the peer-set index and the peer's bitvector over that sorted peer set.",
+          "system_events": [],
+          "visual_elements": [
+            "Hex view: [02] prefix (BitVec variant) + varint index (u64 epoch) + varint bitvec_len + bitvec bytes",
+            "Bit display: row of squares colored by bit value (1=green, 0=gray)",
+            "Bit position label: 'bit[i] = peer at position i in sorted set at index K'",
+            "Show that bitvec_len is the byte count, not bit count (last byte may have unused bits)"
+          ]
+        },
+        {
+          "id": "peers_frame",
+          "caption": "Peers frame — Gossip response. Contains a varint count N followed by N Info records, each with ingress + timestamp + public_key + signature.",
+          "system_events": [],
+          "visual_elements": [
+            "Hex view: [03] prefix (Peers variant) + varint count + N × Info record",
+            "Each Info record outlined as a sub-structure",
+            "Field tree shows nested Info within Peers wrapper",
+            "Note the per-Info signature field — each peer signs its own Info independently"
+          ]
+        },
+        {
+          "id": "data_frame",
+          "caption": "Data frame — Application payload. Contains channel ID (varint) + message length (varint) + raw bytes. No signature — stream encryption provides authentication.",
+          "system_events": [],
+          "visual_elements": [
+            "Hex view: [00] prefix (Data variant) + varint channel + varint msg_len + msg_bytes",
+            "Channel field highlighted",
+            "Fixed overhead annotation: 'MAX_PAYLOAD_DATA_OVERHEAD = 1 (variant) + 10 (max varint channel) + 5 (max varint length) = 16 bytes'",
+            "Note: the [00] prefix is Data, [02] is BitVec, [03] is Peers — these enum discriminants must stay in sync with the Payload enum"
+          ]
+        },
+        {
+          "id": "corruption",
+          "caption": "Corruption simulation — Corrupt a byte and show the parse error. [01] changed to [FF] → InvalidEnum. Length field overflow → buffer would exceed MAX_FRAME_SIZE. Truncated signature → UnexpectedEof.",
+          "system_events": ["corruption_applied", "parse_error"],
+          "visual_elements": [
+            "Corrupted byte highlighted in red",
+            "Error callout appears: error name (e.g., InvalidEnum) + which field failed + byte offset",
+            "Comparison: original hex vs corrupted hex",
+            "With show_signatures=on: show how corrupting a covered byte would invalidate the signature check"
+          ]
+        }
+      ],
+      "checks": [
+        "Greeting frame prefix is 0x01, BitVec is 0x02, Peers is 0x03, Data is 0x00",
+        "Ingress::Socket encoding: [00] + 4 bytes IP + 2 bytes port",
+        "Ingress::Dns encoding: [01] + varint(len) + hostname bytes + varint(port)",
+        "Timestamp is u64 epoch milliseconds, encoded as varint",
+        "Signature covers all fields of Info except the signature field itself",
+        "MAX_PAYLOAD_DATA_OVERHEAD = 16 bytes (1 + 10 + 5)"
+      ]
+    },
+    {
+      "id": "simulated-network",
+      "title": "Simulated Network Controller",
+      "learning_goal": "Build intuition for how link parameters (latency, jitter, loss) affect message delivery, how partitions are detected and recovered from, and why deterministic seeding makes distributed bugs reproducible.",
+      "why_it_matters": "Testing distributed systems requires controlling the network. Real networks cannot be paused, slowed, or partitioned. The simulated network lets tests specify exact conditions and reproduce them deterministically — essential for catching race conditions that only appear under specific network conditions.",
+      "source_files": [
+        "p2p/src/simulated/mod.rs",
+        "p2p/src/simulated/ingress.rs"
+      ],
+      "default_state": "4 nodes in a complete graph. All links show (latency=50ms, jitter=10ms, loss=0%). One ping-pong message flow visible between node 0 and node 1.",
+      "controls": [
+        {
+          "id": "node_count",
+          "type": "stepper",
+          "label": "Nodes",
+          "values": ["3", "4", "6", "8"]
+        },
+        {
+          "id": "selected_link",
+          "type": "toggle",
+          "label": "Edit link",
+          "values": ["0→1", "0→2", "1→2", "1→3", "2→3"]
+        },
+        {
+          "id": "latency",
+          "type": "slider",
+          "label": "Latency (ms)",
+          "values": ["0", "50", "200", "500", "2000"]
+        },
+        {
+          "id": "jitter",
+          "type": "slider",
+          "label": "Jitter σ (ms)",
+          "values": ["0", "10", "50", "150"]
+        },
+        {
+          "id": "loss_rate",
+          "type": "slider",
+          "label": "Loss rate",
+          "values": ["0%", "5%", "20%", "50%"]
+        },
+        {
+          "id": "partition",
+          "type": "toggle",
+          "label": "Partition",
+          "values": ["none", "cut_A", "cut_B"]
+        },
+        {
+          "id": "seed",
+          "type": "stepper",
+          "label": "RNG seed",
+          "values": ["42", "0", "1", "1337"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "steady_state",
+          "caption": "Steady state — All links operating normally. Messages flow bidirectionally. Link quality color: green (>95% delivery), yellow (80-95%), red (<80%).",
+          "system_events": ["message_delivered"],
+          "visual_elements": [
+            "Node circles labeled P0, P1, P2, P3",
+            "Directed edges with labels: '50ms ± 10ms, 0% loss'",
+            "Messages shown as small dots traveling along edges",
+            "Delivery counter on each edge",
+            "Color-coded edge backgrounds by delivery rate"
+          ]
+        },
+        {
+          "id": "latency_jitter",
+          "caption": "High latency with jitter — Messages arrive with variable delay. Show the Normal distribution curve for a 500ms ± 150ms link. Bursts of slow messages cluster together.",
+          "system_events": ["message_delayed", "jitter_sampled"],
+          "visual_elements": [
+            "Edge label updates to '500ms ± 150ms'",
+            "Messages queue on sender side and release one-by-one with sampled delay",
+            "Histogram overlay shows distribution of recent inter-arrival times",
+            "Visual burst: messages from the same source cluster in arrival"
+          ]
+        },
+        {
+          "id": "packet_loss",
+          "caption": "Random packet loss — Each message independently has a 20% chance of being dropped. Unlike burst loss, this produces isolated gaps scattered throughout message streams.",
+          "system_events": ["message_dropped"],
+          "visual_elements": [
+            "Dropped messages shown as fading red dots on the edge",
+            "Drop counter increments per edge",
+            "Edge color shifts toward yellow/red based on recent loss rate",
+            "No queuing — dropped messages simply disappear"
+          ]
+        },
+        {
+          "id": "partition_detected",
+          "caption": "Network partition — Cut selected. Edges crossing the cut are removed. Isolated subgraphs cannot communicate. Watch BitVec keepalives time out in the disconnected region.",
+          "system_events": ["link_removed", "bitvec_timeout", "isolation_detected"],
+          "visual_elements": [
+            "Cut edges shown as dashed gray lines",
+            "Isolated node groups have tinted background",
+            "Message flow stops across the cut",
+            "BitVec timeout countdown shown on nodes in separate partition",
+            "'Partition detected' banner with elapsed partition time"
+          ]
+        },
+        {
+          "id": "partition_heal",
+          "caption": "Partition heal — Reconnect the cut. Show bitvector re-convergence messages flowing across the restored link. Normal-distributed jitter resumes.",
+          "system_events": ["link_restored", "bitvec_exchange", "re_convergence"],
+          "visual_elements": [
+            "Edges restore with animated pulse",
+            "BitVec messages re-initiate across the restored link",
+            "Convergence progress shown per node",
+            "'Partition healed in K ms' banner"
+          ]
+        },
+        {
+          "id": "determinism",
+          "caption": "Determinism check — With the same seed, two runs produce identical message delivery order. Change the seed and the random choices differ. This is how distributed bugs are reproduced.",
+          "system_events": ["rng_sampled", "delivery_order_recorded"],
+          "visual_elements": [
+            "Two side-by-side identical network diagrams",
+            "'Run A (seed=42)' vs 'Run B (seed=42)': identical message delivery animation",
+            "'Run B (seed=99)': different delivery timing shown as mismatch",
+            "Delivery order sequence displayed as list of (src, dst, seq) tuples"
+          ]
+        }
+      ],
+      "checks": [
+        "Normal(latency, jitter) is sampled per message, producing burst delays",
+        "success_rate is an independent draw per message, NOT burst loss",
+        "remove_link() is unidirectional — both directions must be removed to partition",
+        "with seed=42, two runs produce bit-identical delivery sequences",
+        "partition detection happens via missing BitVec keepalives, not via explicit signal"
+      ]
+    },
+    {
+      "id": "nat-traversal",
+      "title": "Asymmetric Address NAT Traversal",
+      "learning_goal": "Understand why Symmetric addressing fails for NAT'd peers, how Asymmetric { ingress, egress } models the NAT problem, and how egress IP filtering prevents address spoofing.",
+      "why_it_matters": "Most peers in production are behind NAT. A naive symmetric address model (dial what you receive from) breaks when both peers are behind different NATs — each sees the other's public IP but cannot dial it directly. The Asymmetric model allows peers to advertise a dialable ingress while validating the source IP they actually received from.",
+      "source_files": [
+        "p2p/src/types.rs",
+        "p2p/src/authenticated/discovery/types.rs",
+        "p2p/src/authenticated/discovery/actors/listener.rs"
+      ],
+      "default_state": "Node A (left) behind NAT with ingress Dns('node-a.example.com') and egress 1.2.3.4. Node B (right) behind NAT with ingress Dns('node-b.example.com') and egress 5.6.7.8. Both NATs shown as semi-transparent boxes.",
+      "controls": [
+        {
+          "id": "step",
+          "type": "stepper",
+          "label": "Step",
+          "values": ["0", "1", "2", "3", "4", "5"]
+        },
+        {
+          "id": "show_addresses",
+          "type": "toggle",
+          "label": "Show addresses",
+          "values": ["all", "ingress_only", "egress_only"]
+        },
+        {
+          "id": "spoof_attempt",
+          "type": "toggle",
+          "label": "Show spoof attempt",
+          "values": ["hidden", "shown"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "initial_state",
+          "caption": "Step 0 — Initial state: Node A knows B's DNS name but not B's egress IP. Node B knows A's DNS name but not A's egress IP. Neither can dial the other directly because NAT boxes don't forward without port forwarding.",
+          "system_events": [],
+          "visual_elements": [
+            "Two node boxes (A and B) each inside a NAT box",
+            "NAT boxes show public-facing IP (1.2.3.4 and 5.6.7.8)",
+            "Dashed lines from A to node-a.example.com and from B to node-b.example.com",
+            "Egress IPs shown inside NAT boxes as internal labels",
+            "Red X on potential direct A→B connection (can't dial egress IP directly)"
+          ]
+        },
+        {
+          "id": "a_dials_b",
+          "caption": "Step 1 — A resolves node-b.example.com → 5.6.7.8 and dials. B receives the connection. B observes the connection came from egress IP 1.2.3.4 (A's public IP). B's listener checks: is 1.2.3.4 in any tracked Asymmetric { egress }? Not yet — A is not in B's peer set. Connection proceeds to handshake.",
+          "system_events": ["dns_resolve", "dial_attempt", "egress_observed"],
+          "visual_elements": [
+            "Arrow from A through NAT-B to B showing connection path",
+            "B's NAT box shows 'incoming from 1.2.3.4' label",
+            "B's egress validation check callout: 'Checking egress: 1.2.3.4'",
+            "A's Info not yet in B's tracker — highlighted yellow (pending)"
+          ]
+        },
+        {
+          "id": "greeting_exchange",
+          "caption": "Step 2 — Encrypted handshake completes. A sends Greeting with Info { ingress: Dns('node-a.example.com'), egress: 1.2.3.4 }. B sends Greeting with Info { ingress: Dns('node-b.example.com'), egress: 5.6.7.8 }. Both peers now know each other's asymmetric addresses via gossip.",
+          "system_events": ["greeting_sent", "info_received", "directory_updated"],
+          "visual_elements": [
+            "Info bubbles appear near each node showing the signed Info contents",
+            "Signature shown as a lock icon on each Info",
+            "B's tracker directory shows: 'A: Asymmetric { ingress: Dns('node-a.example.com'), egress: 1.2.3.4 }'",
+            "A's tracker directory shows: 'B: Asymmetric { ingress: Dns('node-b.example.com'), egress: 5.6.7.8 }'"
+          ]
+        },
+        {
+          "id": "egress_validation",
+          "caption": "Step 3 — Now B tries to connect back to A. B dials node-a.example.com (which resolves to 1.2.3.4). A's listener receives from egress 5.6.7.8. A checks: does this match Asymmetric { egress: 5.6.7.8 } in my tracker for B? YES — connection accepted.",
+          "system_events": ["reverse_dial", "egress_check", "egress_match"],
+          "visual_elements": [
+            "Arrow from B through NAT-A to A",
+            "A's egress validation shown as green check: 'egress 5.6.7.8 == expected 5.6.7.8 ✓'",
+            "If spoof attempt shown: same step but egress is wrong IP — red X with 'egress mismatch: expected 5.6.7.8, got 9.9.9.9'"
+          ]
+        },
+        {
+          "id": "spoof_rejected",
+          "caption": "Spoof attempt — Mallory (M) tries to impersonate B by sending from egress 9.9.9.9 but claiming B's identity. A checks tracker: B's tracked Asymmetric { egress: 5.6.7.8 }. Received egress 9.9.9.9 does not match — connection rejected before handshake.",
+          "system_events": ["spoof_attempt", "egress_mismatch", "connection_rejected"],
+          "visual_elements": [
+            "Mallory node M shown outside NATs",
+            "Arrow M→A labeled 'spoofing B's identity, egress=9.9.9.9'",
+            "A's egress check shown as red X: 'egress mismatch: expected 5.6.7.8, got 9.9.9.9'",
+            "Connection rejected annotation before handshake occurs",
+            "Tracker unchanged — no state for Mallory"
+          ]
+        },
+        {
+          "id": "symmetric_fails",
+          "caption": "Why not Symmetric? — If both nodes used Symmetric addresses, they would need to dial each other at the egress IP they observe. But egress IPs are not dialable from outside (NAT). The diagram shows the deadlock: A sees B at 5.6.7.8 but can't dial it; B sees A at 1.2.3.4 but can't dial it.",
+          "system_events": ["symmetric_deadlock"],
+          "visual_elements": [
+            "Side-by-side comparison: Symmetric (red X on both dial attempts) vs Asymmetric (green checkmarks)",
+            "NAT boxes with 'not dialable from outside' annotation",
+            "Deadlock arrows showing circular dependency"
+          ]
+        }
+      ],
+      "checks": [
+        "Asymmetric { ingress, egress } separates what is dialable from what is expected on receive",
+        "A connection from unexpected egress IP is rejected even if ingress dial was correct",
+        "Info is signed by the peer — egress IP cannot be forged without the private key",
+        "Symmetric addressing fails when both peers are behind different NATs",
+        "Gossip propagates egress IPs before the first successful reverse connection"
+      ]
+    },
+    {
+      "id": "priority-relay",
+      "title": "Priority Relay Backpressure",
+      "learning_goal": "Internalize the dual-lane relay design: priority=true always succeeds via unbounded high lane; priority=false goes through bounded low lane and blocks (or drops) when full. This invariant is the foundation of the adversarial-safety property.",
+      "why_it_matters": "In adversarial environments, a slow or malicious peer must not be able to stall important messages. The bounded low lane returns errors on overflow so senders know they're being throttled (rather than having messages silently disappear). The unbounded high lane ensures priority messages never wait behind a slow peer's backlog.",
+      "source_files": [
+        "p2p/src/authenticated/relay.rs",
+        "p2p/src/authenticated/mod.rs"
+      ],
+      "default_state": "A single Relay shown with low lane capacity=3, high lane unbounded. Idle state. Queue visualization: low lane shows 3 empty slots, high lane shows infinity symbol.",
+      "controls": [
+        {
+          "id": "action",
+          "type": "toggle",
+          "label": "Send",
+          "values": ["low_priority", "high_priority", "drain"]
+        },
+        {
+          "id": "low_capacity",
+          "type": "stepper",
+          "label": "Low lane capacity",
+          "values": ["1", "3", "8", "32"]
+        },
+        {
+          "id": "drain_count",
+          "type": "stepper",
+          "label": "Drain count",
+          "values": ["1", "2", "3"]
+        },
+        {
+          "id": "scenario",
+          "type": "toggle",
+          "label": "Scenario",
+          "values": ["normal", "backpressure", "priority_bypass"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "idle",
+          "caption": "Idle — Low lane shows N empty slots (bounded). High lane shows ∞ symbol (unbounded). No messages queued.",
+          "system_events": [],
+          "visual_elements": [
+            "Relay box with two lanes: 'LOW (bounded)' and 'HIGH (unbounded)'",
+            "Low lane: row of square slots, all gray/empty",
+            "High lane: vertical bar with ∞ label",
+            "Send buttons: 'Low' and 'High' prominently shown"
+          ]
+        },
+        {
+          "id": "low_queue",
+          "caption": "Low-priority messages queue in the low lane — Each low-priority send adds a blue dot to the next empty slot. When all slots are full, the next low-priority send returns an error immediately (try_send semantics) and the message is dropped.",
+          "system_events": ["low_send", "queue_grows", "queue_full", "low_drop"],
+          "visual_elements": [
+            "Blue dots appear in low lane slots sequentially",
+            "Progress bar below low lane showing fill level",
+            "When full: low-priority sender shows 'dropped' state with X icon and red flash",
+            "Metrics panel: 'messages_in_low_queue: K/N', 'messages_dropped_total: M'"
+          ]
+        },
+        {
+          "id": "high_bypass",
+          "caption": "High-priority bypass — While low lane is full and low senders are being dropped, a high-priority send arrives. It routes through the high (unbounded) lane and immediately succeeds. The dropped low senders get error feedback.",
+          "system_events": ["high_send", "high_bypass", "low_dropped"],
+          "visual_elements": [
+            "Green message dot travels through HIGH lane bypassing LOW",
+            "HIGH lane shows green dot leaving immediately",
+            "LOW lane dots show 'X' as they are dropped",
+            "'Priority message delivered immediately' callout",
+            "Metrics: 'high_messages_total: K'"
+          ]
+        },
+        {
+          "id": "drain",
+          "caption": "Drain — The receiver consumes N messages from the relay. Low-lane messages are consumed in order (FIFO). High-lane messages are interleaved by arrival time. As slots free up, new low-priority messages can be sent (try_send succeeds again).",
+          "system_events": ["drain", "message_consumed", "low_slot_freed"],
+          "visual_elements": [
+            "Dots exit the right side of each lane",
+            "Slots refill from the left (shuffle animation)",
+            "Senders retry and succeed as slots free up (no clock icon)",
+            "Metrics update: 'messages_in_low_queue: K/N'"
+          ]
+        },
+        {
+          "id": "drop",
+          "caption": "Drop on overflow — When low lane is full, a low-priority send returns an error immediately (try_send semantics). The message is dropped and the dropped counter increments. High-priority messages are NEVER dropped.",
+          "system_events": ["low_drop", "dropped_increment"],
+          "visual_elements": [
+            "Low-priority message fades to red and disappears at the relay input",
+            "'DROPPED' label briefly appears",
+            "Metrics: 'messages_dropped_total: K' increments in red",
+            "Contrast: high-priority messages never show this animation"
+          ]
+        }
+      ],
+      "checks": [
+        "send(message, priority=true) always succeeds if the channel is live (high lane is unbounded)",
+        "send(message, priority=false) returns error when low lane is full (try_send semantics, not blocking)",
+        "low-priority messages are dropped when low lane is full, not queued beyond capacity",
+        "When low lane is full, high-priority messages arrive via the unbounded high lane",
+        "metrics 'messages_dropped_total' increments only for low-priority drops",
+        "draining the relay frees slots for subsequent low-priority messages (no FIFO queue beyond capacity)"
+      ]
+    }
+  ]
+}

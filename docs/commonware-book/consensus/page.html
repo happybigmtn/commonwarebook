@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+    <title>commonware-consensus &mdash; Ordering in an Adversarial World</title>
+    <meta name="description" content="A deep technical treatment of commonware-consensus: the three-phase simplex protocol, quorum certificates, leader election, ordered broadcast, and marshal block delivery.">
+
+    <link rel="preload" href="/shared.js" as="script">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+    <style>
+        /* ── Book tokens ─────────────────────────────────────── */
+        :root {
+            --paper:       #f8f5f0;
+            --paper-dark:  #f0ece4;
+            --ink:         #1a1814;
+            --ink-light:   #4a4540;
+            --ink-faint:   #8a8580;
+            --accent:      #2c5f8a;
+            --accent-soft: #e8f0f6;
+            --border:      #d8d4cc;
+            --border-faint:#eae6de;
+            --code-bg:     #f0ece4;
+            --serif:       'Libre Baskerville', Georgia, 'Times New Roman', serif;
+            --mono:        'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+            --col-measure: 68ch;
+            --col-toc:     22ch;
+        }
+
+        html[data-theme="dark"] {
+            --paper:       #12100f;
+            --paper-dark:  #1a1715;
+            --ink:         #f2ece5;
+            --ink-light:   #d1c7bd;
+            --ink-faint:   #8f867d;
+            --accent:      #7eaad1;
+            --accent-soft: #1a2430;
+            --border:      #3a332d;
+            --border-faint:#2b2521;
+            --code-bg:     #1d1917;
+            color-scheme: dark;
+        }
+
+        /* ── Reset & base ───────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html {
+            scroll-behavior: smooth;
+            font-size: 17px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: var(--serif);
+            line-height: 1.75;
+            min-height: 100vh;
+        }
+
+        /* ── Sticky reading bar ─────────────────────────────── */
+        .reading-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--paper);
+            border-bottom: 1px solid var(--border);
+            padding: 0.45rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.03em;
+        }
+
+        html[data-theme="dark"] .reading-bar {
+            background: rgba(18, 16, 15, 0.92);
+        }
+
+        .reading-bar .crumb {
+            color: var(--ink-faint);
+        }
+
+        .reading-bar .crumb a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .reading-bar .crumb a:hover {
+            text-decoration: underline;
+        }
+
+        .reading-bar .chapter-title {
+            color: var(--ink-light);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .reading-bar .prog {
+            margin-left: auto;
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        .reading-bar .prog .prev,
+        .reading-bar .prog .next {
+            color: var(--accent);
+            text-decoration: none;
+            padding: 0.2rem 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            font-size: 0.68rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .reading-bar .prog .prev:hover,
+        .reading-bar .prog .next:hover {
+            background: var(--accent-soft);
+            border-color: var(--accent);
+        }
+
+        .theme-toggle {
+            min-width: 4.3rem;
+            background: transparent;
+        }
+
+        /* ── Chapter header ─────────────────────────────────── */
+        .ch-header {
+            text-align: center;
+            padding: 4rem 2rem 3rem;
+            max-width: calc(var(--col-measure) + var(--col-toc) + 4rem);
+            margin: 0 auto;
+        }
+
+        .ch-header .ch-meta {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            margin-bottom: 1.2rem;
+        }
+
+        .ch-header .ch-title {
+            font-family: var(--serif);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            line-height: 1.15;
+            margin: 0 0 1rem;
+            color: var(--ink);
+        }
+
+        .ch-header .ch-deck {
+            font-family: var(--serif);
+            font-size: 1.1rem;
+            font-style: italic;
+            color: var(--ink-light);
+            max-width: 52ch;
+            margin: 0 auto 1.5rem;
+            line-height: 1.6;
+        }
+
+        .ch-header .ch-divider {
+            display: inline-block;
+            font-family: var(--mono);
+            font-size: 1.4rem;
+            color: var(--border);
+            letter-spacing: 0.3em;
+            margin-top: 0.5rem;
+        }
+
+        /* ── Layout shell ──────────────────────────────────── */
+        .ch-layout {
+            display: grid;
+            grid-template-columns: 1fr var(--col-toc);
+            max-width: calc(var(--col-measure) + var(--col-toc) + 4rem);
+            margin: 0 auto;
+            padding: 0 2rem 6rem;
+            gap: 0 3rem;
+            align-items: start;
+        }
+
+        .ch-prose {
+            min-width: 0;
+            max-width: var(--col-measure);
+        }
+
+        /* ── TOC ───────────────────────────────────────────── */
+        .ch-toc {
+            position: sticky;
+            top: 3.2rem;
+            padding-top: 1rem;
+        }
+
+        .ch-toc details {
+            border: 1px solid var(--border-faint);
+            background: var(--paper-dark);
+            border-radius: 3px;
+            padding: 0.8rem 1rem;
+            font-size: 0.78rem;
+        }
+
+        .ch-toc details summary {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .ch-toc details[open] summary {
+            margin-bottom: 0.6rem;
+        }
+
+        .ch-toc ol {
+            margin: 0;
+            padding-left: 1.1rem;
+            list-style: none;
+        }
+
+        .ch-toc li {
+            margin-bottom: 0.3rem;
+        }
+
+        .ch-toc a {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--ink-light);
+            text-decoration: none;
+            display: block;
+            padding: 0.1rem 0;
+            line-height: 1.4;
+        }
+
+        .ch-toc a:hover {
+            color: var(--accent);
+        }
+
+        /* ── Prose elements ────────────────────────────────── */
+        h2.ch-s1 {
+            font-family: var(--serif);
+            font-size: 1.55rem;
+            font-weight: 700;
+            margin: 3.5rem 0 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-faint);
+            color: var(--ink);
+            line-height: 1.25;
+        }
+
+        h3.ch-s2 {
+            font-family: var(--serif);
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin: 2rem 0 0.6rem;
+            color: var(--ink);
+        }
+
+        h4.ch-s3 {
+            font-family: var(--mono);
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 500;
+            margin: 1.5rem 0 0.4rem;
+            color: var(--ink-faint);
+        }
+
+        p {
+            margin: 0 0 1rem;
+        }
+
+        .ch-prose strong {
+            font-weight: 700;
+            color: var(--ink);
+        }
+
+        .ch-prose em {
+            font-style: italic;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        a:hover {
+            text-decoration-thickness: 2px;
+        }
+
+        /* ── Code ──────────────────────────────────────────── */
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 1rem 1.2rem;
+            overflow-x: auto;
+            margin: 1.2rem 0;
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            line-height: 1.6;
+        }
+
+        code {
+            font-family: var(--mono);
+            font-size: 0.85em;
+            background: var(--code-bg);
+            padding: 0.1em 0.35em;
+            border-radius: 2px;
+            border: 1px solid var(--border-faint);
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            border: none;
+            font-size: inherit;
+        }
+
+        /* ── HR separator ───────────────────────────────────── */
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2.5rem 0;
+        }
+
+        /* ── Callout boxes ─────────────────────────────────── */
+        .callout {
+            border-left: 3px solid var(--accent);
+            background: var(--accent-soft);
+            margin: 1.5rem 0;
+            padding: 0.9rem 1.2rem;
+            border-radius: 0 3px 3px 0;
+        }
+
+        .callout-label {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 0.35rem;
+            font-weight: 500;
+        }
+
+        .callout p {
+            margin: 0;
+            font-size: 0.92rem;
+            color: var(--ink-light);
+        }
+
+        .callout.invariant {
+            border-left-color: #5a8a2c;
+            background: #f2f7eb;
+        }
+
+        .callout.invariant .callout-label {
+            color: #5a8a2c;
+        }
+
+        .callout.warning {
+            border-left-color: #8a5a2c;
+            background: #f7f0eb;
+        }
+
+        .callout.warning .callout-label {
+            color: #8a5a2c;
+        }
+
+        .callout.source {
+            border-left-color: var(--ink-faint);
+            background: var(--paper-dark);
+        }
+
+        .callout.source .callout-label {
+            color: var(--ink-faint);
+        }
+
+        /* ── Figure / Lab plates ────────────────────────────── */
+        figure.visual {
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            margin: 2.5rem 0;
+            overflow: hidden;
+            background: var(--paper-dark);
+        }
+
+        figure.visual figcaption {
+            padding: 0.8rem 1.2rem;
+            background: var(--paper);
+            border-bottom: 1px solid var(--border-faint);
+            font-size: 0.82rem;
+        }
+
+        .visual-meta {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .visual-num {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+        }
+
+        .visual-title {
+            font-family: var(--serif);
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--ink);
+        }
+
+        .visual-body {
+            padding: 1.5rem 1.2rem;
+        }
+
+        .visual-goal {
+            font-size: 0.88rem;
+            color: var(--ink-light);
+            margin-bottom: 0.8rem;
+            font-style: italic;
+        }
+
+        .visual-goal strong {
+            font-style: normal;
+            color: var(--ink);
+        }
+
+        .visual-why {
+            font-size: 0.85rem;
+            color: var(--ink-light);
+            background: var(--paper);
+            border: 1px solid var(--border-faint);
+            border-radius: 3px;
+            padding: 0.7rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .visual-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+        }
+
+        .control-group label {
+            color: var(--ink-faint);
+            letter-spacing: 0.05em;
+        }
+
+        .control-group select,
+        .control-group input[type="range"] {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            padding: 0.2rem 0.4rem;
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            background: var(--paper);
+            color: var(--ink);
+            cursor: pointer;
+        }
+
+        .visual-stage {
+            background: var(--paper);
+            border: 1px solid var(--border-faint);
+            border-radius: 3px;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.8rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .visual-stage-placeholder {
+            text-align: center;
+            color: var(--ink-faint);
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            padding: 2rem;
+        }
+
+        .visual-stage-placeholder span {
+            display: block;
+            margin-top: 0.5rem;
+            font-size: 0.68rem;
+            letter-spacing: 0.08em;
+        }
+
+        .visual-scenes {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .scene-label {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            margin-bottom: 0.2rem;
+        }
+
+        .scene-caption {
+            font-size: 0.85rem;
+            color: var(--ink-light);
+            line-height: 1.5;
+        }
+
+        .scene-events {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--ink-faint);
+            margin-top: 0.3rem;
+            line-height: 1.6;
+        }
+
+        .visual-sources {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            color: var(--ink-faint);
+            margin-top: 0.6rem;
+            line-height: 1.6;
+        }
+
+        .visual-sources span {
+            color: var(--accent);
+        }
+
+        .visual-caption-footer {
+            padding: 0.6rem 1.2rem;
+            background: var(--paper);
+            border-top: 1px solid var(--border-faint);
+            font-size: 0.8rem;
+            color: var(--ink-faint);
+            font-style: italic;
+        }
+
+        /* ── Checks list ───────────────────────────────────── */
+        .visual-checks {
+            background: var(--paper);
+            border-top: 1px solid var(--border-faint);
+            padding: 0.8rem 1.2rem;
+        }
+
+        .visual-checks-title {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            margin-bottom: 0.4rem;
+        }
+
+        .visual-checks ul {
+            margin: 0;
+            padding-left: 1.2rem;
+        }
+
+        .visual-checks li {
+            font-size: 0.82rem;
+            color: var(--ink-light);
+            margin-bottom: 0.25rem;
+            line-height: 1.4;
+        }
+
+        /* ── Chapter end ───────────────────────────────────── */
+        .ch-end {
+            text-align: center;
+            padding: 3rem 0 2rem;
+            font-family: var(--mono);
+            font-size: 1.2rem;
+            color: var(--border);
+            letter-spacing: 0.3em;
+        }
+
+        /* ── Next chapter ───────────────────────────────────── */
+        .ch-next {
+            border-top: 1px solid var(--border-faint);
+            padding: 2.5rem 0 0;
+            margin-top: 2rem;
+        }
+
+        .ch-next-label {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            margin-bottom: 0.5rem;
+        }
+
+        .ch-next-title {
+            font-family: var(--serif);
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--ink);
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .ch-next-title:hover {
+            color: var(--accent);
+        }
+
+        .ch-next-desc {
+            font-size: 0.88rem;
+            color: var(--ink-light);
+            margin-top: 0.3rem;
+            font-style: italic;
+        }
+
+        /* ── Glossary ──────────────────────────────────────── */
+        .glossary {
+            border-top: 1px solid var(--border-faint);
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+        }
+
+        .glossary dt {
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--ink);
+            margin-top: 1rem;
+        }
+
+        .glossary dd {
+            margin: 0.2rem 0 0 1.5rem;
+            font-size: 0.88rem;
+            color: var(--ink-light);
+            line-height: 1.5;
+        }
+
+        /* ── Mobile TOC ─────────────────────────────────────── */
+        .mobile-toc {
+            display: none;
+            margin-bottom: 2rem;
+        }
+
+        .mobile-toc details {
+            border: 1px solid var(--border-faint);
+            background: var(--paper-dark);
+            border-radius: 3px;
+            padding: 0.7rem 1rem;
+        }
+
+        .mobile-toc summary {
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--ink-faint);
+            cursor: pointer;
+        }
+
+        .mobile-toc ol {
+            list-style: none;
+            margin: 0.6rem 0 0;
+            padding: 0;
+        }
+
+        .mobile-toc li {
+            margin-bottom: 0.25rem;
+        }
+
+        .mobile-toc a {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--ink-light);
+            text-decoration: none;
+        }
+
+        /* ── Responsive ─────────────────────────────────────── */
+        @media (max-width: 900px) {
+            .ch-layout {
+                grid-template-columns: 1fr;
+                padding: 0 1.25rem 6rem;
+            }
+
+            .ch-toc {
+                display: none;
+            }
+
+            .mobile-toc {
+                display: block;
+            }
+
+            .ch-prose {
+                max-width: 100%;
+            }
+
+            .reading-bar .chapter-title {
+                display: none;
+            }
+        }
+
+        @media (max-width: 600px) {
+            html { font-size: 16px; }
+            .ch-header { padding: 2.5rem 1.25rem 2rem; }
+            .reading-bar { padding: 0.4rem 1rem; }
+            figure.visual { margin: 2rem -0.5rem; border-left: none; border-right: none; border-radius: 0; }
+            .visual-body { padding: 1rem 0.8rem; }
+        }
+    </style>
+    <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+
+<body>
+
+    <!-- ── Sticky reading bar ─────────────────────────── -->
+    <div class="reading-bar" role="navigation" aria-label="Chapter navigation">
+        <span class="crumb">
+            <a href="/index.html">commonware</a> &rsaquo; <a href="/commonware-book/index.html">book</a> &rsaquo; consensus
+        </span>
+        <span class="chapter-title">commonware-consensus</span>
+        <div class="prog">
+            <button class="prev theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+            <a href="/commonware-book/p2p/page.html" class="prev" aria-label="Previous chapter">&#8592; prev</a>
+            <a href="/commonware-book/index.html" style="color:var(--ink-faint);text-decoration:none;font-size:0.68rem;">contents</a>
+            <a href="/commonware-book/index.html" class="next" aria-label="Return to book index">index &#8594;</a>
+        </div>
+    </div>
+
+    <!-- ── Chapter header ─────────────────────────────── -->
+    <header class="ch-header">
+        <div class="ch-meta">commonware-consensus &nbsp;&middot;&nbsp; chapter 3 &nbsp;&middot;&nbsp; ALPHA</div>
+        <h1 class="ch-title">commonware-consensus</h1>
+        <p class="ch-deck">Ordering opaque messages in a Byzantine environment &mdash; three-phase voting, quorum certificates, and the stack of primitives that sit beneath it.</p>
+        <div class="ch-divider" aria-hidden="true">&mdash;&mdash;&mdash;&mdash;&mdash;</div>
+    </header>
+
+    <!-- ── Main layout ───────────────────────────────── -->
+    <div class="ch-layout">
+
+        <!-- ── Prose ──────────────────────────────────── -->
+        <main class="ch-prose">
+
+            <!-- Mobile TOC -->
+            <div class="mobile-toc">
+                <details>
+                    <summary>Chapter contents</summary>
+                    <ol>
+                        <li><a href="#bg">Backgrounder</a></li>
+                        <li><a href="#s1">What Problem Does This Solve?</a></li>
+                        <li><a href="#s2">Mental Model</a></li>
+                        <li><a href="#s3">Core Abstractions</a></li>
+                        <li><a href="#s4">Execution Flow</a></li>
+                        <li><a href="#s5">Concurrency and Protocol Semantics</a></li>
+                        <li><a href="#s6">Failure Modes</a></li>
+                        <li><a href="#s7">How to Read the Source</a></li>
+                        <li><a href="#s8">Glossary</a></li>
+                    </ol>
+                </details>
+            </div>
+
+            <!-- ── Introduction ──────────────────────── -->
+            <section id="intro">
+                <p>Every replicated system eventually has to answer one simple and uncomfortable
+                    question: when several machines disagree about what should happen next, who gets
+                    to decide? In a Byzantine environment &mdash; where participants can lie,
+                    equivocate, or disappear on purpose &mdash; the answer has to be a protocol,
+                    not a convention.</p>
+
+                <p><code>commonware-consensus</code> provides that protocol surface for Commonware
+                    systems. It orders <em>opaque</em> messages in a Byzantine environment. Opaque
+                    is the load-bearing word: consensus never needs to parse the application
+                    payload. It only orders digests. The application decides what deserves a
+                    digest; consensus decides how those digests enter history.</p>
+
+                <p>The crate is organized as four layered primitives:</p>
+
+                <ul>
+                    <li><strong><code>simplex</code></strong> (BETA): A three-phase Byzantine consensus protocol with leader rotation and threshold signature support.</li>
+                    <li><strong><code>aggregation</code></strong> (ALPHA): Recoverable quorum certificates over an externally synchronized sequence of items.</li>
+                    <li><strong><code>ordered_broadcast</code></strong> (ALPHA): Reliable, ordered delivery from sequencers to validators with chaining and journaling.</li>
+                    <li><strong><code>marshal</code></strong> (ALPHA): Coordinates broadcast delivery with simplex finalization, handles backfill, and delivers finalized blocks to the application.</li>
+                </ul>
+
+                <div class="callout source">
+                    <div class="callout-label">Source note</div>
+                    <p>See <code>consensus/src/lib.rs</code> for the trait hierarchy; <code>consensus/src/simplex/actors/voter/actor.rs</code> for the main voter state machine; <code>consensus/src/marshal/mod.rs</code> for the marshal actor.</p>
+                </div>
+            </section>
+
+            <hr>
+
+            <section id="bg">
+                <h2 class="ch-s1">Backgrounder: Why Consensus Exists At All</h2>
+
+                <p>Consensus sounds formal very quickly. Agreement. Liveness. Byzantine faults.
+                    Quorums. Those words are important, but the broad question underneath them is
+                    simpler: once more than one machine is allowed to matter, who gets to decide
+                    what the shared history is?</p>
+
+                <p>If one machine owns the state, the next action is whatever that machine says it
+                    is. Replication changes the problem. Several nodes now hold related state, and
+                    the system wants availability, performance, or trust properties that no single
+                    node should control alone. So the real task becomes keeping many local views
+                    from drifting into several incompatible histories.</p>
+
+                <h3>From State Machines to Shared History</h3>
+
+                <p>The clean undergraduate-level picture is the replicated state machine. If all
+                    honest nodes start from the same state and apply the same commands in the same
+                    order, they stay in sync. So consensus is usually not about understanding the
+                    full application payload. It is about deciding which command, block, or digest
+                    occupies the next slot in history.</p>
+
+                <p>That is why Commonware consensus orders opaque digests. The application decides
+                    what those digests mean. Consensus decides how one shared sequence emerges from
+                    competing proposals under adversarial conditions.</p>
+
+                <h3>Why Voting Alone Is Not Enough</h3>
+
+                <p>A beginner's first idea is often “let everyone vote and take the majority.”
+                    That helps in one narrow instant, but it does not solve the whole problem. A
+                    majority observed by whom, at what time, over which proposal, and with what
+                    guarantee that a different observer will not see a different majority built
+                    from delayed messages?</p>
+
+                <p>Once the network can delay messages or a malicious leader can equivocate,
+                    “count the votes” is not a protocol. The system needs enough support for one
+                    history that any conflicting support must overlap with it. That is the idea
+                    behind quorums: geometry under a fault assumption.</p>
+
+                <h3>Safety, Liveness, and Why Timeouts Exist</h3>
+
+                <p>Consensus protocols live between two big obligations. Safety says honest nodes
+                    must not finalize conflicting histories. Liveness says the protocol must keep
+                    moving once the network becomes well behaved enough. These goals pull in
+                    different directions. A protocol can always preserve safety by waiting longer,
+                    but then progress stalls. It can push for progress aggressively, but then the
+                    risk of conflicting or unsafe movement rises.</p>
+
+                <p>This is why leaders, rounds, and timeouts are not implementation details. They
+                    are the practical answer to a deeper uncertainty: the system cannot always tell
+                    whether a leader is slow, dead, or malicious. So it gives the leader a turn,
+                    waits long enough to gather evidence, and then moves to a new view when that
+                    evidence does not arrive.</p>
+
+                <h3>Why Byzantine Consensus Needs Evidence</h3>
+
+                <p>Crash-fault tolerance already needs coordination. Byzantine fault tolerance is
+                    harsher because faulty participants may lie, equivocate, replay, or
+                    strategically omit messages. Once that is allowed, signatures and certificates
+                    become load-bearing. The protocol needs more than "someone said yes." It needs
+                    durable evidence that enough support accumulated under rules that make
+                    conflicting histories unsafe.</p>
+
+                <p>That is why certificates are more than receipts. They are state-carrying
+                    objects that constrain what future rounds are allowed to do.</p>
+
+                <div class="callout invariant">
+                    <div class="callout-label">Background Takeaway</div>
+                    <p>Consensus exists because replicated systems need one shared history in a
+                        world where messages are delayed and some participants may behave
+                        strategically. The protocol's real job is to turn local votes into global
+                        evidence without sacrificing either safety or eventual progress.</p>
+                </div>
+            </section>
+
+            <hr>
+
+            <!-- ── Section 1 ─────────────────────────── -->
+            <section id="s1">
+                <h2 class="ch-s1">1. What Problem Does This Solve?</h2>
+
+                <p>Distributed consensus asks a deceptively small question: given a network of
+                    <code>N</code> processes where up to <code>f</code> may behave arbitrarily,
+                    how do the honest ones agree on the same sequence of decisions?</p>
+
+                <p>The classical answer is PBFT and its descendants. Those protocols work, but the
+                    happy path is expensive: many message phases, a lot of all-to-all traffic, and
+                    enough ceremony per decision that large validator sets feel the weight of it.</p>
+
+                <p><code>commonware-consensus</code> takes a different route.
+                    <strong>Simplex</strong> keeps the common case to three phases &mdash;
+                    notarize, nullify, finalize &mdash; and pushes as much work as possible into
+                    certificates that can be reused across rounds. A certificate is not just a
+                    receipt for the past. It is the parent context for what comes next.</p>
+
+                <p>The design is built around three properties:</p>
+
+                <ol>
+                    <li><strong>Safety</strong>: No two honest nodes finalize different values at the same height. This holds as long as fewer than <code>N/3</code> participants are Byzantine.</li>
+                    <li><strong>Liveness</strong>: The system continues to make progress under partial synchrony, given an eventually leader. Timeout and view-change mechanisms ensure the protocol does not stall indefinitely.</li>
+                    <li><strong>Attributability</strong>: With attributable schemes (<code>ed25519</code>, <code>bls12381_multisig</code>, <code>secp256r1</code>), the signature on a notarize or finalize vote can be used as evidence of a fault. With threshold schemes (<code>bls12381_threshold</code>), signatures cannot be attributed to individual validators &mdash; useful for internal liveness proofs but not for punishment.</li>
+                </ol>
+
+                <p>The crate also separates concerns that many consensus implementations tangle
+                    together:</p>
+
+                <ul>
+                    <li><strong>What</strong> is being decided (the payload) is opaque to consensus. The <code>Automaton</code> trait provides digests; consensus orders them.</li>
+                    <li><strong>Who</strong> decides (leader election) is pluggable. <code>RoundRobin</code> gives deterministic rotation; <code>Random</code> gives unpredictable leaders via threshold VRF.</li>
+                    <li><strong>How</strong> signatures are aggregated is pluggable. Attributable schemes preserve fault evidence; threshold schemes give succinct certificates.</li>
+                </ul>
+            </section>
+
+            <hr>
+
+            <!-- ── Section 2 ─────────────────────────── -->
+            <section id="s2">
+                <h2 class="ch-s1">2. Mental Model</h2>
+
+                <p>Think of simplex as a voting machine with memory. Each round, called a
+                    <em>view</em>, has a designated leader. The leader proposes a block.
+                    Validators then move through three kinds of votes:</p>
+
+                <pre><code>Propose &rarr; Notarize &rarr; Nullify &rarr; Finalize
+                     &uarr;
+                     &hellip;&ensp; If leader fails or block invalid: timeout &rarr; view change</code></pre>
+
+                <p><strong>Notarize</strong> asks: <em>is this proposal valid enough to build
+                    on?</em> A validator who accepts the proposal signs a notarize vote. Once
+                    more than <code>2N/3</code> validators do that, the block has a notarization
+                    certificate. The block is not yet finalized, but it has crossed an important
+                    line: any safe future must account for it.</p>
+
+                <p><strong>Nullify</strong> asks: <em>should we abandon this view and move
+                    on?</em> If the leader stalls or proposes nonsense, validators can vote to
+                    skip the view. But nullify votes are not free-floating. They still have to
+                    respect <em>parent continuity</em>. You cannot safely skip view
+                    <code>v</code> unless you can also prove you are not jumping over certified
+                    history that honest validators may already depend on.</p>
+
+                <p><strong>Finalize</strong> asks: <em>are we ready to commit this block as part
+                    of the durable sequence?</em> A block can only be finalized after it has
+                    already been notarized. That ordering is the conceptual center of the
+                    protocol: first establish that the proposal is admissible, then establish that
+                    the system is ready to commit it.</p>
+
+                <div class="callout invariant">
+                    <div class="callout-label">Invariant</div>
+                    <p>Finalization requires notarization, and notarization requires proposal
+                        validity. Once that chain is in your head, the rest of the protocol is much
+                        easier to reason about.</p>
+                </div>
+
+                <h3 class="ch-s2">Composing the Layers</h3>
+
+                <p>The four primitives stack like this:</p>
+
+                <pre><code>marshal          &larr; delivers finalized blocks to the application
+    &uarr;              (coordinates broadcast + simplex + backfill)
+simplex          &larr; three-phase consensus
+    &uarr;              (coordinates voter + batcher + resolver)
+aggregation      &larr; quorum certificates over external sequence
+    &uarr;              (coordinates with externally-provided ordered items)
+ordered_broadcast&larr; sequencer &rarr; validator reliable broadcast</code></pre>
+
+                <p>Each layer solves a different failure problem. <code>simplex</code> handles
+                    Byzantine leaders and view changes. <code>ordered_broadcast</code> makes
+                    sequencer equivocation detectable through chaining.
+                    <code>aggregation</code> turns externally provided ordered items into
+                    quorum-certified facts. <code>marshal</code> closes the gap between "a block
+                    exists somewhere" and "the application can now consume finalized blocks in
+                    order."</p>
+
+                <!-- Visual 1: Simplex Three-Phase FSM -->
+                <figure class="visual" id="v-simplex-fsm">
+                    <figcaption>
+                        <div class="visual-meta">
+                            <span class="visual-num">Visual 1 &mdash; Figure</span>
+                            <span class="visual-title">Simplex Three-Phase Voting FSM</span>
+                        </div>
+                    </figcaption>
+                    <div class="visual-body">
+                        <p class="visual-goal"><strong>Learning goal:</strong> Understand how a consensus round transitions through Propose &rarr; Notarize &rarr; Nullify &rarr; Finalize and what conditions drive each transition.</p>
+                        <div class="visual-why">
+                            <strong>Why it matters:</strong> The phase gating is the core protocol insight. Students frequently confuse &ldquo;quorum reached&rdquo; with &ldquo;all votes collected&rdquo; &mdash; the quorum threshold line makes the N3f1 <code>&gt;2/3</code> requirement concrete and visible.
+                        </div>
+                        <div class="visual-controls">
+                            <div class="control-group">
+                                <label>Scenario:</label>
+                                <select>
+                                    <option>normal_path</option>
+                                    <option>leader_failure</option>
+                                    <option>competing_proposals</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>N:</label>
+                                <select>
+                                    <option>3</option>
+                                    <option selected>4</option>
+                                    <option>7</option>
+                                    <option>10</option>
+                                    <option>13</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Speed:</label>
+                                <select>
+                                    <option>0.5x</option>
+                                    <option selected>1x</option>
+                                    <option>2x</option>
+                                    <option>4x</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>f (Byzantine):</label>
+                                <select>
+                                    <option>0</option>
+                                    <option selected>1</option>
+                                    <option>2</option>
+                                    <option>3</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="visual-stage">
+                            <div class="visual-stage-placeholder">
+                                Interactive FSM stage
+                                <span>Propose &rarr; Notarize &rarr; Nullify &rarr; Finalize transitions</span>
+                            </div>
+                        </div>
+                        <div class="visual-scenes">
+                            <div>
+                                <div class="scene-label">Scene: Propose</div>
+                                <p class="scene-caption">Leader broadcasts a proposal for the current view. The proposal carries round (Epoch, View), leader identity, and parent (previous View, parent digest). Validators receive it and check parent continuity.</p>
+                                <div class="scene-events">system: leader_proposes(payload_digest, round, parent)</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Notarize Accumulate</div>
+                                <p class="scene-caption">Each honest validator runs <code>Automaton::verify</code>. If valid, they sign and broadcast a Notarize vote. Votes accumulate in VoteTracker. The quorum threshold line (<code>&gt;2N/3</code>) is visible throughout.</p>
+                                <div class="scene-events">system: validator_0 votes Notarize &rarr; validator_1 votes Notarize &rarr; validator_2 votes Notarize</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Notarize Certificate</div>
+                                <p class="scene-caption">When <code>&gt;2N/3</code> Notarize votes are collected, the notarization certificate forms. The certificate is gossiped. Then <code>CertifiableAutomaton::certify</code> is invoked &mdash; this is the deferred verification hook.</p>
+                                <div class="scene-events">system: NotarizeCertificate formed &rarr; certify(round, payload_digest) &rarr; true &rarr; Finalize votes start</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Finalize Accumulate</div>
+                                <p class="scene-caption">Validators who received the notarization certificate and passed certification sign Finalize votes. Once <code>&gt;2N/3</code> finalize votes are collected, the finalization certificate is formed and the block is committed.</p>
+                                <div class="scene-events">system: FinalizeCertificate formed &rarr; block committed at height</div>
+                            </div>
+                        </div>
+                        <div class="visual-sources">
+                            Source files: <span>consensus/src/simplex/types.rs</span> &middot; <span>consensus/src/simplex/actors/voter/actor.rs</span> &middot; <span>consensus/src/simplex/types.rs:Subject</span>
+                        </div>
+                    </div>
+                    <div class="visual-checks">
+                        <div class="visual-checks-title">Protocol checks</div>
+                        <ul>
+                            <li>Notarize vote requires <code>Automaton::verify</code> to return true</li>
+                            <li>Finalize vote requires prior Notarize certificate (no orphaned finalization)</li>
+                            <li>Quorum threshold = <code>N3f1::quorum(N) = ceil(N - N/3)</code></li>
+                            <li>Each validator casts at most one vote per phase (AttributableMap enforces this)</li>
+                        </ul>
+                    </div>
+                    <div class="visual-caption-footer">
+                        Caption: The phase transitions above represent the normal-path voting sequence. In the normal path, a single leader proposes, validators notarize, then finalize &mdash; with no view changes.
+                    </div>
+                </figure>
+
+            </section>
+
+            <hr>
+
+            <!-- ── Section 3 ─────────────────────────── -->
+            <section id="s3">
+                <h2 class="ch-s1">3. Core Abstractions and Important Types</h2>
+
+                <p>This chapter gets easier if you sort the types by the question they answer:
+                    What time are we talking about? What is being voted on? Who gets to influence
+                    the decision? How does data reach validators? In that order, the type list
+                    reads like a model of the protocol instead of a glossary dump.</p>
+
+                <h3 class="ch-s2">Identifier Types (<code>consensus/src/types.rs</code>)</h3>
+
+                <p>The protocol uses four different notions of "where we are." Keeping them
+                    separate prevents a lot of confusion later.</p>
+
+                <p><strong><code>Epoch</code></strong> &mdash; the validator-set boundary. If
+                    membership changes, the epoch changes. Certificates do not cross that
+                    boundary.</p>
+
+                <p><strong><code>View</code></strong> &mdash; the leader-attempt counter inside one
+                    epoch. If a leader fails, the view increments.</p>
+
+                <p><strong><code>Round</code></strong> &mdash; the pair <code>(Epoch, View)</code>.
+                    This is the protocol's full "where are we right now?" coordinate.</p>
+
+                <p><strong><code>Height</code></strong> &mdash; the position of a finalized block
+                    in the output chain. Heights are application-visible history. Rounds are
+                    protocol progress. One height may need several rounds before it is finalized.</p>
+
+                <div class="callout">
+                    <div class="callout-label">Arithmetic</div>
+                    <p>All identifier arithmetic is overflow-safe. <code>next()</code> panics on overflow (which is appropriate for identifiers that should never realistically overflow). Arithmetic that might legitimately underflow returns <code>Option</code> or saturates.</p>
+                </div>
+
+                <h3 class="ch-s2">The Trait Hierarchy (<code>consensus/src/lib.rs</code>)</h3>
+
+                <p><strong><code>Automaton</code></strong> is the boundary between consensus and the
+                    application. It tells consensus three things: what genesis digest to start
+                    from, how to ask the application for a proposal, and how to ask whether that
+                    proposal is acceptable.</p>
+
+                <pre><code>pub trait Automaton: Clone + Send + 'static {
+    type Context;
+    type Digest: Digest;
+
+    fn genesis(&mut self, epoch: Epoch) -&gt; impl Future&lt;Output = Self::Digest&gt; + Send;
+    fn propose(&mut self, context: Self::Context) -&gt; impl Future&lt;Output = oneshot::Receiver&lt;Self::Digest&gt;&gt; + Send;
+    fn verify(&mut self, context: Self::Context, payload: Self::Digest) -&gt; impl Future&lt;Output = oneshot::Receiver&lt;bool&gt;&gt; + Send;
+}</code></pre>
+
+                <p>The important abstraction choice is that consensus traffic carries
+                    <strong>digests</strong>, not full application objects. That keeps consensus
+                    generic and keeps large payload movement in the broadcast layer where it
+                    belongs.</p>
+
+                <p><code>propose</code> and <code>verify</code> return one-shot channels rather
+                    than plain booleans because the application may need time to decide. But once
+                    the channel resolves or closes, consensus treats the verdict as final for that
+                    attempt.</p>
+
+                <div class="callout warning">
+                    <div class="callout-label">Single-shot semantics</div>
+                    <p>Once the returned channel resolves or closes, consensus treats verification as concluded and will not retry. If the application is still uncertain, it must keep the channel open. Returning <code>false</code> is permanent &mdash; consensus will never retry. The application must only return <code>false</code> when the payload is <em>permanently</em> invalid.</p>
+                </div>
+
+                <p><strong><code>CertifiableAutomaton</code></strong> extends
+                    <code>Automaton</code> with a <code>certify</code> phase between notarization
+                    and finalization. This is where the application can say: "The block is valid,
+                    but I am not yet ready to finalize it."</p>
+
+                <pre><code>pub trait CertifiableAutomaton: Automaton {
+    fn certify(&amp;mut self, round: Round, payload: Self::Digest)
+        -&gt; impl Future&lt;Output = oneshot::Receiver&lt;bool&gt;&gt; + Send {
+        async move { receiver }
+    }
+}</code></pre>
+
+                <p>The <code>certify</code> decision must be deterministic across honest
+                    participants. If equally honest validators make different certify decisions on
+                    the same input, liveness falls apart.</p>
+
+                <p><strong><code>Relay</code></strong> broadcasts full payloads to the network. Consensus only knows digests; the relay disseminates the data.</p>
+                <p><strong><code>Reporter</code></strong> emits activity events (votes, finalizations, faults) for reward/penalty systems.</p>
+                <p><strong><code>Monitor</code></strong> allows external actors to subscribe to consensus progress (latest finalized index).</p>
+
+                <h3 class="ch-s2">Simplex Types (<code>consensus/src/simplex/types.rs</code>)</h3>
+
+                <p><strong><code>Subject&lt;'a, D&gt;</code></strong> identifies what a validator is
+                    actually signing at a given moment:</p>
+
+                <pre><code>pub enum Subject&lt;'a, D: Digest&gt; {
+    Notarize { proposal: &amp;'a Proposal&lt;D&gt; },
+    Nullify  { round: Round },
+    Finalize { proposal: &amp;'a Proposal&lt;D&gt; },
+}</code></pre>
+
+                <p>That split is worth noticing. <code>Notarize</code> and
+                    <code>Finalize</code> both point at a proposal. <code>Nullify</code> points
+                    only at a round, because a nullify vote is not endorsing data; it is endorsing
+                    progress to the next attempt.</p>
+
+                <p><strong><code>VoteTracker&lt;S, D&gt;</code></strong> accumulates votes per phase:</p>
+
+                <pre><code>pub struct VoteTracker&lt;S: Scheme, D: Digest&gt; {
+    notarizes: AttributableMap&lt;Notarize&lt;S, D&gt;&gt;,
+    nullifies: AttributableMap&lt;Nullify&lt;S&gt;&gt;,
+    finalizes: AttributableMap&lt;Finalize&lt;S, D&gt;&gt;,
+}</code></pre>
+
+                <p><code>AttributableMap&lt;T&gt;</code> is keyed by validator index, so each
+                    validator gets at most one slot per phase. That is how the code enforces the
+                    familiar rule "one validator, one vote, per phase, per round."</p>
+
+                <p><strong><code>Context&lt;D, P&gt;</code></strong> carries round metadata for proposal verification:</p>
+
+                <pre><code>pub struct Context&lt;D: Digest, P: PublicKey&gt; {
+    pub round:    Round,
+    pub leader:   P,
+    pub parent:   (View, D),
+}</code></pre>
+
+                <p>The <code>parent</code> field is the critical piece. If there is a gap between the current view and the parent view, the validator must possess a nullification for each discarded view before safely voting on a new proposal. This is the fork-safety mechanism.</p>
+
+                <!-- Visual 2: Leader Election -->
+                <figure class="visual" id="v-leader-election">
+                    <figcaption>
+                        <div class="visual-meta">
+                            <span class="visual-num">Visual 2 &mdash; Figure</span>
+                            <span class="visual-title">Leader Election: RoundRobin vs Random</span>
+                        </div>
+                    </figcaption>
+                    <div class="visual-body">
+                        <p class="visual-goal"><strong>Learning goal:</strong> Compare deterministic round-robin rotation with VRF-based random leader selection, and understand why Random falls back to round-robin for view 1.</p>
+                        <div class="visual-why">
+                            <strong>Why it matters:</strong> Leader election is subtle: Random&rsquo;s VRF depends on a prior certificate for seed derivation, which doesn&rsquo;t exist at view 1. The fallback is intentional and necessary &mdash; without it, there would be no deterministic leader for the first view.
+                        </div>
+                        <div class="visual-controls">
+                            <div class="control-group">
+                                <label>Elector:</label>
+                                <select>
+                                    <option>RoundRobin</option>
+                                    <option>Random</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>N:</label>
+                                <select>
+                                    <option>3</option>
+                                    <option>4</option>
+                                    <option selected>7</option>
+                                    <option>10</option>
+                                    <option>13</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Shuffle:</label>
+                                <select>
+                                    <option selected>none</option>
+                                    <option>0</option>
+                                    <option>1</option>
+                                    <option>42</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Jump to View:</label>
+                                <select>
+                                    <option selected>1</option>
+                                    <option>5</option>
+                                    <option>10</option>
+                                    <option>25</option>
+                                    <option>50</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="visual-stage">
+                            <div class="visual-stage-placeholder">
+                                Leader election stage
+                                <span>RoundRobin rotation vs VRF-based Random with certificate seed</span>
+                            </div>
+                        </div>
+                        <div class="visual-scenes">
+                            <div>
+                                <div class="scene-label">Scene: RoundRobin at View 1</div>
+                                <p class="scene-caption"><code>RoundRobin</code> elects leader as <code>(epoch + view) % N</code>. At view 1 with 7 validators, leader index = <code>(0 + 1) % 7 = 1</code>. No certificate dependency &mdash; rotation is fully deterministic.</p>
+                                <div class="scene-events">elect(view=1, certificate=None) &rarr; participant_1</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Random at View 1 (Fallback)</div>
+                                <p class="scene-caption">Random elector at view 1 has no certificate to seed the VRF, so it falls back to round-robin. The fallback is intentional &mdash; VRF output is pseudorandom but requires a seed; no prior certificate means no seed.</p>
+                                <div class="scene-events">elect(view=1, certificate=None) &rarr; round_robin_fallback &rarr; participant_1</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: 50-Round Comparison</div>
+                                <p class="scene-caption">After 50 rounds, RoundRobin shows a perfectly regular rotation pattern. Random shows an unpredictable sequence with no detectable pattern. The two sequences diverge significantly after the first few views.</p>
+                                <div class="scene-events">elect() called for views 1..50 with appropriate certificates &rarr; two leader sequence columns shown</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Random with Certificate Feeds VRF</div>
+                                <p class="scene-caption">For view 2, Random uses the Finalize certificate from view 1 as the VRF seed. The BLS threshold signature over the finalized block becomes the input to the VRF. Output is a pseudorandom index derived via modulo arithmetic.</p>
+                                <div class="scene-events">elect(view=2, certificate=&lt;cert_view1&gt;) &rarr; vrf(seed=cert_view1) % N &rarr; participant_4</div>
+                            </div>
+                        </div>
+                        <div class="visual-sources">
+                            Source files: <span>consensus/src/simplex/elector.rs</span> &middot; <span>consensus/src/simplex/scheme/bls12381_threshold.rs</span>
+                        </div>
+                    </div>
+                    <div class="visual-checks">
+                        <div class="visual-checks-title">Protocol checks</div>
+                        <ul>
+                            <li><code>elect()</code> is deterministic: same round + same certificate &rarr; same leader index</li>
+                            <li>View 1 with <code>certificate=None</code> always falls back to round-robin for Random</li>
+                            <li>Random elector requires a certificate for views &gt; 1</li>
+                            <li>RoundRobin leader = <code>(epoch + view) % num_participants</code></li>
+                        </ul>
+                    </div>
+                </figure>
+
+                <h3 class="ch-s2">Signing Schemes (<code>consensus/src/simplex/scheme/mod.rs</code>)</h3>
+
+                <p>The scheme layer is where attribution policy is decided. All schemes implement <code>certificate::Scheme&lt;Subject&gt;</code>:</p>
+
+                <ul>
+                    <li><strong><code>ed25519</code></strong>, <strong><code>bls12381_multisig</code></strong>, <strong><code>secp256r1</code></strong>: <em>Attributable.</em> Each individual signature carries the signer&rsquo;s identity. Certificates contain <code>(index, signature)</code> pairs.</li>
+                    <li><strong><code>bls12381_threshold</code></strong>: <em>Non-attributable.</em> Any <code>t</code> partial signatures can be combined to forge a signature for any other participant. Certificates contain only the recovered threshold signature.</li>
+                </ul>
+
+                <div class="callout warning">
+                    <div class="callout-label">Non-attribution implication</div>
+                    <p>With <code>bls12381_threshold</code>, evidence cannot be exported to third parties. A signature that proves validator V participated in a quorum cannot be verified by an external observer &mdash; because an external observer cannot distinguish a genuine V signature from a forged one. For punishment protocols, use attributable schemes.</p>
+                </div>
+
+                <p>Domain separation is enforced via namespace suffixes:</p>
+
+                <pre><code>const NOTARIZE_SUFFIX: &amp;[u8] = b"_NOTARIZE";
+const NULLIFY_SUFFIX:  &amp;[u8] = b"_NULLIFY";
+const FINALIZE_SUFFIX: &amp;[u8] = b"_FINALIZE";</code></pre>
+
+                <p>A signature made under <code>_NOTARIZE</code> cannot be replayed as a <code>_FINALIZE</code> signature. This prevents cross-protocol attacks where a notarization certificate could be repurposed as a finalization certificate.</p>
+
+                <!-- Visual 3: VoteTracker -->
+                <figure class="visual" id="v-votetracker">
+                    <figcaption>
+                        <div class="visual-meta">
+                            <span class="visual-num">Visual 3 &mdash; Figure</span>
+                            <span class="visual-title">VoteTracker: Quorum Accumulation in Real Time</span>
+                        </div>
+                    </figcaption>
+                    <div class="visual-body">
+                        <p class="visual-goal"><strong>Learning goal:</strong> Watch notarize, nullify, and finalize votes accumulate per validator and observe exactly when the N3f1 quorum threshold is crossed.</p>
+                        <div class="visual-why">
+                            <strong>Why it matters:</strong> Students often think &ldquo;quorum reached&rdquo; means &ldquo;all votes collected.&rdquo; The N3f1 threshold (<code>ceiling(N - N/3)</code>) is strictly less than N, meaning finalization requires only a supermajority, not unanimity.
+                        </div>
+                        <div class="visual-controls">
+                            <div class="control-group">
+                                <label>N:</label>
+                                <select>
+                                    <option>3</option>
+                                    <option>4</option>
+                                    <option selected>7</option>
+                                    <option>10</option>
+                                    <option>13</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Scheme:</label>
+                                <select>
+                                    <option selected>ed25519 (attributable)</option>
+                                    <option>bls12381_threshold (non-attributable)</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Phase:</label>
+                                <select>
+                                    <option selected>Notarize</option>
+                                    <option>Nullify</option>
+                                    <option>Finalize</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Byzantine:</label>
+                                <select>
+                                    <option selected>off</option>
+                                    <option>on</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="visual-stage">
+                            <div class="visual-stage-placeholder">
+                                VoteTracker accumulation stage
+                                <span>Quorum threshold line at N3f1::quorum(N) = 5 (for N=7)</span>
+                            </div>
+                        </div>
+                        <div class="visual-scenes">
+                            <div>
+                                <div class="scene-label">Scene: Empty VoteTracker</div>
+                                <p class="scene-caption">VoteTracker starts empty. Each validator has one slot per phase. <code>AttributableMap&lt;Notarize&gt;</code> is keyed by validator index. Slots are empty. Quorum threshold line shown at right: &ldquo;need 5 of 7.&rdquo;</p>
+                                <div class="scene-events">system: no votes cast</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Votes Arriving</div>
+                                <p class="scene-caption">Votes arrive sequentially. Each insert into <code>AttributableMap</code> either succeeds (slot filled) or returns false (duplicate vote rejected). The bar chart shows vote count approaching quorum.</p>
+                                <div class="scene-events">validator_0 notarize &rarr; insert success &rarr; validator_0 notarize (again) &rarr; insert fails (duplicate)</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Quorum Crossed</div>
+                                <p class="scene-caption">At 5 notarizes (quorum), the threshold is crossed. The system emits a notarization certificate. Validators 5 and 6 shown as non-contributing (grayed out) &mdash; they don&rsquo;t need to vote.</p>
+                                <div class="scene-events">count reaches 5 &rarr; quorum threshold crossed &rarr; NotarizeCertificate emitted</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: bls12381_threshold (Non-Attributable)</div>
+                                <p class="scene-caption">Switch to bls12381_threshold. Now each validator&rsquo;s individual signature is not shown &mdash; only the aggregate threshold signature appears once quorum is reached. This is non-attribution.</p>
+                                <div class="scene-events">scheme switched to bls12381_threshold &rarr; individual bars replaced with aggregate bar</div>
+                            </div>
+                        </div>
+                        <div class="visual-sources">
+                            Source files: <span>consensus/src/simplex/types.rs:VoteTracker</span> &middot; <span>consensus/src/simplex/types.rs:AttributableMap</span>
+                        </div>
+                    </div>
+                    <div class="visual-checks">
+                        <div class="visual-checks-title">Protocol checks</div>
+                        <ul>
+                            <li><code>N3f1::quorum(N) = ceiling(N - N/3)</code>. For N=7, quorum=5. For N=4, quorum=3.</li>
+                            <li><code>AttributableMap</code> insert returns false on duplicate &mdash; one vote per phase per validator</li>
+                            <li>Quorum reached does NOT mean all N validators voted &mdash; only <code>&gt;2N/3</code></li>
+                        </ul>
+                    </div>
+                </figure>
+
+                <h3 class="ch-s2">Ordered Broadcast (<code>consensus/src/ordered_broadcast/</code>)</h3>
+
+                <p>The system has two roles: <strong>sequencers</strong> broadcast chunks; <strong>validators</strong> sign chunks to form quorum certificates.</p>
+
+                <p><strong><code>Node</code></strong> is the fundamental broadcast unit:</p>
+
+                <pre><code>pub struct Node&lt;P: PublicKey, D: Digest&gt; {
+    pub chunk:  Chunk&lt;P, D&gt;,
+    pub parent: Option&lt;Certificate&lt;P&gt;&gt;,
+}</code></pre>
+
+                <p>Each node contains a chunk and a certificate over the <em>previous</em> chunk from the same sequencer. This creates a chain: to verify node at height <code>h</code>, you need the certificate for height <code>h-1</code>. A sequencer that broadcasts two different chunks at the same height produces a <em>fork</em> &mdash; detectable and attributable.</p>
+
+                <!-- Visual 4: Ordered Broadcast Chains -->
+                <figure class="visual" id="v-ordered-broadcast">
+                    <figcaption>
+                        <div class="visual-meta">
+                            <span class="visual-num">Visual 4 &mdash; Figure</span>
+                            <span class="visual-title">Ordered Broadcast: Sequencer Chains and Validator Quorums</span>
+                        </div>
+                    </figcaption>
+                    <div class="visual-body">
+                        <p class="visual-goal"><strong>Learning goal:</strong> Understand how sequencers produce chained nodes where each node certifies the previous, making equivocation detectable and attributable.</p>
+                        <div class="visual-why">
+                            <strong>Why it matters:</strong> The chaining mechanism is the key design choice: each chunk includes a certificate over the previous chunk, so an honest sequencer&rsquo;s misbehavior (equivocating at the same height) produces detectable conflicting signatures from the same validator.
+                        </div>
+                        <div class="visual-controls">
+                            <div class="control-group">
+                                <label>N:</label>
+                                <select>
+                                    <option>3</option>
+                                    <option selected>4</option>
+                                    <option>7</option>
+                                    <option>10</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Action:</label>
+                                <select>
+                                    <option selected>broadcast_normal</option>
+                                    <option>equivocate</option>
+                                    <option>epoch_change</option>
+                                    <option>simulate_crash</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>TipAck:</label>
+                                <select>
+                                    <option selected>off</option>
+                                    <option>on</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="visual-stage">
+                            <div class="visual-stage-placeholder">
+                                Ordered broadcast chain stage
+                                <span>Sequencer nodes chained via parent certificates</span>
+                            </div>
+                        </div>
+                        <div class="visual-scenes">
+                            <div>
+                                <div class="scene-label">Scene: Genesis Chain</div>
+                                <p class="scene-caption">Genesis node at height=0 has parent=None. The sequencer broadcasts it; validators sign and form a quorum certificate. This certificate is stored and referenced as the parent for height=1.</p>
+                                <div class="scene-events">sequencer broadcasts Node(height=0, chunk=chunk_0, parent=None) &rarr; Certificate assembled from 3/4 signatures</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Chain Extension</div>
+                                <p class="scene-caption">Height=1 node: chunk_1 + parent=cert_0. Validators verify chunk_1 is valid, verify parent cert_0 exists, then sign. The chain is now length 2.</p>
+                                <div class="scene-events">Node(height=1, chunk=chunk_1, parent=cert_0) &rarr; validators verify chunk and parent &rarr; cert_1 assembled</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: TipAck (aggregation)</div>
+                                <p class="scene-caption">TipAck combines a validator&rsquo;s acknowledgment with their current tip height. When gossiping, a validator shares both their vote and how far their chain has advanced. This allows other validators to detect gaps and request backfill.</p>
+                                <div class="scene-events">validator_1 sends TipAck(ack=cert_2, tip_height=5) &rarr; gap detected: validator_2 missing heights 4 and 5</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Equivocation Detection</div>
+                                <p class="scene-caption">The sequencer broadcasts two different chunks at height=2 with the same parent (cert_1). Honest validators sign both &mdash; producing two different signatures from the same validator on the same height with different payloads. This is detectable as <code>ChunkMismatch</code> error.</p>
+                                <div class="scene-events">Node_A(height=2, chunk=chunk_A, parent=cert_1) + Node_B(height=2, chunk=chunk_B, parent=cert_1) &rarr; ChunkMismatch: same validator, same height, different chunks</div>
+                            </div>
+                        </div>
+                        <div class="visual-sources">
+                            Source files: <span>consensus/src/ordered_broadcast/types.rs:Node</span> &middot; <span>consensus/src/ordered_broadcast/types.rs:Chunk</span> &middot; <span>consensus/src/aggregation/types.rs:TipAck</span>
+                        </div>
+                    </div>
+                    <div class="visual-checks">
+                        <div class="visual-checks-title">Protocol checks</div>
+                        <ul>
+                            <li>Each node&rsquo;s parent is a Certificate over the previous node &mdash; creates immutable chain</li>
+                            <li>Equivocation at same height with same parent produces <code>ChunkMismatch</code> error</li>
+                            <li>TipAck carries both the validator&rsquo;s acknowledgment and their current tip height for backfill</li>
+                            <li>Certificate quorum = <code>N3f1::quorum(N)</code></li>
+                        </ul>
+                    </div>
+                </figure>
+
+                <h3 class="ch-s2">Aggregation (<code>consensus/src/aggregation/</code>)</h3>
+
+                <p>Aggregation differs from ordered_broadcast in a subtle way: the sequence of items is externally provided (by some other consensus process), and validators only need to certify that they agree on the sequence.</p>
+
+                <p><strong><code>Item&lt;D&gt;</code></strong> is an externally-provided <code>(height, digest)</code> pair. The aggregation engine monitors an external source of <code>Item</code>s, collects acknowledgments from validators, and assembles certificates. Unlike ordered_broadcast, there is no chaining: each item is certified independently based on its height and digest.</p>
+
+                <h3 class="ch-s2">Marshal (<code>consensus/src/marshal/</code>)</h3>
+
+                <p>Marshal bridges consensus and the application. It:</p>
+
+                <ol>
+                    <li>Receives uncertified blocks from a broadcast mechanism (e.g., <code>commonware_broadcast::buffered</code>).</li>
+                    <li>Receives notarizations and finalizations from simplex.</li>
+                    <li>Reconstructs total order via <code>core::Actor</code>.</li>
+                    <li>Provides backfill when gaps appear.</li>
+                </ol>
+
+                <p>The actor delivers blocks at-least-once, in monotonically increasing order. The application must handle duplicates. Finalization is view-based: a block is finalized when marshal has seen a valid finalization certificate from consensus for that block.</p>
+
+                <p><strong>Starting height (floor)</strong>: Marshal can be configured to only store blocks above a certain height. This enables state sync from a recent snapshot rather than from genesis. Setting this height prevents peers from backfilling blocks below it.</p>
+
+                <!-- Visual 5: Marshal Block Ordering -->
+                <figure class="visual" id="v-marshal">
+                    <figcaption>
+                        <div class="visual-meta">
+                            <span class="visual-num">Visual 5 &mdash; Figure</span>
+                            <span class="visual-title">Marshal: From Broadcast to Application Delivery</span>
+                        </div>
+                    </figcaption>
+                    <div class="visual-body">
+                        <p class="visual-goal"><strong>Learning goal:</strong> Trace how blocks flow from broadcast &rarr; simplex (notarization/finalization) &rarr; marshal actor &rarr; application, and understand where gaps trigger backfill.</p>
+                        <div class="visual-why">
+                            <strong>Why it matters:</strong> Marshal is the bridge between consensus and the application layer. It is where ordered delivery guarantees are enforced, where gaps appear and trigger backfill, and where the floor/starting height determines which blocks the application receives.
+                        </div>
+                        <div class="visual-controls">
+                            <div class="control-group">
+                                <label>Mode:</label>
+                                <select>
+                                    <option selected>standard</option>
+                                    <option>coding</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Floor Height:</label>
+                                <select>
+                                    <option selected>0</option>
+                                    <option>3</option>
+                                    <option>5</option>
+                                    <option>10</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Scenario:</label>
+                                <select>
+                                    <option selected>normal_flow</option>
+                                    <option>gap_triggered</option>
+                                    <option>backfill_resolved</option>
+                                    <option>reorg</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="visual-stage">
+                            <div class="visual-stage-placeholder">
+                                Marshal pipeline stage
+                                <span>Three-lane pipeline: broadcast &rarr; simplex &rarr; marshal &rarr; application</span>
+                            </div>
+                        </div>
+                        <div class="visual-scenes">
+                            <div>
+                                <div class="scene-label">Scene: Normal Pipeline</div>
+                                <p class="scene-caption">In normal operation: broadcast delivers uncertified blocks &rarr; simplex delivers notarization/finalization certificates &rarr; marshal coordinates the two streams and delivers finalized blocks in height order.</p>
+                                <div class="scene-events">broadcast delivers block_3 &rarr; simplex delivers notarization cert for view 3 &rarr; simplex delivers finalization cert &rarr; marshal delivers block_3 to application</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Gap Detected</div>
+                                <p class="scene-caption">Marshal receives a finalization certificate for height=5 but does not have the block at height=4. This is a gap. Marshal pauses finalization of height 5 and emits a backfill request.</p>
+                                <div class="scene-events">marshal receives FinalizationCert for height=5 &rarr; block_4 is missing &rarr; gap detected &rarr; BackfillRequest(height=4)</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Backfill Resolved</div>
+                                <p class="scene-caption">Resolver queries peers and receives block 4. Marshal verifies it matches the certified digest, then delivers blocks 4 and 5 in sequence. The pipeline resumes.</p>
+                                <div class="scene-events">resolver queries peers &rarr; peer returns block_4 &rarr; marshal verifies digest &rarr; delivers block_4, then block_5</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Coding Mode</div>
+                                <p class="scene-caption">In coding mode, marshal receives erasure-coded shards from <code>coding::shards::Engine</code>. Shards arrive from different peers. Marshal reconstructs the full block before issuing the finalization delivery.</p>
+                                <div class="scene-events">broadcast delivers shard_3a from peer_0 &rarr; shard_3b from peer_1 &rarr; shard_3c from peer_2 &rarr; coding::shards::Engine reconstructs block_3 &rarr; marshal delivers reconstructed block_3</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Floor Height</div>
+                                <p class="scene-caption">When floor_height=5, marshal discards or ignores any block below height 5. This enables state sync from a snapshot rather than from genesis. Peers cannot backfill blocks below the floor.</p>
+                                <div class="scene-events">marshal configured with floor_height=5 &rarr; blocks 1-4 arrive from broadcast &rarr; marshal ignores blocks below floor &rarr; application only receives blocks &ge; 5</div>
+                            </div>
+                        </div>
+                        <div class="visual-sources">
+                            Source files: <span>consensus/src/marshal/mod.rs</span> &middot; <span>consensus/src/marshal/core.rs</span> &middot; <span>consensus/src/marshal/standard.rs</span> &middot; <span>consensus/src/marshal/coding.rs</span>
+                        </div>
+                    </div>
+                    <div class="visual-checks">
+                        <div class="visual-checks-title">Protocol checks</div>
+                        <ul>
+                            <li>Marshal delivers blocks in monotonically increasing height &mdash; no gaps reported to application</li>
+                            <li>When a finalization cert arrives but the prior block is missing, backfill is triggered</li>
+                            <li>Backfill requests go to resolver, which queries peers</li>
+                            <li>Blocks below floor_height are ignored and not backfilled</li>
+                        </ul>
+                    </div>
+                </figure>
+
+                <!-- Visual 6: Domain Separation -->
+                <figure class="visual" id="v-domain-sep">
+                    <figcaption>
+                        <div class="visual-meta">
+                            <span class="visual-num">Visual 6 &mdash; Figure</span>
+                            <span class="visual-title">Domain Separation: Why _NOTARIZE &ne; _FINALIZE</span>
+                        </div>
+                    </figcaption>
+                    <div class="visual-body">
+                        <p class="visual-goal"><strong>Learning goal:</strong> Understand how namespace suffixes prevent cross-protocol signature replay, and see exactly what bytes get signed under each subject.</p>
+                        <div class="visual-why">
+                            <strong>Why it matters:</strong> Domain separation is a cryptographic discipline that prevents entire classes of attacks. A signature made under the notarize namespace cannot be replayed as a finalize signature &mdash; even if the underlying digest is identical.
+                        </div>
+                        <div class="visual-controls">
+                            <div class="control-group">
+                                <label>Digest:</label>
+                                <select>
+                                    <option selected>0xdeadbeef</option>
+                                    <option>0xc0ffeeee</option>
+                                    <option>0x12345678</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Signers:</label>
+                                <select>
+                                    <option selected>1 (validator_0)</option>
+                                    <option>3 of 4</option>
+                                    <option>4 of 4</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Demonstrate:</label>
+                                <select>
+                                    <option selected>sign_under_notarize_verify_under_same</option>
+                                    <option>sign_under_notarize_verify_under_finalize</option>
+                                    <option>show_namespace_derivation</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="visual-stage">
+                            <div class="visual-stage-placeholder">
+                                Domain separation stage
+                                <span>Namespace derivation: _COMMONWARE_CONSENSUS_SIMPLEX_&lt;SUFFIX&gt;</span>
+                            </div>
+                        </div>
+                        <div class="visual-scenes">
+                            <div>
+                                <div class="scene-label">Scene: Namespace Derivation</div>
+                                <p class="scene-caption">Every vote subject uses a distinct namespace suffix. The <code>Namespace</code> trait prepends the base <code>_COMMONWARE_CONSENSUS_SIMPLEX</code> namespace and appends the subject suffix. The derived namespace is passed to the cryptographic primitive.</p>
+                                <div class="scene-events">Namespace::derive(base=_COMMONWARE_CONSENSUS_SIMPLEX, suffix=_NOTARIZE) &rarr; ns_notarize</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Sign &amp; Verify (Same Namespace)</div>
+                                <p class="scene-caption">validator_0 signs the proposal digest under ns_notarize. Anyone verifying under ns_notarize with validator_0&rsquo;s public key gets a valid result.</p>
+                                <div class="scene-events">sign(digest=0xdeadbeef, namespace=ns_notarize, key=validator_0_sk) &rarr; VALID</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Cross-Namespace Replay</div>
+                                <p class="scene-caption">validator_0 signs under ns_notarize. An attacker tries to replay: they present sig_notarize to a verifier using ns_finalize. Verification fails &mdash; the namespace mismatch is detected.</p>
+                                <div class="scene-events">verify(sig_notarize, digest=0xdeadbeef, namespace=ns_finalize, key=validator_0_pk) &rarr; INVALID (namespace mismatch)</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Nullify Namespace</div>
+                                <p class="scene-caption">Nullify votes carry only a Round identifier (not a digest). The namespace suffix still applies: the same Round signed under <code>_NULLIFY</code> cannot be used as a notarize or finalize signature.</p>
+                                <div class="scene-events">sign(round=(epoch=0,view=3), namespace=ns_nullify) &rarr; fails ns_notarize &rarr; fails ns_finalize &rarr; passes ns_nullify</div>
+                            </div>
+                        </div>
+                        <div class="visual-sources">
+                            Source files: <span>consensus/src/simplex/scheme/mod.rs</span> &middot; <span>consensus/src/simplex/types.rs:Subject</span>
+                        </div>
+                    </div>
+                    <div class="visual-checks">
+                        <div class="visual-checks-title">Protocol checks</div>
+                        <ul>
+                            <li>Namespace suffixes: <code>_NOTARIZE</code>, <code>_NULLIFY</code>, <code>_FINALIZE</code> are distinct byte sequences</li>
+                            <li><code>sign(namespace=A, msg=M) &ne; sign(namespace=B, msg=M)</code> for <code>A &ne; B</code></li>
+                            <li>Nullify signs only Round (not a digest), still namespace-separated</li>
+                        </ul>
+                    </div>
+                </figure>
+
+            </section>
+
+            <hr>
+
+            <!-- ── Section 4 ─────────────────────────── -->
+            <section id="s4">
+                <h2 class="ch-s1">4. Execution Flow and Lifecycle</h2>
+
+                <p>This is the point where the protocol stops being a list of types and becomes a
+                    moving system. The main thing to watch is not the mailbox plumbing by itself.
+                    It is how the actor flow preserves the earlier invariants while messages arrive
+                    late, certificates appear out of order, and timeouts fire.</p>
+
+                <h3 class="ch-s2">Simplex Voter Lifecycle</h3>
+
+                <p>The voter actor (<code>consensus/src/simplex/actors/voter/actor.rs</code>) is the heart of simplex. It runs a <code>select!</code> loop handling three classes of events:</p>
+
+                <ol>
+                    <li>Incoming messages (proposals, votes, certificates) via the mailbox.</li>
+                    <li>Timeout events from the deterministic clock.</li>
+                    <li>Automaton responses (verification, certification verdicts).</li>
+                </ol>
+
+                <p>The loop uses <code>select_loop!</code> from <code>commonware_macros</code> which is a tokio-aware select that handles cancellation correctly.</p>
+
+                <p><strong>On receiving a proposal:</strong></p>
+                <ol>
+                    <li>Extract context (round, leader, parent) from proposal.</li>
+                    <li>Check if we already have a notarize/finalize for this view &rarr; ignore if duplicate.</li>
+                    <li>Check parent nullification: if <code>parent.view &lt; our latest known view</code>, ensure we have nullifications for all views in between. If not &rarr; store proposal but don&rsquo;t vote yet.</li>
+                    <li>Send verification request to automaton.</li>
+                    <li>On verification true &rarr; send notarize vote to batcher. On false &rarr; stay silent.</li>
+                </ol>
+
+                <p><strong>On receiving a notarization certificate (<code>&gt;2N/3</code> notarizes):</strong></p>
+                <ol>
+                    <li>Record the notarization certificate in state.</li>
+                    <li>Send certification request to automaton (via <code>CertifiableAutomaton</code>).</li>
+                    <li>On certification true &rarr; send finalize vote to batcher. On false &rarr; don&rsquo;t finalize.</li>
+                </ol>
+
+                <p><strong>On timeout (no progress in current view):</strong></p>
+                <ol>
+                    <li>Send nullify vote to batcher.</li>
+                    <li>If <code>&gt;2N/3</code> nullifications accumulated &rarr; enter view change.</li>
+                    <li>In view change: advance view, reset vote trackers, request certificates from resolver.</li>
+                </ol>
+
+                <!-- Visual 7: Parent Nullification -->
+                <figure class="visual" id="v-parent-nullify">
+                    <figcaption>
+                        <div class="visual-meta">
+                            <span class="visual-num">Visual 7 &mdash; Figure</span>
+                            <span class="visual-title">Parent Nullification: The Fork-Safety Gate</span>
+                        </div>
+                    </figcaption>
+                    <div class="visual-body">
+                        <p class="visual-goal"><strong>Learning goal:</strong> Understand the parent nullification requirement: a validator cannot vote on a proposal whose parent view is behind their latest certified view, without first obtaining nullifications for the gap.</p>
+                        <div class="visual-why">
+                            <strong>Why it matters:</strong> Without parent nullification enforcement, a malicious leader could publish a chain that skips an honest leader&rsquo;s block, and honest validators would unknowingly finalize it. This is the most subtle safety invariant in simplex.
+                        </div>
+                        <div class="visual-controls">
+                            <div class="control-group">
+                                <label>Gap Size:</label>
+                                <select>
+                                    <option selected>0 (no gap)</option>
+                                    <option>1 (view 5 missing)</option>
+                                    <option>2 (views 5 and 6 missing)</option>
+                                    <option>3+ (large gap)</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Parent View:</label>
+                                <select>
+                                    <option>3</option>
+                                    <option selected>4</option>
+                                    <option>5</option>
+                                    <option>6</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Latest Certified:</label>
+                                <select>
+                                    <option>3</option>
+                                    <option selected>4</option>
+                                    <option>5</option>
+                                    <option>6</option>
+                                    <option>7</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Fork-Safety Attack:</label>
+                                <select>
+                                    <option selected>off</option>
+                                    <option>on</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="visual-stage">
+                            <div class="visual-stage-placeholder">
+                                Parent nullification checker stage
+                                <span>Gap detection: parent_view &lt; latest_certified_view triggers blocking</span>
+                            </div>
+                        </div>
+                        <div class="visual-scenes">
+                            <div>
+                                <div class="scene-label">Scene: Gap Check Explained</div>
+                                <p class="scene-caption">The parent nullification check is: let V&rsquo;s latest certified view = L. Let proposal&rsquo;s parent view = P. If P &lt; L, then V must hold nullifications (or notarizations) for ALL views in (P, L] before voting. This prevents skipping certified blocks.</p>
+                                <div class="scene-events">formula: P &lt; L? &rarr; if YES, gap views in (P, L] must have nullification certs</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Gap Blocked</div>
+                                <p class="scene-caption">V&rsquo;s latest certified view = 4. Proposal at view 6 has parent view = 4. But view 5 nullification is missing. V cannot vote until they have view 5 nullification. The proposal is stored but not acted on.</p>
+                                <div class="scene-events">proposal received: round=(epoch=0,view=6), parent=(view=4) &rarr; check: parent_view=4 &lt; latest_certified_view=4? NO &rarr; gap views [5] need nullification &mdash; MISSING &rarr; voter stores proposal, waits</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Gap Filled</div>
+                                <p class="scene-caption">View 5 nullification certificate arrives. Now V has all nullifications from P=4 to L=6. V can now vote on the view 6 proposal.</p>
+                                <div class="scene-events">view_5_nullification_certificate arrives &rarr; recheck: P=4, L=5, no gap in (4, 5] &rarr; voting unblocked</div>
+                            </div>
+                            <div>
+                                <div class="scene-label">Scene: Fork-Safety Attack Visualized</div>
+                                <p class="scene-caption">Attack scenario: Honest leader proposes block B at view 5. Validator V is slow. Malicious leader at view 6 proposes a chain built on view 4 (skipping B). Without parent nullification enforcement, V would notarize the malicious chain. With enforcement, V requires view 5 nullification before voting &mdash; not present &mdash; V blocks.</p>
+                                <div class="scene-events">honest_leader broadcasts proposal for view 5, block B &rarr; malicious_leader broadcasts for view 6, parent=view_4 (skips B) &rarr; parent continuity check FAILS &rarr; attack prevented</div>
+                            </div>
+                        </div>
+                        <div class="visual-sources">
+                            Source files: <span>consensus/src/simplex/types.rs:Context</span> &middot; <span>consensus/src/simplex/actors/voter/actor.rs</span> &middot; <span>consensus/src/simplex/types.rs:Subject</span>
+                        </div>
+                    </div>
+                    <div class="visual-checks">
+                        <div class="visual-checks-title">Protocol checks</div>
+                        <ul>
+                            <li>Parent nullification check: if <code>parent_view &lt; latest_certified_view</code>, all intermediate views must have nullification certificates</li>
+                            <li>Without parent nullification enforcement, a malicious leader can cause honest validators to finalize a chain that skips valid blocks</li>
+                            <li>The check happens in voter actor before any notarize vote is sent</li>
+                        </ul>
+                    </div>
+                </figure>
+
+                <h3 class="ch-s2">Marshal Block Ordering</h3>
+
+                <p>Marshal coordinates three input streams:</p>
+
+                <ol>
+                    <li>Uncertified blocks from broadcast (via <code>commonware_broadcast::buffered</code> or <code>coding::shards::Engine</code>).</li>
+                    <li>Notarizations from simplex.</li>
+                    <li>Finalizations from simplex.</li>
+                </ol>
+
+                <p>It tracks a view-based state machine:</p>
+
+                <pre><code>For each view v:
+  - Wait for block at height h with notarization cert
+  - If block's parent is finalized and we have cert for v:
+      - Finalize block and all ancestors
+      - Deliver to reporter
+  - If timeout:
+      - Backfill request for missing blocks</code></pre>
+
+                <p><strong>Backfill</strong>: When marshal detects a gap (it knows a finalization for height <code>h</code> but doesn&rsquo;t have the block at <code>h-1</code>), it queries the resolver for the missing block. Resolver queries peers. Once the gap is filled, finalization proceeds.</p>
+
+                <p><strong>Standard vs. coding mode</strong>: In standard mode, marshal receives blocks via <code>commonware_broadcast::buffered</code>. In coding mode, it receives erasure-coded shards from <code>coding::shards::Engine</code> and reconstructs the full block before finalizing.</p>
+            </section>
+
+            <hr>
+
+            <!-- ── Section 5 ─────────────────────────── -->
+            <section id="s5">
+                <h2 class="ch-s1">5. Concurrency, Protocol, and Systems Semantics</h2>
+
+                <p>These are the disciplines the code is trying to enforce. A consensus protocol
+                    is not only a sequence of messages; it is a set of promises about quorum
+                    overlap, evidence, determinism, and recovery. The implementation details matter
+                    because this is where those promises either survive contact with the runtime or
+                    quietly disappear.</p>
+
+                <h3 class="ch-s2">Deterministic Runtime and Testing</h3>
+
+                <p>All consensus actors run on <code>commonware_runtime::deterministic::Runner</code>. This is a simulated runtime that controls time explicitly, enabling deterministic test execution. Tests can advance time manually, fire multiple concurrent events, and verify deterministic outcomes.</p>
+
+                <p>The deterministic runtime is why the codebase can test Byzantine scenarios reproducibly: with a fixed seed, the same sequence of events always produces the same result. This is critical for testing protocols where timing matters (timeouts, view changes, competing proposals).</p>
+
+                <h3 class="ch-s2">Actor Message Passing</h3>
+
+                <p>All simplex actors &mdash; voter, batcher, resolver &mdash; communicate via typed channels. There is no shared mutable state between actors. The voter sends vote artifacts to the batcher, which batches and broadcasts them. The resolver receives certificates from the network and provides them to the voter. This isolation means the protocol is testable in isolation: you can test the voter state machine with mock batcher and resolver.</p>
+
+                <h3 class="ch-s2">N3f1 Quorum Threshold</h3>
+
+                <p>Throughout the crate, quorum is <code>N3f1::quorum(N) = N - N/3</code> (ceiling). For <code>N=4</code>, quorum is 3; for <code>N=7</code>, quorum is 5; for <code>N=10</code>, quorum is 7. This is the minimum quorum that guarantees:</p>
+
+                <ul>
+                    <li><strong>Safety</strong>: With <code>f = N/3</code> Byzantine nodes, any two quorums of size <code>&gt;2N/3</code> must overlap in at least one honest node.</li>
+                    <li><strong>Liveness</strong>: An honest quorum can always make progress (since <code>N - f = 2f + 1 &gt; f</code> honest nodes).</li>
+                </ul>
+
+                <h3 class="ch-s2">Journaling and Crash Recovery</h3>
+
+                <p>Both <code>ordered_broadcast</code> and <code>simplex</code> use journaling for crash recovery. Events (votes, certificates, node broadcasts) are written to a journal before being acted on. On restart, the journal is replayed: the actor re-constructs state from the persisted log.</p>
+
+                <p>For <code>ordered_broadcast</code>, the journal prevents sequencer equivocation: if a sequencer crashes after broadcasting node at height <code>h</code> but before persisting, on restart it will find the journal entry and know not to broadcast a different chunk at height <code>h</code>.</p>
+
+                <p>For <code>simplex</code>, the journal stores vote artifacts and certificates. On restart, the voter re-syncs with peers via the resolver to fill gaps.</p>
+
+                <h3 class="ch-s2">VRF Randomness and the Commit-Then-Reveal Pattern</h3>
+
+                <div class="callout warning">
+                    <div class="callout-label">Security warning</div>
+                    <p>It is <strong>not safe</strong> to use a round&rsquo;s randomness to drive execution in that same round. A malicious leader can selectively distribute blocks to gain early visibility of the randomness output, then choose nullification if the outcome is unfavorable. The recommended pattern is <strong>commit-then-reveal</strong>: bind randomness requests in finalized blocks at view <code>v</code> for use at view <code>v+100</code> (or any sufficiently distant view).</p>
+                </div>
+            </section>
+
+            <hr>
+
+            <!-- ── Section 6 ─────────────────────────── -->
+            <section id="s6">
+                <h2 class="ch-s1">6. Failure Modes, Cancellation, and Correctness Concerns</h2>
+
+                <p>This section is the protocol under stress. The happy path tells you what the
+                    design wants to do. The failure sections tell you what it is actually prepared
+                    to survive, what it can only mitigate, and where the hard limits really are.</p>
+
+                <h3 class="ch-s2">Byzantine Fault Tolerance Limits</h3>
+
+                <p>The <code>N/3</code> tolerance is a hard limit. If more than <code>N/3</code> participants are simultaneously Byzantine:</p>
+
+                <ul>
+                    <li><strong>Safety can be violated</strong>: A Byzantine quorum can finalize two conflicting blocks at the same height (by controlling which blocks propagate to which honest nodes).</li>
+                    <li><strong>Liveness can be violated</strong>: A Byzantine coalition can always have a quorum to block finalization.</li>
+                </ul>
+
+                <p>In practice, this means the system is secure against up to 33% adversarial participation. For 10 validators, 3 can be Byzantine. For 100 validators, 33 can be Byzantine.</p>
+
+                <h3 class="ch-s2">Cancellation and Timeouts</h3>
+
+                <p>The voter uses <code>leader_timeout</code> and <code>certification_timeout</code> to bound how long it waits. The invariant enforced at construction:</p>
+
+                <pre><code>if cfg.leader_timeout &gt; cfg.certification_timeout {
+    panic!("leader timeout must be less than or equal to certification timeout");
+}</code></pre>
+
+                <p>The leader timeout must not exceed the certification timeout because certification (the application&rsquo;s <code>certify</code> call) happens after notarization. If the leader timeout were larger, a leader could propose, get notarized, then timeout before certification completes &mdash; causing unnecessary view changes.</p>
+
+                <h3 class="ch-s2">Marshal Gap Handling</h3>
+
+                <p>Marshal delivers blocks in monotonically increasing order (no gaps). When a gap appears:</p>
+
+                <ol>
+                    <li>Marshal detects that it has a finalization for height <code>h</code> but no block at <code>h-1</code>.</li>
+                    <li>It pauses finalization of <code>h</code> and emits a backfill request.</li>
+                    <li>Resolver queries peers for the missing block.</li>
+                    <li>On receipt, Marshal verifies and delivers <code>h-1</code>.</li>
+                    <li>Finalization of <code>h</code> resumes.</li>
+                </ol>
+
+                <p>If the gap cannot be filled (peer doesn&rsquo;t have it, or peer is malicious), Marshal will continue to retry. The application receives no updates until the gap is resolved.</p>
+
+                <h3 class="ch-s2">Double-Signing and Equivocation Detection</h3>
+
+                <p>In <code>ordered_broadcast</code>, a sequencer that broadcasts two different chunks at the same height with the same parent produces detectable equivocation: two valid signatures from the same validator on the same height with different payloads. The <code>ordered_broadcast::types::Error::ChunkMismatch</code> error captures this.</p>
+
+                <p>In simplex, a validator that sends two different notarize votes at the same view produces equivocation. The <code>AttributableMap</code> enforces one vote per phase per validator: the second insert returns <code>false</code>.</p>
+            </section>
+
+            <hr>
+
+            <!-- ── Section 7 ─────────────────────────── -->
+            <section id="s7">
+                <h2 class="ch-s1">7. How to Read the Source Code</h2>
+
+                <p>Read the consensus crate as an argument, not as a catalog. Start with the
+                    temporal identifiers and the trait boundary to the application. Then read the
+                    vote subjects and certificate machinery. Only after that should you move
+                    outward into the voter state machine and the layers built above it.</p>
+
+                <h3 class="ch-s2">File Map</h3>
+
+                <pre><code>consensus/src/
+  lib.rs                      &larr; trait hierarchy (Automaton, CertifiableAutomaton, Relay, Reporter, Monitor)
+  types.rs                    &larr; Epoch, View, Height, Round, Participant, Delta types
+  simplex/
+    mod.rs                    &larr; module entry, public re-exports
+    types.rs                  &larr; Subject, VoteTracker, AttributableMap, Context, Proposal, Vote types
+    scheme/
+      mod.rs                  &larr; Namespace derivation, scheme trait, domain separation constants
+      ed25519.rs              &larr; attributable scheme
+      bls12381_multisig.rs    &larr; attributable scheme
+      bls12381_threshold.rs   &larr; non-attributable threshold scheme
+      secp256r1.rs            &larr; attributable scheme
+      reporter.rs             &larr; AttributableReporter for filtering attributable events
+    elector.rs                &larr; RoundRobin and Random leader election
+    actors/
+      voter/
+        actor.rs              &larr; main voter state machine (the most important file)
+        state.rs              &larr; voter state (active views, certificates, etc.)
+        ingress.rs            &larr; inbound message types
+        outbound.rs           &larr; outbound message types
+      batcher/
+        actor.rs              &larr; vote batching and broadcast coordination
+      resolver/
+        actor.rs              &larr; certificate exchange with peers
+  aggregation/
+    mod.rs                    &larr; engine, configuration, pluggable scheme
+    types.rs                  &larr; Item, Ack, TipAck, Certificate, Namespace
+    engine.rs                 &larr; aggregation state machine
+    config.rs                 &larr; engine configuration
+    safe_tip.rs               &larr; tip advancement logic
+  ordered_broadcast/
+    mod.rs                    &larr; Engine, sequencer/validator roles, pluggable scheme
+    types.rs                  &larr; Node, Chunk, Certificate, Ack, TipAck, Context
+    engine.rs                 &larr; broadcast engine
+    ack_manager.rs            &larr; tracks validator acknowledgments
+    tip_manager.rs            &larr; tracks sequencer chain tips
+  marshal/
+    mod.rs                    &larr; Actor, Config, Update types
+    core.rs                   &larr; main marshal actor
+    standard.rs               &larr; standard (non-erasure-coded) mode
+    coding.rs                 &larr; erasure-coded mode (shards::Engine)
+    resolver.rs               &larr; backfill mechanism
+    ancestry.rs               &larr; block ancestry queries
+    store/                    &larr; internal storage for blocks and certificates</code></pre>
+
+                <h3 class="ch-s2">Reading Order</h3>
+
+                <p>For understanding the protocol:</p>
+
+                <ol>
+                    <li><code>consensus/src/types.rs</code> &mdash; understand the identifier types (Epoch, View, Height, Round). All consensus decisions are scoped to these identifiers.</li>
+                    <li><code>consensus/src/lib.rs</code> &mdash; understand the trait hierarchy. <code>Automaton</code> is the key interface.</li>
+                    <li><code>consensus/src/simplex/types.rs</code> &mdash; understand <code>Subject</code>, <code>VoteTracker</code>, and <code>Context</code>. These encode the core protocol state.</li>
+                    <li><code>consensus/src/simplex/scheme/mod.rs</code> &mdash; understand domain separation (namespace suffixes). This is where cross-protocol attacks are prevented.</li>
+                    <li><code>consensus/src/simplex/elector.rs</code> &mdash; understand leader election determinism requirements.</li>
+                    <li><code>consensus/src/simplex/actors/voter/actor.rs</code> &mdash; the main state machine. Read this last and carefully.</li>
+                </ol>
+
+                <p>For understanding the layers above simplex:</p>
+
+                <ol>
+                    <li><code>consensus/src/ordered_broadcast/types.rs</code> &mdash; Node chaining, certificate assembly.</li>
+                    <li><code>consensus/src/aggregation/types.rs</code> &mdash; Item/Ack/Certificate model.</li>
+                    <li><code>consensus/src/marshal/mod.rs</code> and <code>marshal/core.rs</code> &mdash; how blocks flow from broadcast through consensus to the application.</li>
+                </ol>
+
+                <h3 class="ch-s2">Key Invariants to Verify in Code</h3>
+
+                <ul>
+                    <li><strong>Parent nullification</strong>: In <code>voter/actor.rs</code>, search for where <code>parent</code> context is checked before sending notarize votes.</li>
+                    <li><strong>Single-shot verification</strong>: In <code>lib.rs</code>, the doc comment on <code>verify</code> explains the single-shot property. In <code>actor.rs</code>, look for how the oneshot channel is used.</li>
+                    <li><strong>Quorum assembly</strong>: In <code>scheme/*/mod.rs</code>, look for where <code>N3f1::quorum</code> is used to determine when a certificate is complete.</li>
+                    <li><strong>Domain separation</strong>: In <code>scheme/mod.rs</code>, look for the suffix constants and how they are used in <code>Namespace::derive</code>.</li>
+                    <li><strong>Deterministic election</strong>: In <code>elector.rs</code>, the <code>Elector::elect</code> trait method has a determinism requirement in its docs.</li>
+                </ul>
+            </section>
+
+            <hr>
+
+            <!-- ── Section 8: Glossary ───────────────── -->
+            <section id="s8">
+                <h2 class="ch-s1">8. Glossary</h2>
+
+                <dl class="glossary">
+                    <dt>Attributable signature</dt>
+                    <dd>A signature that uniquely identifies the signer. With an attributable scheme, any party can verify that a specific validator signed a specific message.</dd>
+
+                    <dt>Certificate</dt>
+                    <dd>A quorum of signatures (or a threshold signature) over a common subject, proving that <code>&gt;2N/3</code> validators have voted on the same value.</dd>
+
+                    <dt>Domain separation</dt>
+                    <dd>The technique of deriving distinct namespaces for different purposes so that a signature/primitive created for one purpose cannot be used for another. In simplex, <code>_NOTARIZE</code>, <code>_NULLIFY</code>, <code>_FINALIZE</code> provide domain separation.</dd>
+
+                    <dt>Epoch</dt>
+                    <dd>A period of time during which the validator set is fixed. Epochs increment on reconfiguration.</dd>
+
+                    <dt>Finalization</dt>
+                    <dd>The point at which a block is considered committed. After finalization, the block cannot be reverted without a coordinated chain reorg.</dd>
+
+                    <dt>Leader election</dt>
+                    <dd>The process of selecting which validator proposes the next block. In <code>RoundRobin</code>, this is deterministic. In <code>Random</code>, this uses VRF-derived randomness.</dd>
+
+                    <dt>N3f1 quorum</dt>
+                    <dd>The quorum size <code>N - N/3</code> (ceiling), which ensures overlap with any other quorum of the same size in a network with <code>N/3</code> Byzantine participants.</dd>
+
+                    <dt>Notarization</dt>
+                    <dd>A vote by a validator that a proposal is valid. A notarization certificate proves that <code>&gt;2N/3</code> validators have verified and accepted the proposal.</dd>
+
+                    <dt>Nullification</dt>
+                    <dd>A vote to skip a view. Nullification certificates allow the next leader to safely skip a view without risking a fork.</dd>
+
+                    <dt>Simplex</dt>
+                    <dd>The three-phase (notarize &rarr; nullify &rarr; finalize) consensus protocol in <code>commonware-consensus</code>.</dd>
+
+                    <dt>Threshold signature</dt>
+                    <dd>A signature produced by combining partial signatures from multiple participants. The combined signature does not reveal which individual participants signed.</dd>
+
+                    <dt>View</dt>
+                    <dd>A single consensus round within an epoch, identified by <code>(epoch, view_number)</code>. Each view has a designated leader.</dd>
+
+                    <dt>VRF (Verifiable Random Function)</dt>
+                    <dd>A function that produces a pseudorandom output that can be verified by anyone given a public key. In <code>Random</code> leader election, VRF outputs determine the leader.</dd>
+                </dl>
+            </section>
+
+            <!-- ── Chapter end marker ──────────────── -->
+            <div class="ch-end" aria-hidden="true">&mdash; &bull; &mdash;</div>
+
+            <!-- ── Next chapter ────────────────────── -->
+            <nav class="ch-next" aria-label="Next chapter">
+                <div class="ch-next-label">End of current volume</div>
+                <a href="/commonware-book/index.html" class="ch-next-title">Return to book index</a>
+                <p class="ch-next-desc">Review the published chapter map and jump to another section of the book.</p>
+            </nav>
+
+        </main>
+
+        <!-- ── Right-rail TOC ─────────────────────── -->
+        <aside class="ch-toc" aria-label="Table of contents">
+            <details open>
+                <summary>Contents</summary>
+                <ol>
+                    <li><a href="#bg">Backgrounder</a></li>
+                    <li><a href="#s1">What Problem Does This Solve?</a></li>
+                    <li><a href="#s2">Mental Model</a></li>
+                    <li><a href="#s3">Core Abstractions</a></li>
+                    <li><a href="#s4">Execution Flow</a></li>
+                    <li><a href="#s5">Concurrency and Protocol Semantics</a></li>
+                    <li><a href="#s6">Failure Modes</a></li>
+                    <li><a href="#s7">How to Read the Source</a></li>
+                    <li><a href="#s8">Glossary</a></li>
+                </ol>
+            </details>
+        </aside>
+
+    </div><!-- /ch-layout -->
+
+    <script>
+        (() => {
+            const root = document.documentElement;
+            const key = 'commonware-book-theme';
+            const button = document.getElementById('theme-toggle');
+            const media = window.matchMedia('(prefers-color-scheme: dark)');
+            const saved = localStorage.getItem(key);
+            root.dataset.theme = saved || (media.matches ? 'dark' : 'light');
+            const syncButton = () => {
+                if (!button) return;
+                const current = root.dataset.theme || 'light';
+                button.textContent = current === 'dark' ? 'light' : 'dark';
+                button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+            };
+            syncButton();
+            button?.addEventListener('click', () => {
+                const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+                root.dataset.theme = current;
+                localStorage.setItem(key, current);
+                syncButton();
+            });
+        })();
+    </script>
+    <script src="/shared.js"></script>
+</body>
+</html>

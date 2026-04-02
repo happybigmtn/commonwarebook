@@ -1,0 +1,36 @@
+digraph ModuleChapter {
+    graph [
+        goal="Create a graduate-level, navigable interactive-book chapter for $module_display_name with embedded visualization specifications.",
+        model_stylesheet="
+            * { provider: anthropic; reasoning_effort: medium; backend: cli; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    brief [
+        label="Brief",
+        prompt="You are preparing a chapter of an interactive technical book about Commonware. Focus only on the `$module_display_name` crate and the files it depends on directly for core concepts.\n\nBefore writing, inspect at minimum:\n- Cargo.toml at the workspace root\n- $crate_path/Cargo.toml\n- $readme_path\n- $source_glob\n$supplemental_context\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Do not edit sibling module directories unless the prompt explicitly requires it.\n\nModule-specific focus:\n$module_focus\n\nThen create `$chapter_dir/brief.md`.\n\nThe brief must include:\n1. Module purpose in one paragraph.\n2. The 6-10 source files that matter most, each with why it matters.\n3. A chapter outline with 5-7 sections.\n4. A list of system concepts to explain at graduate distributed-systems depth.\n5. A list of 3-5 interactive visualizations to build later.\n6. A claims-to-verify checklist to keep the later draft honest.\n\nKeep the brief concrete and operational. Reference real file paths. Write the file, then respond with a short summary."
+    ]
+
+    draft_chapter [
+        label="Draft Chapter",
+        prompt="Read `$chapter_dir/brief.md`, then inspect the referenced source files directly.\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Avoid touching sibling chapter artifacts unless the prompt explicitly requires it.\n\nWrite `$chapter_dir/chapter.md`.\n\nRequirements:\n- Audience: strong systems engineers and graduate students in distributed systems.\n- Style: Feynman-like clarity without dumbing anything down.\n- Tone: technical, direct, explanatory; no marketing language.\n- Use real file paths and APIs from the repo.\n- Explain the design through concrete execution flows, not just definitions.\n- Call out invariants, failure modes, scheduler/runtime tradeoffs, and how the crate composes with the rest of Commonware.\n- The output should read like one navigable chapter of a larger interactive book.\n\nThe chapter must include these sections:\n1. What problem the module solves.\n2. Mental model of the module.\n3. Core abstractions and important types.\n4. Execution flow and lifecycle.\n5. Concurrency, protocol, or systems semantics that matter most.\n6. Failure modes, cancellation, and correctness concerns.\n7. How to read the source code.\n8. Glossary and further reading.\n\nEnd with a section called `Open Questions For Interactive UI` that identifies what the future site should animate or make explorable."
+    ]
+
+    draft_visuals [
+        label="Draft Visual Specs",
+        prompt="Read `$chapter_dir/brief.md` and `$chapter_dir/chapter.md`, then create `$chapter_dir/visuals.json`.\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n\nWrite valid JSON with this shape:\n{\n  \"module\": \"$module_display_name\",\n  \"visualizations\": [\n    {\n      \"id\": \"string\",\n      \"title\": \"string\",\n      \"learning_goal\": \"string\",\n      \"why_it_matters\": \"string\",\n      \"source_files\": [\"path\"],\n      \"default_state\": \"string\",\n      \"controls\": [{\"id\": \"string\", \"type\": \"toggle|slider|stepper\", \"label\": \"string\", \"values\": [\"string\"]}],\n      \"scenes\": [{\"id\": \"string\", \"caption\": \"string\", \"system_events\": [\"string\"], \"visual_elements\": [\"string\"]}],\n      \"checks\": [\"string\"]\n    }\n  ]\n}\n\nMake the specs detailed enough that a frontend engineer could build the first interactive version without inventing the pedagogy."
+    ]
+
+    review [
+        label="Review",
+        goal_gate=true,
+        retry_target="draft_chapter",
+        prompt="Audit `$chapter_dir/brief.md`, `$chapter_dir/chapter.md`, and `$chapter_dir/visuals.json` against the actual source under `$crate_path/`.\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Do not rewrite sibling module artifacts during review.\n\nTasks:\n1. Check for technical inaccuracies, hand-wavy claims, or missing caveats.\n2. Tighten the chapter where it is vague or too generic.\n3. Make sure the visuals are grounded in real module behavior.\n4. Fix any issues directly in the files.\n5. Write `$chapter_dir/review.md` with three sections: `What is solid`, `What still needs deeper verification`, and `Recommended next workflow`.\n\nIf the files are already strong, still improve specificity where possible. Respond with a concise audit summary."
+    ]
+
+    start -> brief -> draft_chapter -> draft_visuals -> review -> exit
+}

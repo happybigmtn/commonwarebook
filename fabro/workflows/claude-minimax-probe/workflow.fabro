@@ -1,0 +1,15 @@
+digraph ClaudeMiniMaxProbe {
+    graph [goal="Verify Fabro CLI backend works with Claude Code routed to MiniMax M2.7 HighSpeed"]
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    probe [
+        label="Probe",
+        provider="anthropic",
+        model="MiniMax-M2.7-highspeed",
+        backend="cli",
+        prompt="Read `runtime/README.md` and write `docs/commonware-book/probes/claude-minimax-m27-highspeed.md` containing:\n1. A one-paragraph summary of what commonware-runtime is for.\n2. Three bullets naming concrete concepts a future interactive explainer should visualize.\n3. A final line that says exactly `claude minimax probe ok`.\n\nWrite the file first, then respond with a short confirmation."
+    ]
+
+    start -> probe -> exit
+}

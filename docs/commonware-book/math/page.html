@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-math — commonware-book</title>
+  <meta name="description" content="Start with the systems pressure, not the notation.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / math
+      </span>
+      <span class="chapter-title">commonware-math</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../codec/page.html">← prev</a>
+        <a class="next" href="../conformance/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · math · Complete · 21 min read</div>
+    <h1 class="ch-title">commonware-math</h1>
+    <p class="ch-deck">The executable algebra engine room beneath coding, interpolation, and recovery.</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Start with the systems pressure, not the notation.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part II. Evidence and State</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">11 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">21 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-conformance</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-why-this-crate-exists">1. Why This Crate Exists</a></li><li class="toc-item"><a class="toc-link" href="#backgrounder-algebra-as-an-execution-environment">Backgrounder: Algebra as an Execution Environment</a></li><li class="toc-item"><a class="toc-link" href="#2-the-contract-deck-and-the-law-checking-engine">2. The Contract Deck and the Law-Checking Engine</a><ul class="toc-sub"><li><a class="toc-link" href="#borrowed-operators-are-part-of-the-interface">Borrowed operators are part of the interface</a></li><li><a class="toc-link" href="#one-generic-engine-powers-scale-and-exponentiation">One generic engine powers scale and exponentiation</a></li><li><a class="toc-link" href="#space-r-is-the-bridge-most-readers-should-linger-on">Space&lt;R&gt; is the bridge most readers should linger on</a></li><li><a class="toc-link" href="#the-laws-are-executed-not-merely-written-down">The laws are executed, not merely written down</a></li><li><a class="toc-link" href="#math-src-test-rs-is-the-proving-ground-for-generic-code">math/src/test.rs is the proving ground for generic code</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#3-goldilocks-when-the-contracts-become-metal">3. Goldilocks: When the Contracts Become Metal</a><ul class="toc-sub"><li><a class="toc-link" href="#the-easy-reductions-come-first">The easy reductions come first</a></li><li><a class="toc-link" href="#the-real-trick-is-reduce-128">The real trick is reduce_128</a></li><li><a class="toc-link" href="#inversion-and-halving-both-exploit-field-structure">Inversion and halving both exploit field structure</a></li><li><a class="toc-link" href="#goldilocks-is-also-an-ntt-field-not-just-a-prime-field">Goldilocks is also an NTT field, not just a prime field</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-polynomials-semantic-objects-not-coefficient-buckets">4. Polynomials: Semantic Objects, Not Coefficient Buckets</a><ul class="toc-sub"><li><a class="toc-link" href="#degree-and-degree-exact-are-different-on-purpose">degree() and degree_exact() are different on purpose</a></li><li><a class="toc-link" href="#evaluation-has-two-routes-because-space-r-made-both-legal">Evaluation has two routes because Space&lt;R&gt; made both legal</a></li><li><a class="toc-link" href="#interpolation-is-the-inverse-story-and-the-crate-does-real-work-up-front">Interpolation is the inverse story, and the crate does real work up front</a></li><li><a class="toc-link" href="#roots-of-unity-interpolation-has-a-separate-fast-path">Roots-of-unity interpolation has a separate fast path</a></li><li><a class="toc-link" href="#commitments-fit-because-polynomials-are-generic-over-coefficient-type">Commitments fit because polynomials are generic over coefficient type</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-ntt-changes-the-route-not-the-meaning">5. NTT Changes the Route, Not the Meaning</a><ul class="toc-sub"><li><a class="toc-link" href="#the-butterfly-comes-from-splitting-even-and-odd-coefficients">The butterfly comes from splitting even and odd coefficients</a></li><li><a class="toc-link" href="#bit-reversal-is-pushed-into-storage-not-left-as-an-afterthought">Bit reversal is pushed into storage, not left as an afterthought</a></li><li><a class="toc-link" href="#matrix-polynomialvector-and-evaluationvector-are-the-real-data-plane">Matrix, PolynomialVector, and EvaluationVector are the real data plane</a></li><li><a class="toc-link" href="#vanishingpoints-is-bookkeeping-with-algebraic-consequences">VanishingPoints is bookkeeping with algebraic consequences</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-vanishing-polynomials-and-real-erasure-recovery">6. Vanishing Polynomials and Real Erasure Recovery</a><ul class="toc-sub"><li><a class="toc-link" href="#evaluationcolumn-vanishing-builds-the-polynomial-the-recovery-path-needs">EvaluationColumn::vanishing builds the polynomial the recovery path needs</a></li><li><a class="toc-link" href="#recovery-works-by-multiplying-by-a-vanishing-polynomial-then-dividing-back">Recovery works by multiplying by a vanishing polynomial, then dividing back</a></li><li><a class="toc-link" href="#the-division-step-uses-a-coset-because-direct-division-would-hit-zeros">The division step uses a coset because direct division would hit zeros</a></li><li><a class="toc-link" href="#a-small-recovery-picture">A small recovery picture</a></li><li><a class="toc-link" href="#lagrange-coefficients-exposes-the-same-recovery-idea-in-a-lighter-form">lagrange_coefficients exposes the same recovery idea in a lighter form</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-what-pressure-this-design-absorbs">7. What Pressure This Design Absorbs</a></li><li class="toc-item"><a class="toc-link" href="#8-limits-and-reading-order">8. Limits and Reading Order</a></li><li class="toc-item"><a class="toc-link" href="#9-glossary">9. Glossary</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="1-why-this-crate-exists">1. Why This Crate Exists</h2>
+<p>Start with the systems pressure, not the notation.</p>
+<p>Commonware has crates that encode data into parity rows, commit to structured objects, interpolate secrets from shares, and recover missing evaluations after erasures. None of those crates can afford their own private arithmetic folklore. If one crate treats trailing zero coefficients as meaningful, another decodes field elements non-canonically, and a third &quot;optimizes&quot; a transform with the wrong root ordering, the bug will not announce itself as a bug. It will look like a different result.</p>
+<p>That is why <code>commonware-math</code> exists. It gives the rest of the system one place to ask:</p>
+<blockquote><p>What algebraic promises are real, which concrete field satisfies them, and how do we reorganize the same polynomial meaning into a form that coding and recovery can execute quickly?</p></blockquote>
+<p>This crate answers that question in layers.</p>
+<ol><li>[<code>algebra.rs</code>](../../../math/src/algebra.rs) states the contracts.</li><li>[<code>test_suites</code> in <code>algebra.rs</code>](../../../math/src/algebra.rs) and [<code>math/src/test.rs</code>](../../../math/src/test.rs) turn those contracts into executable law checks.</li><li>[<code>fields/goldilocks.rs</code>](../../../math/src/fields/goldilocks.rs) makes the contracts concrete in a field with a useful modulus shape.</li><li>[<code>poly.rs</code>](../../../math/src/poly.rs) gives the contracts an object whose meaning must survive multiple execution strategies.</li><li>[<code>ntt.rs</code>](../../../math/src/ntt.rs) changes the route, not the meaning, so evaluation and recovery become fast enough to use in real protocol code.</li></ol>
+<p>Read the chapter as one argument. The lower layers exist so the upper ones can trust algebra as infrastructure instead of re-deriving it in every crate.</p>
+<hr>
+<h2 id="backgrounder-algebra-as-an-execution-environment">Backgrounder: Algebra as an Execution Environment</h2>
+<p>Most people meet algebra as symbol pushing on a whiteboard. In systems code, it shows up as an execution environment with rules. A value is not just &quot;some numbers.&quot; It lives in a structure that decides what addition means, whether division is always possible, and how much representation freedom is allowed.</p>
+<p>That distinction matters because naive integer arithmetic is not stable enough for protocol logic. Integers overflow. Fractions do not always stay inside the same set. Floating point introduces rounding. Different machines can preserve the same abstract idea only if they share the same algebraic rules.</p>
+<p>The central structures are familiar:</p>
+<ul><li>a <strong>ring</strong> supports addition and multiplication,</li><li>a <strong>field</strong> adds multiplicative inverses for nonzero elements,</li><li>a <strong>vector space</strong> or module lets scalars weight structured objects,</li><li>and a <strong>polynomial</strong> packages many related values into one object that can be evaluated, shifted, or reconstructed from samples.</li></ul>
+<p>Those structures are not abstract decoration. They are what make interpolation and fast recovery possible. If you know enough points of a polynomial, you can reconstruct the whole thing. If you can move the same polynomial into a more convenient basis, you can evaluate or multiply it much faster. That is the reason finite fields and roots of unity matter here.</p>
+<p>The classical alternatives are slower or less robust:</p>
+<ul><li>work directly with large integers and accept overflow bugs,</li><li>use rationals and pay for expensive normalization,</li><li>or use floating point and accept rounding noise where exact equality matters.</li></ul>
+<p><code>commonware-math</code> chooses exact algebra instead. The tradeoff is that the code has to respect the laws very carefully, but the payoff is that higher-level protocols can treat algebra as a dependable substrate rather than a source of surprises.</p>
+<hr>
+<h2 id="2-the-contract-deck-and-the-law-checking-engine">2. The Contract Deck and the Law-Checking Engine</h2>
+<p>The most important design choice in <code>commonware-math</code> is that it begins with traits, not with a favorite field or polynomial type. The crate first asks what other crates may rely on without knowing the concrete implementation.</p>
+<p>That question produces a ladder in [<code>math/src/algebra.rs</code>](../../../math/src/algebra.rs).</p>
+<ul><li><code>Object</code> says a value can be cloned, compared, and debug-printed.</li><li><code>Additive</code> says it behaves like a commutative group under <code>+</code>, <code>-</code>, and <code>-x</code>.</li><li><code>Multiplicative</code> says it supports <code>*</code> and <code>square</code>.</li><li><code>Space&lt;R&gt;</code> says an additive object can be scaled by <code>R</code>.</li><li><code>Ring</code> adds <code>one()</code> and exponentiation.</li><li><code>Field</code> adds inversion.</li><li><code>FieldNTT</code> adds roots of unity, coset shifts, and <code>div_2</code>.</li><li><code>CryptoGroup</code> says a group is also a <code>Space</code> over its scalar field.</li><li><code>HashToGroup</code> and <code>Random</code> add sampling capabilities used by higher layers.</li></ul>
+<p>The crate is not merely naming textbook structures. Each rung corresponds to a systems promise.</p>
+<ul><li>If something is <code>Additive</code>, callers may form cancellations and linear sums.</li><li>If something is <code>Space&lt;R&gt;</code>, callers may do weighted combinations, MSMs, and commitment-style aggregation.</li><li>If something is <code>FieldNTT</code>, callers may move into a root-of-unity domain and expect the inverse transform to exist.</li></ul>
+<p>That is the first engine-room lesson: the laws are the interface.</p>
+<h3 id="borrowed-operators-are-part-of-the-interface">Borrowed operators are part of the interface</h3>
+<p>The operator signatures are not cosmetic. <code>algebra.rs</code> consistently prefers borrowed right-hand sides such as <code>T + &amp;T</code>, <code>&amp;mut T += &amp;T</code>, <code>T * &amp;R</code>, and <code>&amp;mut T *= &amp;R</code>.</p>
+<p>That choice protects the rest of the crate from accidental cloning when the &quot;number&quot; is not a single machine word. A polynomial, vector, or group element can be large enough that ownership churn becomes part of the algorithmic cost. The traits therefore encode not just which operations exist, but how to use them cheaply.</p>
+<h3 id="one-generic-engine-powers-scale-and-exponentiation">One generic engine powers scale and exponentiation</h3>
+<p>There is a deeper unification near the top of <code>algebra.rs</code>: <code>monoid_exp</code>.</p>
+<p>It takes:</p>
+<ul><li>an identity element,</li><li>an associative binary operation,</li><li>a &quot;self operation&quot; that doubles or squares,</li><li>a base element,</li><li>and exponent limbs in little-endian <code>u64</code> form.</li></ul>
+<p>The algorithm scans the exponent bits from low to high. If the current bit is set, it folds the current working value into the accumulator. Then it applies the self-operation to the working value.</p>
+<p>For <code>Additive::scale</code>, the operation is addition and the self-operation is doubling. For <code>Ring::exp</code>, the operation is multiplication and the self- operation is squaring. One generic routine therefore implements both double-and-add and square-and-multiply.</p>
+<p>Take exponent <code>13 = 1101₂</code>.</p>
+<ul><li>In additive mode, the accumulator collects <code>x</code>, then <code>4x</code>, then <code>8x</code>, for a final result of <code>13x</code>.</li><li>In multiplicative mode, the accumulator collects <code>x</code>, then <code>x^4</code>, then <code>x^8</code>, for a final result of <code>x^13</code>.</li></ul>
+<p>That is a compact example of the crate&#x27;s style. Instead of shipping separate ad hoc loops for every algebraic flavor, it identifies the common contract and lets one implementation serve several layers.</p>
+<h3 id="space-r-is-the-bridge-most-readers-should-linger-on"><code>Space&lt;R&gt;</code> is the bridge most readers should linger on</h3>
+<p><code>Space&lt;R&gt;</code> is where the contract ladder starts doing concrete systems work.</p>
+<p>Mathematically, it is a right module action. Operationally, it says:</p>
+<blockquote><p>I can take additive objects, weight each by a scalar, and sum the results in a structured way.</p></blockquote>
+<p>That is why <code>Space&lt;R&gt;</code> carries <code>msm</code>, the multi-scalar multiplication hook. The default implementation is naive. It simply computes</p>
+<p><code>sum_i points[i] * scalars[i]</code>.</p>
+<p>But the trait makes a stronger promise: callers may ask for that shape without knowing whether the implementation uses the naive loop or something faster. This becomes important in <code>poly.rs</code>, where polynomial evaluation can switch between Horner accumulation and MSM without changing the semantic request.</p>
+<h3 id="the-laws-are-executed-not-merely-written-down">The laws are executed, not merely written down</h3>
+<p>The important part of the crate is that <code>algebra.rs</code> does not stop at trait definitions. Under <code>#[cfg(any(test, feature = &quot;arbitrary&quot;))]</code>, it ships a real law-checking engine in <code>test_suites</code>.</p>
+<p>Those tests do not &quot;unit test a concrete type once.&quot; They express laws that any implementer must survive:</p>
+<ul><li><code>check_add_assign</code> verifies <code>+=</code> agrees with <code>+</code>.</li><li><code>check_add_commutes</code> and <code>check_add_associates</code> verify additive structure.</li><li><code>check_sub_vs_add_neg</code> verifies subtraction is really addition with negation.</li><li><code>check_mul_assign</code>, <code>check_mul_commutes</code>, and <code>check_mul_associative</code> do the same for multiplication.</li><li>higher suites compose these into <code>fuzz_field</code>, <code>fuzz_space</code>, and <code>fuzz_field_ntt</code>.</li></ul>
+<p>This matters because algebraic breakage often appears in optimized code first. A field implementation can compile and still violate a law at a carry boundary. A transform-specific helper can work on normal inputs and still return the wrong root of unity order. The test suites force implementations to satisfy the contract deck across generated inputs.</p>
+<h3 id="math-src-test-rs-is-the-proving-ground-for-generic-code"><code>math/src/test.rs</code> is the proving ground for generic code</h3>
+<p>The law engine gets an important companion in [<code>math/src/test.rs</code>](../../../math/src/test.rs). It defines a tiny field <code>F_89</code> and a tiny prime-order group <code>G</code>, realized as a subgroup of the units of <code>F_179</code>.</p>
+<p>Why does that matter when Goldilocks already exists?</p>
+<p>Because generic algebra code should not only work for the one optimized field the crate uses in production. The tiny field and group let the crate test <code>Field</code>, <code>Space</code>, <code>CryptoGroup</code>, codec behavior, and interpolation logic in a small setting where the arithmetic is easy to reason about. If a supposedly generic routine only works because Goldilocks has a lucky modulus shape, these toy types are where the illusion breaks.</p>
+<p>That is the second engine-room lesson: <code>commonware-math</code> does not trust laws because the author wrote them in a doc comment. It runs them.</p>
+<hr>
+<h2 id="3-goldilocks-when-the-contracts-become-metal">3. Goldilocks: When the Contracts Become Metal</h2>
+<p>Abstract laws are necessary, but no higher-level crate can encode or recover a row with trait bounds alone. Eventually the chapter has to land on a concrete field, and in Commonware that field is Goldilocks in [<code>math/src/fields/goldilocks.rs</code>](../../../math/src/fields/goldilocks.rs).</p>
+<p>Its modulus is:</p>
+<p><code>P = 2^64 - 2^32 + 1</code></p>
+<p>This constant is not special because it sounds elegant. It is special because its binary shape makes reduction fast and because its multiplicative group has enough two-adic structure for the NTT layer.</p>
+<h3 id="the-easy-reductions-come-first">The easy reductions come first</h3>
+<p><code>add_inner</code> and <code>sub_inner</code> show the basic discipline.</p>
+<p>For addition, each input is already less than <code>P</code>, so the integer sum is at most <code>2P - 2</code>. That means one conditional subtraction of <code>P</code> is enough. The implementation handles both the no-overflow and overflow cases carefully, but the algebraic point is simple: the modulus is close enough to <code>2^64</code> that a single correction step suffices.</p>
+<p>For subtraction, if the raw <code>u64</code> subtraction underflows, adding <code>P</code> once restores the canonical representative. Again, one correction is enough.</p>
+<p><code>reduce_64</code> follows the same pattern. Because <code>2P &gt; 2^64 - 1</code>, a raw <code>u64</code> input also needs at most one subtraction.</p>
+<h3 id="the-real-trick-is-reduce-128">The real trick is <code>reduce_128</code></h3>
+<p>The essential reduction trick sits in <code>reduce_128</code>, where the modulus shape pays for itself.</p>
+<p>Suppose we multiply two field elements as <code>u64</code>s. The product lives in <code>u128</code>, so we must reduce a 128-bit integer modulo <code>P</code>.</p>
+<p>Write the 128-bit value as</p>
+<p><code>x = c * 2^96 + b * 2^64 + a</code></p>
+<p>where:</p>
+<ul><li><code>a</code> is the low 64 bits,</li><li><code>b</code> is the next 32 bits,</li><li><code>c</code> is the high 32 bits.</li></ul>
+<p>Now use the modulus relation</p>
+<p><code>P = 2^64 - 2^32 + 1</code></p>
+<p>which implies</p>
+<p><code>2^64 = 2^32 - 1 (mod P)</code>.</p>
+<p>Multiply both sides by <code>2^32</code> and you get</p>
+<p><code>2^96 = 2^32 * (2^32 - 1) = 2^64 - 2^32 = -1 (mod P)</code>.</p>
+<p>Substitute those identities into <code>x</code>:</p>
+<p><code>x = a + b * 2^64 + c * 2^96</code></p>
+<p><code>  = a + b * (2^32 - 1) - c  (mod P)</code></p>
+<p><code>  = (a - c) + b * (2^32 - 1)  (mod P)</code>.</p>
+<p>That is exactly the structure <code>reduce_128</code> uses. It extracts <code>a</code>, <code>b</code>, and <code>c</code> from the <code>u128</code>, computes <code>(a - c)</code>, computes <code>b * (2^32 - 1)</code> as <code>(b &lt;&lt; 32) - b</code>, and then combines the two pieces with the already-tested field addition and subtraction helpers.</p>
+<p>The point is not that the code is clever. The point is that the chosen modulus lets the code collapse a general 128-bit reduction into a handful of word-sized operations and one field addition path the crate already knows how to trust.</p>
+<h3 id="inversion-and-halving-both-exploit-field-structure">Inversion and halving both exploit field structure</h3>
+<p>Goldilocks inversion is implemented as exponentiation by <code>P - 2</code>:</p>
+<p><code>x^-1 = x^(P-2)</code> for nonzero <code>x</code>.</p>
+<p>That is a standard field fact, but in this crate it also shows why the generic <code>Ring::exp</code> machinery mattered. The same little-endian square-and-multiply engine used for generic exponentiation becomes the inverse implementation of the concrete field.</p>
+<p><code>div_2</code> is even more telling. The default <code>FieldNTT::div_2</code> could compute</p>
+<p><code>x * (1 + 1)^-1</code>,</p>
+<p>but Goldilocks overrides it because halving appears inside inverse butterflies. If the stored <code>u64</code> is even, the implementation just shifts right. If it is odd, it adds <code>P</code> first and then shifts, because <code>x + P</code> is even while representing the same field element modulo <code>P</code>.</p>
+<p>That branch is small, but it is exactly the sort of field-specific detail the engine room should absorb for everyone else.</p>
+<h3 id="goldilocks-is-also-an-ntt-field-not-just-a-prime-field">Goldilocks is also an NTT field, not just a prime field</h3>
+<p>The type <code>F</code> implements <code>FieldNTT</code>, which means it has more to provide than ordinary inversion.</p>
+<ul><li><code>ROOT_OF_UNITY</code> is an element of order <code>2^32</code>.</li><li><code>root_of_unity(lg)</code> squares downward from that element until it reaches order <code>2^lg</code>.</li><li><code>NOT_ROOT_OF_UNITY</code> and <code>NOT_ROOT_OF_UNITY_INV</code> provide the coset shift used later during division in recovery code.</li></ul>
+<p>This modulus choice is what makes the later transform section possible. It makes multiplication cheap and gives the crate a large power-of-two root-of-unity tower. Without that, the later NTT and erasure machinery would have nowhere to stand.</p>
+<hr>
+<h2 id="4-polynomials-semantic-objects-not-coefficient-buckets">4. Polynomials: Semantic Objects, Not Coefficient Buckets</h2>
+<p>The next move in the chapter is [<code>math/src/poly.rs</code>](../../../math/src/poly.rs). It turns the contract deck into an object whose meaning has to survive several representations.</p>
+<p>The crate is not manipulating coefficient vectors because vectors are nice. It is manipulating polynomials whose semantic identity must survive storage shape, evaluation strategy, and recovery path.</p>
+<h3 id="degree-and-degree-exact-are-different-on-purpose"><code>degree()</code> and <code>degree_exact()</code> are different on purpose</h3>
+<p><code>Poly&lt;K&gt;</code> stores a non-empty coefficient list. That storage choice lets the crate represent the zero polynomial as <code>[0]</code> and preserve explicit padding when some caller wants it.</p>
+<p>But that means raw length is not the same thing as semantic degree.</p>
+<p>Take coefficients</p>
+<p><code>[3, 5, 0, 0]</code>.</p>
+<p>Storage length says the polynomial has four coefficients, so <code>degree()</code> returns <code>3</code>. Semantically, the polynomial is just</p>
+<p><code>3 + 5X</code>,</p>
+<p>so <code>degree_exact()</code> should return <code>1</code>.</p>
+<p>The crate therefore offers both answers:</p>
+<ul><li><code>degree()</code> is the cheap upper bound that does not inspect coefficients.</li><li><code>degree_exact()</code> walks backward and trims trailing zeros semantically.</li></ul>
+<p>The same semantic stance appears in <code>PartialEq</code>. Two polynomials compare equal even if one of them has extra high zero coefficients. Without that behavior, ordinary subtraction would create false distinctions between</p>
+<p><code>a_0 + a_1 X</code></p>
+<p>and</p>
+<p><code>a_0 + a_1 X + 0X^2 + 0X^3</code>.</p>
+<h3 id="evaluation-has-two-routes-because-space-r-made-both-legal">Evaluation has two routes because <code>Space&lt;R&gt;</code> made both legal</h3>
+<p><code>Poly&lt;K&gt;::eval</code> uses Horner&#x27;s method. Starting from the highest coefficient, it repeatedly multiplies by <code>r</code> and adds the next coefficient. That is the direct, low-allocation path.</p>
+<p><code>Poly&lt;K&gt;::eval_msm</code> computes the same value differently. It builds the powers</p>
+<p><code>1, r, r^2, ...</code></p>
+<p>and then asks <code>K::msm</code> to form the weighted sum of coefficients.</p>
+<p>These are not two different semantics. They are two execution shapes for the same request. The reason both exist without duplicating algebraic logic is that the contract deck already established what it means for coefficients to live in a <code>Space&lt;R&gt;</code>.</p>
+<p>The same idea extends to <code>lin_comb_eval</code>, which fuses several weighted evaluations into one combined MSM-style pass. Again, the chapter should treat that as one algebraic act expressed in several mechanical forms.</p>
+<h3 id="interpolation-is-the-inverse-story-and-the-crate-does-real-work-up-front">Interpolation is the inverse story, and the crate does real work up front</h3>
+<p>The most important under-covered part of <code>poly.rs</code> is the <code>Interpolator</code>.</p>
+<p>Its purpose is narrow and practical: recover the constant term of a polynomial from evaluations at known points. That is the secret-sharing use-case. Shares are values of a polynomial. The secret sits in the constant coefficient. Enough shares should reconstruct that constant without recomputing every weight from scratch each time.</p>
+<p>For points <code>w_0, ..., w_{n-1}</code>, the constant can be written as</p>
+<p><code>p(0) = sum_i y_i * L_i(0)</code></p>
+<p>where each <code>L_i</code> is the Lagrange basis polynomial for point <code>w_i</code>.</p>
+<p><code>Interpolator::new</code> precomputes exactly those weights.</p>
+<p>The naive way would compute every denominator</p>
+<p><code>prod_{j != i} (w_i - w_j)</code></p>
+<p>and invert them one by one. The implementation does something better.</p>
+<ol><li>It computes <code>c_i = w_i * prod_{j != i} (w_j - w_i)</code>.</li><li>It computes the total product <code>W = prod_i w_i</code>.</li><li>It uses Montgomery&#x27;s trick: invert the product of all <code>c_i</code> once, then use prefix products to recover all <code>1 / c_i</code>.</li><li>From those pieces it materializes the interpolation weights.</li></ol>
+<p>That turns many inversions into one inversion plus multiplications.</p>
+<p>There is also an important edge case: if one evaluation point is <code>0</code>, then the constant term is simply the value at that point. The implementation detects that and returns a one-hot weight vector instead of going through the general formula. That is a good example of the crate choosing the semantically obvious answer once it recognizes the structure.</p>
+<h3 id="roots-of-unity-interpolation-has-a-separate-fast-path">Roots-of-unity interpolation has a separate fast path</h3>
+<p><code>Interpolator::roots_of_unity</code> exists because the transform layer can do better than the generic O(n²) point-based construction when evaluation points come from an NTT domain.</p>
+<p>That constructor delegates to [<code>lagrange_coefficients</code> in <code>ntt.rs</code>](../../../math/src/ntt.rs), which computes the coefficients for interpolation at <code>0</code> from a subset of domain points. The key identity is:</p>
+<p><code>L_j(0) = P_Sbar(w^j) / (N * P_Sbar(0))</code></p>
+<p>where:</p>
+<ul><li><code>S</code> is the set of present indices,</li><li><code>Sbar</code> is the missing complement,</li><li><code>P_Sbar</code> is the vanishing polynomial over the missing points,</li><li><code>N</code> is the domain size.</li></ul>
+<p>This is exactly the kind of bridge the crate wants: polynomial semantics on one side, transform-domain structure on the other.</p>
+<h3 id="commitments-fit-because-polynomials-are-generic-over-coefficient-type">Commitments fit because polynomials are generic over coefficient type</h3>
+<p>One more quiet point matters. <code>Poly&lt;G&gt;::commit</code> maps a scalar polynomial into a group polynomial by multiplying each scalar coefficient by <code>G::generator()</code>. That works because the crate did not hard-code &quot;coefficients are field elements.&quot; The polynomial layer is generic over any additive type that behaves correctly under the relevant scalar action.</p>
+<p>So the third engine-room lesson is this: <code>poly.rs</code> is where the algebra layer stops being a set of traits and becomes a semantic object other crates can evaluate, interpolate, and commit to without changing what that object means.</p>
+<hr>
+<h2 id="5-ntt-changes-the-route-not-the-meaning">5. NTT Changes the Route, Not the Meaning</h2>
+<p>The chapter can now enter [<code>math/src/ntt.rs</code>](../../../math/src/ntt.rs), where the crate turns the same polynomials into a form suitable for fast evaluation, vanishing-polynomial construction, and erasure recovery.</p>
+<p>Read this file as a layout decision, not just a fast algorithm:</p>
+<blockquote><p>once the crate knows what a polynomial means, how does it lay out memory and choose a domain so that the same polynomial work factors into structured butterflies instead of naive quadratic arithmetic?</p></blockquote>
+<h3 id="the-butterfly-comes-from-splitting-even-and-odd-coefficients">The butterfly comes from splitting even and odd coefficients</h3>
+<p>For a polynomial <code>f(X)</code>, write</p>
+<p><code>f(X) = f_+(X^2) + X f_-(X^2)</code></p>
+<p>where <code>f_+</code> collects even coefficients and <code>f_-</code> collects odd ones.</p>
+<p>If <code>w</code> is a <code>2^m</code> root of unity, then <code>w^2</code> is a <code>2^(m-1)</code> root of unity. That means:</p>
+<ul><li>evaluate <code>f_+</code> on powers of <code>w^2</code>,</li><li>evaluate <code>f_-</code> on powers of <code>w^2</code>,</li><li>combine them as <code>f_+(w^{2i}) + w^i f_-(w^{2i})</code> and <code>f_+(w^{2i}) - w^i f_-(w^{2i})</code>.</li></ul>
+<p>The in-place <code>ntt</code> routine turns that recursive idea into iterative stages. For forward transforms it applies the standard butterfly:</p>
+<ul><li><code>(a, b) -&gt; (a + w^j b, a - w^j b)</code>.</li></ul>
+<p>For inverse transforms it carefully undoes the same step:</p>
+<ul><li>add and subtract the pair,</li><li>multiply the second branch by the inverse twiddle,</li><li>divide both results by <code>2</code> using <code>div_2</code>.</li></ul>
+<p>That is why <code>FieldNTT</code> had to promise more than ordinary field behavior.</p>
+<h3 id="bit-reversal-is-pushed-into-storage-not-left-as-an-afterthought">Bit reversal is pushed into storage, not left as an afterthought</h3>
+<p><code>reverse_bits</code> and <code>reverse_slice</code> are not incidental. They show how the crate makes recursive structure contiguous in memory.</p>
+<p>This shows up most clearly in <code>PolynomialVector</code>.</p>
+<p>Each column stores one polynomial, but the coefficient rows are kept in reverse-bit order. For a four-term polynomial</p>
+<p><code>a_0 + a_1 X + a_2 X^2 + a_3 X^3</code>,</p>
+<p>the stored rows are</p>
+<p><code>a_0, a_2, a_1, a_3</code>.</p>
+<p>Why do that? Because then the even and odd halves become contiguous blocks. That makes each butterfly stage line up with memory layout instead of requiring constant reshuffling.</p>
+<p>This is a real implementation decision. The crate spends representation complexity so the transform stages can stay simple and fast.</p>
+<h3 id="matrix-polynomialvector-and-evaluationvector-are-the-real-data-plane"><code>Matrix</code>, <code>PolynomialVector</code>, and <code>EvaluationVector</code> are the real data plane</h3>
+<p>Do not jump from &quot;there is an NTT&quot; straight to &quot;recovery uses it.&quot; <code>ntt.rs</code> defines a concrete data plane.</p>
+<p><code>Matrix&lt;F&gt;</code></p>
+<ul><li>stores row-major data,</li><li>provides codec support,</li><li>can be multiplied naively when the code needs a reference implementation,</li><li>and can reinterpret columns as polynomial vectors.</li></ul>
+<p><code>PolynomialVector&lt;F&gt;</code></p>
+<ul><li>treats each column as one polynomial,</li><li>pads row count to the next power of two,</li><li>stores coefficients in reverse-bit order,</li><li>and runs NTTs column-wise across the matrix.</li></ul>
+<p><code>EvaluationVector&lt;F&gt;</code></p>
+<ul><li>stores evaluations of all those polynomials over the same domain,</li><li>remembers which rows are actually present via <code>VanishingPoints</code>,</li><li>and provides the <code>recover</code> path for missing rows.</li></ul>
+<p>This matters because the transform layer is not only about a single polynomial. Coding and recovery operate on row and column families. The matrix/vector structures make that batch shape explicit.</p>
+<h3 id="vanishingpoints-is-bookkeeping-with-algebraic-consequences"><code>VanishingPoints</code> is bookkeeping with algebraic consequences</h3>
+<p><code>VanishingPoints</code> tracks which roots in the domain should count as present. Internally it uses a bitmap, but the important fact is that its indexing also respects reverse-bit order.</p>
+<p>That lets the code build vanishing polynomials recursively over domain chunks. If a whole chunk vanishes everywhere, the implementation can treat it as a special case. If a chunk vanishes nowhere, it can skip work. Only the mixed case needs the full polynomial machinery.</p>
+<p>This is one of the best examples in the crate of concept-first optimization. The code is fast because it noticed algebraic structure in the input pattern, not because it wrote a shorter loop.</p>
+<hr>
+<h2 id="6-vanishing-polynomials-and-real-erasure-recovery">6. Vanishing Polynomials and Real Erasure Recovery</h2>
+<p>This is the part the original chapter most needed to deepen.</p>
+<p>The transform layer is not only there to evaluate dense polynomials quickly. It also supports missing-row recovery, and that machinery is real, not decorative.</p>
+<h3 id="evaluationcolumn-vanishing-builds-the-polynomial-the-recovery-path-needs"><code>EvaluationColumn::vanishing</code> builds the polynomial the recovery path needs</h3>
+<p>Given a set of present or missing rows, the crate often needs a polynomial <code>V</code> such that:</p>
+<ul><li><code>V(w^j) = 0</code> at the rows that should vanish,</li><li><code>V(w^j) != 0</code> at the rows that are present.</li></ul>
+<p><code>EvaluationColumn::vanishing</code> constructs exactly that object, and it does more than a naive product of <code>(X - w^j)</code> factors.</p>
+<p>The routine:</p>
+<ol><li>splits the domain into chunks,</li><li>directly expands low-degree factors inside each chunk,</li><li>marks each chunk as vanishing nowhere, somewhere, or everywhere,</li><li>merges chunk polynomials upward,</li><li>and uses NTT-based multiplication in the cases where ordinary special-case logic is no longer enough.</li></ol>
+<p>That &quot;somewhere/everywhere/nowhere&quot; trichotomy is not an implementation quirk. It is how the code keeps the common cases from paying for a full polynomial multiplication every time.</p>
+<h3 id="recovery-works-by-multiplying-by-a-vanishing-polynomial-then-dividing-back">Recovery works by multiplying by a vanishing polynomial, then dividing back</h3>
+<p>Now take an <code>EvaluationVector</code> with some rows missing.</p>
+<p>If every row is present, <code>interpolate()</code> is enough. If some rows are missing, the recovery path uses a sharper idea.</p>
+<p>Let <code>D(X)</code> be the original data polynomial for one column. Let <code>V(X)</code> vanish at the missing rows.</p>
+<p>At every present point <code>w^i</code>, we know <code>D(w^i)</code>. If we multiply those known evaluations by <code>V(w^i)</code>, we obtain the evaluations of <code>D(X) V(X)</code> on all the present rows. At missing rows, the value is also zero because <code>V</code> vanishes there.</p>
+<p>That means the partially filled evaluation table can be turned into a complete evaluation table for <code>D(X) V(X)</code>. Once that is true, the crate can interpolate to recover the coefficients of <code>D(X) V(X)</code>.</p>
+<p>Then it only needs to divide by <code>V(X)</code> to recover <code>D(X)</code>.</p>
+<p>That is exactly what <code>EvaluationVector::recover</code> does:</p>
+<ol><li>build the vanishing polynomial for the active-row pattern,</li><li>multiply each present evaluation row by the vanishing evaluation,</li><li>interpolate to obtain <code>D(X) V(X)</code>,</li><li>divide by the vanishing polynomial,</li><li>return the recovered polynomial vector.</li></ol>
+<h3 id="the-division-step-uses-a-coset-because-direct-division-would-hit-zeros">The division step uses a coset because direct division would hit zeros</h3>
+<p>The cleverest recovery detail lives in <code>PolynomialVector::divide</code>.</p>
+<p>A direct divide in the ordinary root-of-unity domain would fail, because the vanishing polynomial is zero exactly where the missing rows lie. Pointwise division by zero is not a recoverable &quot;maybe.&quot;</p>
+<p>So the crate leaves the original domain. It multiplies the roots by <code>coset_shift()</code>, an element guaranteed not to be a power of the domain root of unity. In practice:</p>
+<ol><li>it divides the roots of both numerator and denominator by the coset factor,</li><li>evaluates both on that shifted domain,</li><li>performs pointwise division there,</li><li>inverse-transforms back to coefficients,</li><li>and then shifts the roots back with <code>coset_shift_inv()</code>.</li></ol>
+<p>This is where <code>FieldNTT::coset_shift()</code> stops looking abstract and starts looking necessary. The trait existed because recovery really does need a safe domain where the denominator stays away from zero.</p>
+<h3 id="a-small-recovery-picture">A small recovery picture</h3>
+<p>Suppose we encode four data rows with two parity rows, then pad to an eight-point domain for the transform. If rows <code>1</code> and <code>4</code> disappear, the crate builds a vanishing polynomial whose roots are <code>w^1</code> and <code>w^4</code> up to a harmless scale factor.</p>
+<p>Then it:</p>
+<ul><li>multiplies each surviving row by that vanishing evaluation,</li><li>interpolates the result into <code>D(X) V(X)</code>,</li><li>moves into the coset domain <code>z w^i</code>,</li><li>divides by <code>V(z w^i)</code>,</li><li>and returns the coefficients of <code>D(X)</code>.</li></ul>
+<p>The missing rows are not guessed. They are forced by algebra.</p>
+<h3 id="lagrange-coefficients-exposes-the-same-recovery-idea-in-a-lighter-form"><code>lagrange_coefficients</code> exposes the same recovery idea in a lighter form</h3>
+<p><code>lagrange_coefficients</code> gives another view of the same machinery. When the caller only wants interpolation at <code>0</code>, it is cheaper to compute the relevant Lagrange weights directly than to recover the full polynomial first.</p>
+<p>The implementation builds the vanishing polynomial over the missing complement and uses:</p>
+<p><code>L_j(0) = P_Sbar(w^j) / (N * P_Sbar(0))</code>.</p>
+<p>That formula is the recovery story in miniature. Missing-point structure is not an obstacle to interpolation. It is part of the computation.</p>
+<p>So the fourth engine-room lesson is this: <code>ntt.rs</code> is not merely a fast evaluator. It is the place where polynomial semantics, domain structure, and erasure recovery become one operational system.</p>
+<hr>
+<h2 id="7-what-pressure-this-design-absorbs">7. What Pressure This Design Absorbs</h2>
+<p>With the full machine in view, we can say more precisely what <code>commonware-math</code> absorbs for the rest of Commonware.</p>
+<p>It absorbs correctness pressure.</p>
+<p>The contract deck, the property suites, canonical field decoding, and the toy test field and group keep algebra from fragmenting into crate-local conventions.</p>
+<p>It absorbs performance pressure.</p>
+<p>Borrowed operators, the Goldilocks reduction strategy, bit-reversed storage, batched interpolation weights, chunk-aware vanishing construction, and the NTT all exist because higher layers need arithmetic they can actually afford to use.</p>
+<p>It absorbs semantic pressure.</p>
+<p>Higher crates should not care whether a polynomial is represented by raw coefficients, by evaluations on a root-of-unity domain, or by a partially present evaluation vector waiting for recovery. They should be able to ask for evaluation, interpolation, commitment, or recovery and trust the engine room to preserve the same polynomial meaning all the way through.</p>
+<p>That is what makes this crate infrastructural instead of ornamental.</p>
+<hr>
+<h2 id="8-limits-and-reading-order">8. Limits and Reading Order</h2>
+<p>The fast path works only because the prerequisites are real.</p>
+<p>Not every field can implement <code>FieldNTT</code>. Not every domain supports power-of- two roots of unity. Not every polynomial representation can be divided safely without a coset shift. The crate is powerful because it is strict about what it promises.</p>
+<p>The cleanest source-reading order follows the same lecture path:</p>
+<ol><li>[<code>math/src/algebra.rs</code>](../../../math/src/algebra.rs) for the contract deck and generic exponentiation engine.</li><li>[<code>math/src/test.rs</code>](../../../math/src/test.rs) for the tiny field and group that exercise the generic code paths.</li><li>[<code>math/src/fields/goldilocks.rs</code>](../../../math/src/fields/goldilocks.rs) for concrete reduction, inversion, roots of unity, and codec behavior.</li><li>[<code>math/src/poly.rs</code>](../../../math/src/poly.rs) for polynomial semantics, evaluation routes, and interpolation.</li><li>[<code>math/src/ntt.rs</code>](../../../math/src/ntt.rs) for matrix layout, butterflies, vanishing polynomials, and erasure recovery.</li></ol>
+<p>If you read in that order, the later machinery feels earned rather than magical.</p>
+<hr>
+<h2 id="9-glossary">9. Glossary</h2>
+<ul><li><strong>Additive</strong> - a type with addition, subtraction, negation, and a zero.</li><li><strong>Space</strong> - an additive object that can be scaled by a ring-like scalar type.</li><li><strong>MSM</strong> - multi-scalar multiplication, a weighted sum of additive objects.</li><li><strong>Ring</strong> - an additive and multiplicative structure with <code>one()</code>.</li><li><strong>Field</strong> - a ring where every nonzero element has a multiplicative inverse.</li><li><strong>FieldNTT</strong> - a field with roots of unity, coset shifts, and efficient halving for transform work.</li><li><strong>Goldilocks</strong> - the concrete field <code>2^64 - 2^32 + 1</code> used here.</li><li><strong>Bit-reversed order</strong> - a storage order that makes recursive butterfly structure contiguous in memory.</li><li><strong>Vanishing polynomial</strong> - a polynomial chosen to be zero on a specific set of domain points.</li><li><strong>Coset shift</strong> - an element that moves transform work off the base domain so pointwise division avoids zeros.</li><li><strong>NTT</strong> - the number-theoretic transform, the fast path between coefficient and evaluation views of a polynomial.</li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../codec/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-codec</span>
+          <span class="foot-sub">codec</span>
+        </a>
+        <div class="foot-center">
+          math<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../conformance/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-conformance</span>
+          <span class="foot-sub">conformance</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-why-this-crate-exists">1. Why This Crate Exists</a></li><li class="toc-item"><a class="toc-link" href="#backgrounder-algebra-as-an-execution-environment">Backgrounder: Algebra as an Execution Environment</a></li><li class="toc-item"><a class="toc-link" href="#2-the-contract-deck-and-the-law-checking-engine">2. The Contract Deck and the Law-Checking Engine</a><ul class="toc-sub"><li><a class="toc-link" href="#borrowed-operators-are-part-of-the-interface">Borrowed operators are part of the interface</a></li><li><a class="toc-link" href="#one-generic-engine-powers-scale-and-exponentiation">One generic engine powers scale and exponentiation</a></li><li><a class="toc-link" href="#space-r-is-the-bridge-most-readers-should-linger-on">Space&lt;R&gt; is the bridge most readers should linger on</a></li><li><a class="toc-link" href="#the-laws-are-executed-not-merely-written-down">The laws are executed, not merely written down</a></li><li><a class="toc-link" href="#math-src-test-rs-is-the-proving-ground-for-generic-code">math/src/test.rs is the proving ground for generic code</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#3-goldilocks-when-the-contracts-become-metal">3. Goldilocks: When the Contracts Become Metal</a><ul class="toc-sub"><li><a class="toc-link" href="#the-easy-reductions-come-first">The easy reductions come first</a></li><li><a class="toc-link" href="#the-real-trick-is-reduce-128">The real trick is reduce_128</a></li><li><a class="toc-link" href="#inversion-and-halving-both-exploit-field-structure">Inversion and halving both exploit field structure</a></li><li><a class="toc-link" href="#goldilocks-is-also-an-ntt-field-not-just-a-prime-field">Goldilocks is also an NTT field, not just a prime field</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-polynomials-semantic-objects-not-coefficient-buckets">4. Polynomials: Semantic Objects, Not Coefficient Buckets</a><ul class="toc-sub"><li><a class="toc-link" href="#degree-and-degree-exact-are-different-on-purpose">degree() and degree_exact() are different on purpose</a></li><li><a class="toc-link" href="#evaluation-has-two-routes-because-space-r-made-both-legal">Evaluation has two routes because Space&lt;R&gt; made both legal</a></li><li><a class="toc-link" href="#interpolation-is-the-inverse-story-and-the-crate-does-real-work-up-front">Interpolation is the inverse story, and the crate does real work up front</a></li><li><a class="toc-link" href="#roots-of-unity-interpolation-has-a-separate-fast-path">Roots-of-unity interpolation has a separate fast path</a></li><li><a class="toc-link" href="#commitments-fit-because-polynomials-are-generic-over-coefficient-type">Commitments fit because polynomials are generic over coefficient type</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-ntt-changes-the-route-not-the-meaning">5. NTT Changes the Route, Not the Meaning</a><ul class="toc-sub"><li><a class="toc-link" href="#the-butterfly-comes-from-splitting-even-and-odd-coefficients">The butterfly comes from splitting even and odd coefficients</a></li><li><a class="toc-link" href="#bit-reversal-is-pushed-into-storage-not-left-as-an-afterthought">Bit reversal is pushed into storage, not left as an afterthought</a></li><li><a class="toc-link" href="#matrix-polynomialvector-and-evaluationvector-are-the-real-data-plane">Matrix, PolynomialVector, and EvaluationVector are the real data plane</a></li><li><a class="toc-link" href="#vanishingpoints-is-bookkeeping-with-algebraic-consequences">VanishingPoints is bookkeeping with algebraic consequences</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-vanishing-polynomials-and-real-erasure-recovery">6. Vanishing Polynomials and Real Erasure Recovery</a><ul class="toc-sub"><li><a class="toc-link" href="#evaluationcolumn-vanishing-builds-the-polynomial-the-recovery-path-needs">EvaluationColumn::vanishing builds the polynomial the recovery path needs</a></li><li><a class="toc-link" href="#recovery-works-by-multiplying-by-a-vanishing-polynomial-then-dividing-back">Recovery works by multiplying by a vanishing polynomial, then dividing back</a></li><li><a class="toc-link" href="#the-division-step-uses-a-coset-because-direct-division-would-hit-zeros">The division step uses a coset because direct division would hit zeros</a></li><li><a class="toc-link" href="#a-small-recovery-picture">A small recovery picture</a></li><li><a class="toc-link" href="#lagrange-coefficients-exposes-the-same-recovery-idea-in-a-lighter-form">lagrange_coefficients exposes the same recovery idea in a lighter form</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-what-pressure-this-design-absorbs">7. What Pressure This Design Absorbs</a></li><li class="toc-item"><a class="toc-link" href="#8-limits-and-reading-order">8. Limits and Reading Order</a></li><li class="toc-item"><a class="toc-link" href="#9-glossary">9. Glossary</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

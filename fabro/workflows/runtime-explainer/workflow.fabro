@@ -1,0 +1,35 @@
+digraph RuntimeExplainer {
+    graph [
+        goal="Create a graduate-level, Feynman-style explainer chapter for commonware-runtime with interactive visualization specs.",
+        model_stylesheet="
+            * { provider: anthropic; model: MiniMax-M2.7-highspeed; reasoning_effort: medium; backend: cli; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    brief [
+        label="Brief",
+        prompt="You are preparing the first chapter of an interactive technical book about Commonware. Focus only on the `commonware-runtime` crate and the files it depends on directly for core concepts.\n\nBefore writing, inspect at minimum:\n- Cargo.toml at the workspace root\n- runtime/Cargo.toml\n- runtime/src/**\n- docs/blogs/commonware-runtime.html\n- README.md\n\nThen create `docs/commonware-book/runtime/brief.md`.\n\nThe brief must include:\n1. Module purpose in one paragraph.\n2. The 6-10 source files that matter most, each with why it matters.\n3. A chapter outline with 5-7 sections.\n4. A list of system concepts to explain at graduate distributed-systems depth.\n5. A list of 3-5 interactive visualizations to build later.\n6. A claims-to-verify checklist to keep the later draft honest.\n\nKeep the brief concrete and operational. Reference real file paths. Write the file, then respond with a short summary."
+    ]
+
+    draft_chapter [
+        label="Draft Chapter",
+        prompt="Read `docs/commonware-book/runtime/brief.md`, then inspect the referenced runtime source files directly.\n\nWrite `docs/commonware-book/runtime/chapter.md`.\n\nRequirements:\n- Audience: strong systems engineers and graduate students in distributed systems.\n- Style: Feynman-like clarity without dumbing anything down.\n- Tone: technical, direct, explanatory; no marketing language.\n- Use real file paths and APIs from the repo.\n- Explain the design through concrete execution flows, not just definitions.\n- Call out invariants, failure modes, scheduler/runtime tradeoffs, and how the crate composes with the rest of Commonware.\n\nThe chapter must include these sections:\n1. What problem the runtime solves.\n2. Mental model of the runtime.\n3. Core abstractions and important types.\n4. Execution flow and lifecycle.\n5. Concurrency, scheduling, and time semantics.\n6. Failure modes, cancellation, and correctness concerns.\n7. How to read the source code.\n8. Glossary and further reading.\n\nEnd with a section called `Open Questions For Interactive UI` that identifies what the future app should animate or make explorable."
+    ]
+
+    draft_visuals [
+        label="Draft Visual Specs",
+        prompt="Read `docs/commonware-book/runtime/brief.md` and `docs/commonware-book/runtime/chapter.md`, then create `docs/commonware-book/runtime/visuals.json`.\n\nWrite valid JSON with this shape:\n{\n  \"module\": \"commonware-runtime\",\n  \"visualizations\": [\n    {\n      \"id\": \"string\",\n      \"title\": \"string\",\n      \"learning_goal\": \"string\",\n      \"why_it_matters\": \"string\",\n      \"source_files\": [\"path\"],\n      \"default_state\": \"string\",\n      \"controls\": [{\"id\": \"string\", \"type\": \"toggle|slider|stepper\", \"label\": \"string\", \"values\": [\"string\"]}],\n      \"scenes\": [{\"id\": \"string\", \"caption\": \"string\", \"system_events\": [\"string\"], \"visual_elements\": [\"string\"]}],\n      \"checks\": [\"string\"]\n    }\n  ]\n}\n\nMake the specs detailed enough that a frontend engineer could build the first interactive version without inventing the pedagogy."
+    ]
+
+    review [
+        label="Review",
+        goal_gate=true,
+        prompt="Audit `docs/commonware-book/runtime/brief.md`, `docs/commonware-book/runtime/chapter.md`, and `docs/commonware-book/runtime/visuals.json` against the actual source under `runtime/`.\n\nTasks:\n1. Check for technical inaccuracies, hand-wavy claims, or missing caveats.\n2. Tighten the chapter where it is vague or too generic.\n3. Make sure the visuals are grounded in real runtime behavior.\n4. Fix any issues directly in the files.\n5. Write `docs/commonware-book/runtime/review.md` with three sections: `What is solid`, `What still needs deeper verification`, and `Recommended next workflow`.\n\nIf the files are already strong, still improve specificity where possible. Respond with a concise audit summary."
+    ]
+
+    start -> brief -> draft_chapter -> draft_visuals -> review -> exit
+}

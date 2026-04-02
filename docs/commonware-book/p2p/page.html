@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware &rsaquo; p2p &mdash; chapter</title>
+  <meta name="description"
+    content="Authenticated, Encrypted Peer-to-Peer Networking for Adversarial Environments — commonware interactive book">
+  <meta name="author" content="commonware">
+
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+  <style>
+    /* ── Book design tokens ──────────────────────────────────────── */
+    :root {
+      --paper:       #f7f4ee;
+      --ink:         #1c1917;
+      --ink-muted:   #57534e;
+      --ink-faint:   #a8a29e;
+      --accent:      #2d6a4f;
+      --accent-dim:  #40916c;
+      --border:      #d6cfc4;
+      --border-hair: #e8e3d9;
+      --surface:     #f0ece3;
+      --surface-2:   #e8e2d4;
+      --mono:        'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      --serif:       'Playfair Display', Georgia, 'Times New Roman', serif;
+      --sans:        'News Cycle', 'Arial Narrow', Arial, sans-serif;
+
+      --measure:     68ch;
+      --rail:        22ch;
+      --bar-h:       44px;
+      --gap:         2rem;
+    }
+
+    html[data-theme="dark"] {
+      --paper:       #12100f;
+      --ink:         #f2ece5;
+      --ink-muted:   #c5bbb2;
+      --ink-faint:   #8f867d;
+      --accent:      #79b293;
+      --accent-dim:  #94c3aa;
+      --border:      #3a332d;
+      --border-hair: #2b2521;
+      --surface:     #181412;
+      --surface-2:   #211b18;
+      color-scheme: dark;
+    }
+
+    /* ── Reset & base ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      font-size: 17px;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--serif);
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection {
+      background: var(--accent);
+      color: var(--paper);
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration-color: var(--accent-dim);
+      text-underline-offset: 3px;
+    }
+    a:hover { color: var(--accent-dim); }
+
+    /* ── Sticky reading bar ───────────────────────────────────────── */
+    .reading-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--bar-h);
+      background: var(--paper);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 1.5rem;
+      gap: 1rem;
+      backdrop-filter: blur(4px);
+    }
+
+    html[data-theme="dark"] .reading-bar {
+      background: rgba(18, 16, 15, 0.92);
+    }
+
+    .bar-crumb {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink-muted);
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .bar-crumb span { color: var(--ink-faint); margin: 0 0.3em; }
+
+    .bar-title {
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bar-progress {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .prog-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--ink-faint);
+    }
+
+    .prog-track {
+      width: 80px;
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .prog-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 1px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    .nav-btn {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink-muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.2em 0.6em;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      text-decoration: none;
+      display: inline-block;
+      line-height: 1.6;
+    }
+    .nav-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .nav-btn.disabled {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    .theme-toggle {
+      min-width: 4.3rem;
+    }
+
+    /* ── Chapter header ───────────────────────────────────────────── */
+    .chapter-header {
+      text-align: center;
+      padding: 5rem 1.5rem 3.5rem;
+      border-bottom: 1px solid var(--border-hair);
+      margin-bottom: 0;
+    }
+
+    .ch-meta-line {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-bottom: 1.4rem;
+    }
+
+    .ch-title {
+      font-family: var(--serif);
+      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      font-weight: 600;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      margin: 0 auto 1.1rem;
+      max-width: 16ch;
+    }
+
+    .ch-deck {
+      font-family: var(--serif);
+      font-size: 1.1rem;
+      font-style: italic;
+      color: var(--ink-muted);
+      max-width: 52ch;
+      margin: 0 auto 1.8rem;
+      line-height: 1.6;
+    }
+
+    .ch-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.8rem;
+      color: var(--ink-faint);
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      letter-spacing: 0.2em;
+    }
+    .ch-divider::before,
+    .ch-divider::after {
+      content: '';
+      display: block;
+      width: 3rem;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Layout shell ─────────────────────────────────────────────── */
+    .page-shell {
+      display: grid;
+      grid-template-columns: 1fr min(var(--measure), 100%) 1fr;
+      padding: 0 1.5rem;
+    }
+
+    .page-content {
+      grid-column: 2;
+      padding: 3.5rem 0 5rem;
+    }
+
+    /* ── TOC ─────────────────────────────────────────────────────── */
+    .toc-rail {
+      grid-column: 3;
+      padding: 3.5rem 0 0 2rem;
+      position: sticky;
+      top: calc(var(--bar-h) + 2rem);
+      align-self: start;
+      max-height: calc(100vh - var(--bar-h) - 4rem);
+      overflow-y: auto;
+    }
+
+    .toc-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-hair);
+    }
+
+    .toc-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .toc-item { margin-bottom: 0.5rem; }
+
+    .toc-link {
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      font-weight: 400;
+      color: var(--ink-muted);
+      text-decoration: none;
+      display: block;
+      padding: 0.15rem 0;
+      border-left: 2px solid transparent;
+      padding-left: 0.75rem;
+      transition: border-color 0.2s, color 0.2s;
+      line-height: 1.4;
+    }
+    .toc-link:hover,
+    .toc-link.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+    }
+
+    .toc-sub {
+      list-style: none;
+      margin: 0.2rem 0 0.2rem 0.75rem;
+      padding: 0;
+    }
+    .toc-sub .toc-link {
+      font-size: 0.76rem;
+      color: var(--ink-faint);
+    }
+
+    @media (max-width: 1100px) {
+      .page-shell {
+        grid-template-columns: 1fr min(var(--measure), 100%) 1fr;
+      }
+      .toc-rail { display: none; }
+    }
+
+    @media (max-width: 700px) {
+      .page-shell { padding: 0 1rem; }
+      .chapter-header { padding: 3rem 1rem 2.5rem; }
+      .toc-mobile { display: block; }
+    }
+
+    /* ── Inline TOC (mobile) ──────────────────────────────────────── */
+    .toc-inline {
+      display: none;
+      margin: 2rem 0;
+      padding: 1.25rem 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .toc-inline details summary {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      cursor: pointer;
+      list-style: none;
+    }
+    .toc-inline details[open] summary {
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-hair);
+    }
+    .toc-inline .toc-list { margin-top: 0.5rem; }
+    .toc-inline .toc-link {
+      font-size: 0.85rem;
+      padding: 0.2rem 0;
+    }
+
+    @media (max-width: 700px) {
+      .toc-inline { display: block; }
+    }
+
+    /* ── Prose ────────────────────────────────────────────────────── */
+    .prose h2 {
+      font-family: var(--serif);
+      font-size: 1.45rem;
+      font-weight: 600;
+      color: var(--ink);
+      margin: 3rem 0 1rem;
+      letter-spacing: -0.01em;
+      scroll-margin-top: calc(var(--bar-h) + 1.5rem);
+    }
+    .prose h2::before {
+      content: '';
+      display: block;
+      width: 2rem;
+      height: 2px;
+      background: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .prose h3 {
+      font-family: var(--sans);
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin: 2rem 0 0.75rem;
+      scroll-margin-top: calc(var(--bar-h) + 1.5rem);
+    }
+
+    .prose p {
+      margin: 0 0 1.25rem;
+      font-size: 1rem;
+      line-height: 1.8;
+    }
+
+    .prose strong { font-weight: 600; color: var(--ink); }
+    .prose em { font-style: italic; }
+
+    .prose ul, .prose ol {
+      margin: 0 0 1.25rem 1.5rem;
+      padding: 0;
+    }
+    .prose li { margin-bottom: 0.4rem; line-height: 1.75; }
+
+    .prose table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: 0.9rem;
+    }
+    .prose th {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid var(--border);
+      color: var(--ink-muted);
+    }
+    .prose td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border-hair);
+      vertical-align: top;
+    }
+    .prose tr:last-child td { border-bottom: none; }
+
+    .prose code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--surface);
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
+      color: var(--ink);
+    }
+
+    .prose pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1.25rem 1.5rem;
+      overflow-x: auto;
+      margin: 1.5rem 0;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 1.65;
+    }
+    .prose pre code {
+      background: none;
+      padding: 0;
+      font-size: inherit;
+    }
+
+    .prose .charter-section {
+      margin: 3.5rem 0;
+      padding: 2rem 0;
+      border-top: 1px solid var(--border-hair);
+    }
+
+    /* ── Chapter deck / orientation ──────────────────────────────── */
+    .orientation {
+      font-family: var(--serif);
+      font-size: 1.05rem;
+      font-style: italic;
+      color: var(--ink-muted);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1.25rem;
+      margin: 2rem 0 3rem;
+      background: var(--surface);
+      border-radius: 0 4px 4px 0;
+      line-height: 1.7;
+    }
+
+    /* ── Callout boxes ───────────────────────────────────────────── */
+    .callout {
+      margin: 2rem 0;
+      padding: 1.25rem 1.5rem;
+      border-radius: 4px;
+      border-left: 3px solid;
+      font-size: 0.94rem;
+    }
+    .callout-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .callout p { margin: 0; line-height: 1.65; }
+    .callout p + p { margin-top: 0.75rem; }
+
+    .callout-inv {
+      background: #f0f7f4;
+      border-color: var(--accent);
+    }
+    .callout-inv .callout-label { color: var(--accent); }
+
+    .callout-warn {
+      background: #fef7ed;
+      border-color: #b45309;
+    }
+    .callout-warn .callout-label { color: #b45309; }
+
+    .callout-src {
+      background: var(--surface);
+      border-color: var(--ink-faint);
+    }
+    .callout-src .callout-label { color: var(--ink-muted); }
+
+    .callout-fix {
+      background: #fef2f2;
+      border-color: #dc2626;
+    }
+    .callout-fix .callout-label { color: #dc2626; }
+
+    /* ── Figure plates ────────────────────────────────────────────── */
+    .figure-plate {
+      margin: 3rem -1rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--paper);
+    }
+
+    .plate-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border-hair);
+      background: var(--surface);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .plate-title-group { flex: 1; }
+
+    .plate-number {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-bottom: 0.3rem;
+    }
+
+    .plate-title {
+      font-family: var(--serif);
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    .plate-tags {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+    }
+    .plate-tag {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.2em 0.6em;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--ink-muted);
+      background: var(--paper);
+    }
+
+    .plate-body {
+      padding: 1.5rem;
+    }
+
+    .plate-goal {
+      margin-bottom: 1rem;
+    }
+    .plate-goal-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.3rem;
+    }
+    .plate-goal p {
+      font-size: 0.9rem;
+      color: var(--ink-muted);
+      margin: 0;
+      line-height: 1.6;
+      font-style: italic;
+    }
+
+    .plate-why {
+      margin-bottom: 1.25rem;
+      padding: 0.9rem 1.1rem;
+      background: #f0f7f4;
+      border-radius: 4px;
+      border: 1px solid #c3d9ce;
+    }
+    .plate-why-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.4rem;
+    }
+    .plate-why p {
+      font-size: 0.88rem;
+      color: var(--ink-muted);
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .plate-scene {
+      margin-bottom: 1.25rem;
+    }
+    .plate-scene-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .plate-scene-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-hair);
+    }
+
+    .scene-canvas {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      min-height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.9rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* SVG-based scene diagrams */
+    .scene-svg {
+      width: 100%;
+      height: auto;
+      max-height: 280px;
+    }
+
+    .plate-controls {
+      margin-bottom: 1rem;
+    }
+    .plate-controls-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .plate-controls-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-hair);
+    }
+
+    .control-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .ctrl-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--ink-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .ctrl-btn, .ctrl-step, .ctrl-toggle {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      padding: 0.3em 0.7em;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--paper);
+      color: var(--ink-muted);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, color 0.2s;
+    }
+    .ctrl-btn:hover, .ctrl-step:hover, .ctrl-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .ctrl-btn.active, .ctrl-step.active, .ctrl-toggle.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--paper);
+    }
+
+    .ctrl-slider {
+      width: 80px;
+      accent-color: var(--accent);
+    }
+
+    .plate-source {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--ink-faint);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .plate-source-label {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      flex-shrink: 0;
+    }
+    .plate-source code {
+      font-size: 0.68rem;
+      color: var(--ink-muted);
+    }
+
+    .plate-caption {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--ink-muted);
+      line-height: 1.65;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border-top: 1px solid var(--border-hair);
+      border-radius: 0 0 4px 4px;
+    }
+
+    /* ── End marker ───────────────────────────────────────────────── */
+    .end-marker {
+      text-align: center;
+      padding: 4rem 0 3rem;
+      margin-top: 3rem;
+      border-top: 1px solid var(--border-hair);
+    }
+    .end-glyph {
+      font-family: var(--mono);
+      font-size: 1.4rem;
+      color: var(--ink-faint);
+      letter-spacing: 0.3em;
+      display: block;
+      margin-bottom: 1rem;
+    }
+    .end-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+
+    /* ── Chapter footer ───────────────────────────────────────────── */
+    .chapter-footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .foot-prev,
+    .foot-next {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .foot-prev:hover, .foot-next:hover { opacity: 0.7; }
+    .foot-prev { align-items: flex-start; }
+    .foot-next { align-items: flex-end; }
+
+    .foot-dir {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+    }
+    .foot-title {
+      font-family: var(--serif);
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .foot-sub {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink-faint);
+    }
+
+    .foot-center {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--ink-faint);
+      text-align: center;
+      letter-spacing: 0.06em;
+    }
+
+    @media (max-width: 600px) {
+      .chapter-footer {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+      .foot-prev, .foot-next { align-items: center; }
+    }
+
+    /* ── Footer (site) ────────────────────────────────────────────── */
+    .site-footer {
+      border-top: 1px solid var(--border);
+      padding: 1.5rem;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink-faint);
+    }
+    .site-footer a {
+      color: var(--ink-faint);
+      margin: 0 0.5em;
+    }
+  </style>
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+
+<body>
+
+  <!-- ── Sticky reading bar ──────────────────────────────────────── -->
+  <header class="reading-bar" role="banner">
+    <div class="bar-crumb">
+      <a href="/index.html">commonware</a> <span>/</span>
+      <a href="/commonware-book/index.html">book</a> <span>/</span> p2p
+    </div>
+    <div class="bar-title">commonware-p2p</div>
+    <div class="bar-progress">
+      <span class="prog-label">sec. 1 of 8</span>
+      <div class="prog-track">
+        <div class="prog-fill" id="prog-fill"></div>
+      </div>
+      <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+      <a href="/commonware-book/runtime/page.html" class="nav-btn" id="nav-prev">&#8592; prev</a>
+      <a href="/commonware-book/consensus/page.html" class="nav-btn" id="nav-next">next &#8594;</a>
+    </div>
+  </header>
+
+  <!-- ── Chapter header ──────────────────────────────────────────── -->
+  <section class="chapter-header" aria-label="Chapter introduction">
+    <p class="ch-meta-line">commonware-p2p &nbsp;&middot;&nbsp; chapter 2 &nbsp;&middot;&nbsp; ALPHA</p>
+    <h1 class="ch-title">Authenticated, Encrypted Peer-to-Peer Networking</h1>
+    <p class="ch-deck">For Adversarial Environments &mdash; A guided tour of the five-actor discovery topology, the bitvector gossip protocol, the priority relay, and the wire format.</p>
+    <div class="ch-divider" aria-hidden="true">&#10022;</div>
+  </section>
+
+  <!-- ── Layout shell ─────────────────────────────────────────────── -->
+  <div class="page-shell">
+
+    <!-- Main reading column -->
+    <main class="page-content" id="main-content">
+
+      <!-- Mobile TOC -->
+      <details class="toc-inline" aria-label="Chapter table of contents">
+        <summary>Contents</summary>
+        <ul class="toc-list">
+          <li class="toc-item"><a class="toc-link" href="#bg">Backgrounder</a></li>
+          <li class="toc-item"><a class="toc-link" href="#s1">1 &mdash; What Problem Does This Module Solve?</a></li>
+          <li class="toc-item"><a class="toc-link" href="#s2">2 &mdash; Mental Model</a></li>
+          <li class="toc-item"><a class="toc-link" href="#s3">3 &mdash; Core Abstractions</a>
+            <ul class="toc-sub">
+              <li><a class="toc-link" href="#s3-1">3.1 &mdash; Addressing</a></li>
+              <li><a class="toc-link" href="#s3-2">3.2 &mdash; Wire Protocol</a></li>
+              <li><a class="toc-link" href="#s3-3">3.3 &mdash; Signed Peer Records</a></li>
+              <li><a class="toc-link" href="#s3-4">3.4 &mdash; Priority Relay</a></li>
+              <li><a class="toc-link" href="#s3-5">3.5 &mdash; Mailbox Primitives</a></li>
+              <li><a class="toc-link" href="#s3-6">3.6 &mdash; Shared Trait Surface</a></li>
+            </ul>
+          </li>
+          <li class="toc-item"><a class="toc-link" href="#s4">4 &mdash; Execution Flow and Lifecycle</a></li>
+          <li class="toc-item"><a class="toc-link" href="#s5">5 &mdash; Protocol Semantics</a></li>
+          <li class="toc-item"><a class="toc-link" href="#s6">6 &mdash; Failure Modes</a></li>
+          <li class="toc-item"><a class="toc-link" href="#s7">7 &mdash; Source Reading Guide</a></li>
+          <li class="toc-item"><a class="toc-link" href="#s8">8 &mdash; Glossary</a></li>
+        </ul>
+      </details>
+
+      <!-- ── Prose ──────────────────────────────────────────────────── -->
+      <article class="prose" id="prose">
+
+        <!-- Orientation -->
+        <div class="orientation" role="doc-intro">
+          This chapter covers the full p2p stack: how peers prove who they are, how they learn
+          where other peers live, how encrypted connections come into existence, and how
+          application traffic moves through priority lanes once the link is live.
+        </div>
+
+        <section id="bg">
+          <h2>Backgrounder: What Peer-to-Peer Networking Is Actually Hard About</h2>
+
+          <p>One machine opens a socket, another accepts it, and bytes flow. That beginner picture
+            is fine for a toy client and server. It leaves out the hard parts that matter once the
+            network is dynamic, adversarial, or long-lived.</p>
+
+          <p>Peer-to-peer systems have to solve several problems at once. They must discover peers
+            whose addresses may change. They must authenticate identities that are not the same
+            thing as IP addresses. They must keep urgent control traffic from being trapped behind
+            bulky routine traffic. And they must survive a world where some peers are stale, slow,
+            unreachable, or malicious.</p>
+
+          <h3>Identity Is Not Location</h3>
+
+          <p>The first serious mental shift is to separate <strong>where</strong> traffic is sent
+            from <strong>who</strong> is on the other end. An address is a route hint. A public key
+            is a durable name. If you dial <code>203.0.113.8:9000</code>, you still do not know
+            whether the remote side is the peer you intended to reach. That is what the handshake
+            is for.</p>
+
+          <p>This distinction pays for itself immediately. DNS may resolve to several addresses. A
+            peer may move networks. NAT may make the address you dial different from the address
+            packets appear to come from. A stale record may keep circulating after the machine it
+            described has already moved. Once you accept that identity and address are different
+            facts, much of serious p2p design starts making sense.</p>
+
+          <h3>Discovery Is a Knowledge Problem</h3>
+
+          <p>Discovery is not just bootstrap. It is distributed knowledge management. A node needs
+            to know which identities belong in the network, which of them appear reachable right
+            now, how fresh that reachability information is, and which facts are safe to re-share
+            to others. If those different kinds of knowledge are collapsed into one generic idea of
+            a “known peer,” the overlay cannot represent uncertainty honestly.</p>
+
+          <h3>Handshakes and Channels Solve Different Problems</h3>
+
+          <p>A handshake does more than start encryption. It proves that the live transport
+            session is bound to the expected identity and namespace. After that, channels,
+            priorities, and backpressure solve a different problem: several classes of messages
+            share one connection, but they should not all have the same urgency. Good p2p systems
+            therefore separate identity proof from traffic management.</p>
+
+          <h3>NAT, Asymmetry, and Failure Models</h3>
+
+          <p>Real networks are messy. Some peers can be dialed but not redialed. Some advertise
+            one address yet emit packets from another. Some information is stale but not malicious.
+            Some peers are simply overloaded. A robust overlay has to name those cases separately
+            instead of flattening them into “the connection failed.”</p>
+
+          <div class="callout callout-note" role="note">
+            <div class="callout-label">Background Takeaway</div>
+            <p>Good p2p networking is not socket programming plus retries. It is identity
+              management, knowledge propagation, and contention control under moving addresses and
+              imperfect trust.</p>
+          </div>
+        </section>
+
+        <!-- ══ Section 1 ══════════════════════════════════════════════ -->
+        <section id="s1">
+          <h2>What Problem Does This Module Solve?</h2>
+
+          <p>At first glance, peer-to-peer networking sounds simple: open a socket, connect to a
+            remote address, and send bytes. But that picture leaves out almost everything an
+            adversarial network cares about. How do you know the thing on the other end is really
+            the peer you meant to reach? How do you avoid one slow channel clogging all the other
+            traffic? How do you discover addresses when the network membership changes?</p>
+
+          <p><code>commonware-p2p</code> is Commonware's answer to those questions. It provides
+            authenticated, encrypted, multiplexed communication between peers identified by
+            cryptographic public keys. It operates in two distinct modes:</p>
+
+          <p><strong>Discovery mode</strong> (<code>discovery::Network</code>) &mdash; use this
+            when you know <em>who</em> belongs in the network but not yet <em>where</em> those
+            peers are. Nodes bootstrap from a seed set, gossip signed peer records, and gradually
+            learn the current dialable addresses.</p>
+
+          <p><strong>Lookup mode</strong> (<code>lookup::Network</code>) &mdash; use this when
+            the application already knows both identity and address. The application supplies
+            <code>(PublicKey, Address)</code> pairs directly, so the network can skip the gossip
+            loop entirely.</p>
+
+          <p>Both modes share the same actor topology, encrypted stream handshake, priority relay,
+            and per-channel rate limiting. The only real difference is where addresses come from.
+          </p>
+
+          <p>The crate composes with the rest of Commonware as follows:</p>
+
+          <ul>
+            <li><strong>Cryptography</strong> (<code>commonware-cryptography</code>) &mdash; provides the <code>Signer</code> and <code>PublicKey</code> traits used for peer authentication and signed peer attestations.</li>
+            <li><strong>Codec</strong> (<code>commonware-codec</code>) &mdash; provides <code>Encode</code>/<code>Decode</code> for all wire messages (<code>Ingress</code>, <code>Address</code>, <code>Payload</code>).</li>
+            <li><strong>Runtime</strong> (<code>commonware-runtime</code>) &mdash; provides the abstract <code>ContextCell</code> that drives all async actors and I/O, enabling deterministic testing via <code>deterministic::Runner</code>.</li>
+            <li><strong>Stream</strong> (<code>commonware-stream</code>) &mdash; provides the encrypted stream protocol (<code>commonware_stream::encrypted</code>) that handles the actual connection establishment and framing.</li>
+          </ul>
+        </section>
+
+        <!-- ══ Section 2 ══════════════════════════════════════════════ -->
+        <section id="s2">
+          <h2>Mental Model</h2>
+
+          <p>Think of <code>commonware-p2p</code> as an <strong>encrypted postal service with named
+            mail slots</strong>.</p>
+
+          <ul>
+            <li>A peer's <strong>public key</strong> is its identity.</li>
+            <li>An <strong>address</strong> is only a route to that identity.</li>
+            <li>A <strong>connection</strong> is an authenticated encrypted tunnel between two
+              identities.</li>
+            <li>A <strong>channel</strong> is a named lane inside that tunnel, so unrelated traffic
+              does not all compete in one queue.</li>
+            <li>A <strong>priority flag</strong> decides whether a message enters the fast lane or
+              the ordinary lane.</li>
+          </ul>
+
+          <div class="callout callout-inv" role="note">
+            <div class="callout-label">Invariant</div>
+            <p><strong>Identity is never assumed from an address.</strong> If a packet arrives from
+              <code>1.2.3.4:9000</code>, that tells you where it came from, not who sent it. The
+              handshake is what ties the connection to a cryptographic identity.</p>
+          </div>
+
+          <p>One subtle detail is worth keeping in mind from the beginning. The
+            <code>Info</code> structure signs <code>(ingress, timestamp)</code>, not every field
+            in the struct. So the correct question to ask is not "is this record signed?" but
+            "what exactly does this signature prove?" Good protocol reading often comes down to
+            details like that.</p>
+        </section>
+
+        <!-- ══ Section 3 ══════════════════════════════════════════════ -->
+        <section id="s3">
+          <h2>Core Abstractions and Important Types</h2>
+
+          <!-- 3.1 -->
+          <section class="charter-section" id="s3-1">
+            <h3>3.1 &mdash; Addressing &mdash; <code>Ingress</code> and <code>Address</code></h3>
+
+            <p><code>p2p/src/types.rs</code></p>
+
+            <p>Start with the addressing types, because they explain a design choice that appears
+              everywhere else: Commonware separates <em>what we dial</em> from
+              <em>what we expect packets to arrive from</em>.</p>
+
+            <p><code>Ingress</code> is <strong>what we dial</strong> to reach a peer:</p>
+
+            <pre><code>pub enum Ingress {
+    Socket(SocketAddr),                          // Direct IP address
+    Dns { host: Hostname, port: u16 },           // DNS name (resolved at dial time)
+}</code></pre>
+
+            <p><code>Address</code> is the <strong>full address specification</strong>:</p>
+
+            <pre><code>pub enum Address {
+    Symmetric(SocketAddr),                                     // Same address for dial and filter
+    Asymmetric { ingress: Ingress, egress: SocketAddr },      // Dial one thing, expect another on receive
+}</code></pre>
+
+            <p><code>Asymmetric</code> models <strong>NAT traversal</strong>. A peer may know the
+              public address others should dial, but inbound traffic may still appear from a
+              different egress IP that must be checked. If those ideas were collapsed into one
+              field, the runtime would either reject valid NATed peers or accept spoofed sources
+              too easily.</p>
+
+            <div class="callout callout-src" role="note">
+              <div class="callout-label">Source</div>
+              <p><strong>Private IP policy</strong>: <code>Ingress::Socket</code> is validated against <code>allow_private_ips</code>. <code>Ingress::Dns</code> is resolved first, then the resolved IPs are checked. DNS resolution is randomized &mdash; a different IP is selected from the resolved set on each dial attempt, which provides some load balancing.</p>
+            </div>
+          </section>
+
+          <!-- 3.2 -->
+          <section class="charter-section" id="s3-2">
+            <h3>3.2 &mdash; The Wire Protocol &mdash; <code>Payload</code></h3>
+
+            <p><code>p2p/src/authenticated/discovery/types.rs</code></p>
+
+            <p>Four <code>Payload</code> variants traverse the wire:</p>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Variant</th>
+                  <th>Role</th>
+                  <th>When Sent</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>Greeting(Info&lt;C&gt;)</code></td><td>Introduces the peer</td><td>First message on every new connection</td></tr>
+                <tr><td><code>BitVec(BitVec)</code></td><td>Discovery + keepalive</td><td>Periodically (default: every 50s)</td></tr>
+                <tr><td><code>Peers(Vec&lt;Info&lt;C&gt;&gt;)</code></td><td>Gossip response</td><td>When BitVec reveals unknown peers</td></tr>
+                <tr><td><code>Data(Data)</code></td><td>Application payload</td><td>Whenever the app sends</td></tr>
+              </tbody>
+            </table>
+
+            <p><code>BitVec</code> is a compact bitvector where bit <code>i</code> in position <code>index</code> means "I believe I can dial peer <code>sorted_peers[i]</code>." The bitvector is <strong>lossy</strong>: a <code>1</code> bit means knowledge; a <code>0</code> means either "unknown" or "dialing failed after <code>dial_fail_limit</code> attempts." This prevents stale records from trapping peers.</p>
+          </section>
+
+          <!-- 3.3 -->
+          <section class="charter-section" id="s3-3">
+            <h3>3.3 &mdash; Signed Peer Records &mdash; <code>Info</code> and <code>InfoVerifier</code></h3>
+
+            <p><code>Info</code> is a signed attestation by peer P of its own <code>(ingress, timestamp)</code>:</p>
+
+            <pre><code>pub struct Info&lt;C: PublicKey&gt; {
+    pub ingress: Ingress,
+    pub timestamp: u64,       // Epoch milliseconds
+    pub public_key: C,
+    pub signature: C::Signature,
+}</code></pre>
+
+            <div class="callout callout-src" role="note">
+              <div class="callout-label">Key Detail</div>
+              <p>The signed payload is narrower than the whole struct. Only <code>(ingress, timestamp)</code> is covered by the signature. The <code>public_key</code> field tells the verifier which key to use, but it is not itself part of the signed message.</p>
+            </div>
+
+            <p><code>InfoVerifier::validate</code> applies three checks on every gossip message:</p>
+
+            <ol>
+              <li><strong>Not-self</strong>: reject if <code>info.public_key == me</code> &mdash; prevents self-announcement.</li>
+              <li><strong>Timestamp within <code>synchrony_bound</code></strong>: reject if <code>info.timestamp</code> is more than <code>synchrony_bound</code> milliseconds in the future &mdash; bounds how far into the future a forged timestamp can be.</li>
+              <li><strong>Valid signature</strong>: verify against the gossip namespace &mdash; prevents cross-namespace replay. The signature covers only <code>(ingress, timestamp)</code>, not the <code>public_key</code> field.</li>
+            </ol>
+
+            <div class="callout callout-src" role="note">
+              <div class="callout-label">Why This Matters</div>
+              <p>This is exactly the kind of detail that separates protocol reading from surface reading. A record can be “signed” and still leave some fields outside the signed claim, so the right question is always: what fact does the signature actually prove?</p>
+            </div>
+
+            <p>The gossip namespace <code>_COMMONWARE_P2P_TRACKER</code> is distinct from the stream signing namespace <code>_COMMONWARE_P2P_STREAM</code>. This separation ensures that peer records gossiped through discovery cannot be replayed as stream messages.</p>
+          </section>
+
+          <!-- 3.4 -->
+          <section class="charter-section" id="s3-4">
+            <h3>3.4 &mdash; Priority Relay &mdash; <code>Relay&lt;T&gt;</code></h3>
+
+            <p><code>p2p/src/authenticated/relay.rs</code></p>
+
+            <p>Every peer-to-peer channel is backed by a <code>Relay</code>:</p>
+
+            <pre><code>pub struct Relay&lt;T&gt; {
+    low:  mpsc::Sender&lt;T&gt;,   // Bounded &mdash; fills up if app is slow
+    high: mpsc::Sender&lt;T&gt;,   // Unbounded &mdash; priority messages skip queue
+}</code></pre>
+
+            <p><code>send(message, priority=true)</code> routes to <code>high</code>. <code>send(message, priority=false)</code> routes to <code>low</code>. When the low lane is full, <code>try_send</code> returns an error immediately &mdash; the relay uses <strong>non-blocking semantics</strong>, not blocking. The router handles this error by dropping the message and incrementing a <code>messages_dropped_total</code> metric. Priority senders always succeed if the channel is live (their <code>high</code> lane is unbounded).</p>
+
+            <div class="callout callout-src" role="note">
+              <div class="callout-label">Mechanism</div>
+              <p>The important detail is that the low lane is bounded and non-blocking. When it is full, the relay returns an error immediately and the router decides how to absorb the backpressure. That keeps slow low-priority traffic from turning into a hidden stall.</p>
+            </div>
+          </section>
+
+          <!-- 3.5 -->
+          <section class="charter-section" id="s3-5">
+            <h3>3.5 &mdash; Mailbox Primitives &mdash; <code>Mailbox</code> and <code>UnboundedMailbox</code></h3>
+
+            <p><code>p2p/src/authenticated/mailbox.rs</code></p>
+
+            <p>The interesting question here is not what sender type sits inside the wrapper. The
+            interesting question is what kind of <em>time pressure</em> this actor is supposed to feel.</p>
+
+            <p>At the router and spawner boundary, waiting is informative. If application traffic or
+            connection work arrives faster than the actor can absorb it, the system wants to feel
+            that pressure immediately. A bounded <code>Mailbox&lt;T&gt;</code> turns the queue into a visible
+            limit, which is exactly right for data-plane work where backpressure is part of the
+            contract.</p>
+
+            <p>The tracker is different. It is part of the control plane that keeps the rest of the
+            network alive. If that bookkeeping loop blocked on its own mailbox, the network could
+            stall on the very metadata it needs in order to recover. That is why
+            <code>UnboundedMailbox&lt;T&gt;</code> exists. It is not merely “the same mailbox but bigger.” It is
+            the spelling for a different systems claim: control-plane bookkeeping should not stop
+            because the bookkeeping channel itself became the bottleneck.</p>
+          </section>
+
+          <!-- 3.6 -->
+          <section class="charter-section" id="s3-6">
+            <h3>3.6 &mdash; The Shared Trait Surface &mdash; <code>Manager</code>, <code>AddressableManager</code>, <code>Provider</code></h3>
+
+            <p><code>p2p/src/authenticated/mod.rs</code> defines the traits that both discovery and lookup implement:</p>
+
+            <pre><code>// For discovery: addresses unknown, only Set&lt;PublicKey&gt;
+pub trait Manager: Provider {
+    fn track(&amp;mut self, id: u64, peers: Set&lt;PublicKey&gt;) -&gt; impl Future&lt;Output = ()&gt;;
+}
+
+// For lookup: addresses known, Map&lt;PublicKey, Address&gt;
+pub trait AddressableManager: Provider {
+    fn track(&amp;mut self, id: u64, peers: Map&lt;PublicKey, Address&gt;);
+    fn overwrite(&amp;mut self, peers: Map&lt;PublicKey, Address&gt;); // In-place address updates
+}</code></pre>
+
+            <p>The <code>Oracle</code> returned by <code>Network::new</code> implements <code>Manager</code> in discovery mode and <code>AddressableManager</code> in lookup mode. The application uses the oracle to register peer sets and (in lookup mode) push address updates.</p>
+          </section>
+        </section>
+
+        <!-- ══ Figure plates ══════════════════════════════════════════ -->
+
+        <!-- PLATE 1: Actor Topology -->
+        <div class="figure-plate" id="plate-actor-topology" aria-label="Figure 1: Actor Mailbox Topology">
+          <div class="plate-header">
+            <div class="plate-title-group">
+              <div class="plate-number">Figure 1</div>
+              <h3 class="plate-title">Actor Mailbox Topology</h3>
+            </div>
+            <div class="plate-tags">
+              <span class="plate-tag">discovery</span>
+              <span class="plate-tag">actor-model</span>
+            </div>
+          </div>
+          <div class="plate-body">
+            <div class="plate-goal">
+              <div class="plate-goal-label">Learning goal</div>
+              <p>Trace a message from application <code>send()</code> call through the five-actor system, understanding mailbox ownership, backpressure semantics, and where priority lanes matter.</p>
+            </div>
+            <div class="plate-why">
+              <div class="plate-why-label">Why it matters</div>
+              <p>The five-actor design isolates concerns (tracking, routing, connection management) but means a single logical send spans four message handoffs. Understanding which actor owns which mailbox explains why backpressure works at the router mailbox, not at the application.</p>
+            </div>
+            <div class="plate-controls">
+              <div class="plate-controls-label">Controls</div>
+              <div class="control-row">
+                <div class="ctrl-group">
+                  <span class="ctrl-label">Scenario</span>
+                  <div class="ctrl-toggle-row" style="display:flex;gap:0.3rem;margin-top:0.25rem;">
+                    <button class="ctrl-toggle active" data-ctrl="scenario" data-val="outbound_dial">outbound dial</button>
+                    <button class="ctrl-toggle" data-ctrl="scenario" data-val="inbound_accept">inbound accept</button>
+                    <button class="ctrl-toggle" data-ctrl="scenario" data-val="app_send">app send</button>
+                    <button class="ctrl-toggle" data-ctrl="scenario" data-val="backpressure">backpressure</button>
+                  </div>
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Mailbox size</span>
+                  <select class="ctrl-slider" style="width:90px;" data-ctrl="mailbox_size">
+                    <option value="1">1</option>
+                    <option value="8">8</option>
+                    <option value="32" selected>32</option>
+                    <option value="128">128</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="plate-scene">
+              <div class="plate-scene-label">Scene canvas</div>
+              <div class="scene-canvas" id="scene-actor-topology">
+                <svg class="scene-svg" viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <!-- Five actor boxes -->
+                  <!-- Tracker -->
+                  <rect x="10" y="50" width="110" height="90" rx="4" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="65" y="80" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#2d6a4f" font-weight="500">tracker</text>
+                  <text x="65" y="97" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#57534e">UnboundedMailbox</text>
+                  <circle cx="115" cy="60" r="10" fill="#2d6a4f" opacity="0.15"/>
+                  <text x="115" y="64" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="#2d6a4f">0</text>
+
+                  <!-- Router -->
+                  <rect x="155" y="50" width="110" height="90" rx="4" fill="#f7f4ee" stroke="#1c1917" stroke-width="1.5"/>
+                  <text x="210" y="80" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#1c1917" font-weight="500">router</text>
+                  <text x="210" y="97" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#57534e">Mailbox</text>
+                  <circle cx="260" cy="60" r="10" fill="#1c1917" opacity="0.1"/>
+                  <text x="260" y="64" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="#1c1917">0</text>
+
+                  <!-- Spawner -->
+                  <rect x="300" y="50" width="110" height="90" rx="4" fill="#f7f4ee" stroke="#1c1917" stroke-width="1.5"/>
+                  <text x="355" y="80" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#1c1917" font-weight="500">spawner</text>
+                  <text x="355" y="97" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#57534e">Mailbox</text>
+                  <circle cx="405" cy="60" r="10" fill="#1c1917" opacity="0.1"/>
+                  <text x="405" y="64" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="#1c1917">0</text>
+
+                  <!-- Listener -->
+                  <rect x="445" y="20" width="110" height="70" rx="4" fill="#f7f4ee" stroke="#1c1917" stroke-width="1.5"/>
+                  <text x="500" y="50" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#1c1917" font-weight="500">listener</text>
+                  <text x="500" y="67" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#57534e">event loop</text>
+
+                  <!-- Dialer -->
+                  <rect x="445" y="110" width="110" height="70" rx="4" fill="#f7f4ee" stroke="#1c1917" stroke-width="1.5"/>
+                  <text x="500" y="140" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="#1c1917" font-weight="500">dialer</text>
+                  <text x="500" y="157" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#57534e">event loop</text>
+
+                  <!-- Arrows -->
+                  <!-- Tracker → Router -->
+                  <line x1="120" y1="95" x2="153" y2="95" stroke="#a8a29e" stroke-width="1.5" marker-end="url(#arrow)"/>
+                  <!-- Router → Spawner -->
+                  <line x1="265" y1="95" x2="298" y2="95" stroke="#a8a29e" stroke-width="1.5" marker-end="url(#arrow)"/>
+                  <!-- Spawner ↔ Listener+Dialer -->
+                  <line x1="410" y1="85" x2="443" y2="55" stroke="#a8a29e" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow)"/>
+                  <line x1="410" y1="105" x2="443" y2="145" stroke="#a8a29e" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow)"/>
+
+                  <!-- App → Router (top) -->
+                  <line x1="220" y1="50" x2="220" y2="20" stroke="#2d6a4f" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-green)"/>
+
+                  <!-- Arrow marker -->
+                  <defs>
+                    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <path d="M0,0 L0,6 L6,3 z" fill="#a8a29e"/>
+                    </marker>
+                    <marker id="arrow-green" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <path d="M0,0 L0,6 L6,3 z" fill="#2d6a4f"/>
+                    </marker>
+                  </defs>
+
+                  <!-- Legend -->
+                  <text x="10" y="18" font-family="JetBrains Mono,monospace" font-size="9" fill="#57534e">application</text>
+                  <line x1="80" y1="15" x2="115" y2="15" stroke="#2d6a4f" stroke-width="1.5" stroke-dasharray="4,2"/>
+                  <text x="120" y="18" font-family="JetBrains Mono,monospace" font-size="9" fill="#a8a29e">message</text>
+                </svg>
+              </div>
+            </div>
+            <div class="plate-source">
+              <span class="plate-source-label">Source</span>
+              <code>p2p/src/authenticated/discovery/network.rs</code> &middot;
+              <code>actors/tracker/actor.rs</code> &middot;
+              <code>actors/router/actor.rs</code> &middot;
+              <code>actors/spawner/actor.rs</code> &middot;
+              <code>actors/listener.rs</code> &middot;
+              <code>actors/dialer.rs</code> &middot;
+              <code>relay.rs</code> &middot;
+              <code>mailbox.rs</code>
+            </div>
+            <div class="plate-caption">
+              <strong>Scene: outbound dial.</strong> The outbound dial path flows: dialer.tick() → tracker.dialable() → reservation → encrypted handshake → spawner → tracker.connect() → router.ready(). Tracker uses UnboundedMailbox (never blocks); router and spawner use bounded Mailbox (senders block when full).
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATE 2: Wire Format -->
+        <div class="figure-plate" id="plate-wire-format" aria-label="Figure 2: Wire Format Explorer">
+          <div class="plate-header">
+            <div class="plate-title-group">
+              <div class="plate-number">Figure 2</div>
+              <h3 class="plate-title">Wire Format Explorer</h3>
+            </div>
+            <div class="plate-tags">
+              <span class="plate-tag">wire</span>
+              <span class="plate-tag">codec</span>
+            </div>
+          </div>
+          <div class="plate-body">
+            <div class="plate-goal">
+              <div class="plate-goal-label">Learning goal</div>
+              <p>Read a real multi-frame p2p connection at the byte level: understand how the codec encodes each <code>Payload</code> variant, why varints are used for length fields, and what happens when bytes are corrupted.</p>
+            </div>
+            <div class="plate-why">
+              <div class="plate-why-label">Why it matters</div>
+              <p>Distributed systems must agree on wire formats. Misunderstanding varint encoding leads to off-by-one bugs; not knowing which bytes are signed leads to security failures.</p>
+            </div>
+            <div class="plate-controls">
+              <div class="plate-controls-label">Controls</div>
+              <div class="control-row">
+                <div class="ctrl-group">
+                  <span class="ctrl-label">Frame</span>
+                  <div style="display:flex;gap:0.3rem;margin-top:0.25rem;">
+                    <button class="ctrl-step active" data-ctrl="frame" data-val="1">1 Greeting</button>
+                    <button class="ctrl-step" data-ctrl="frame" data-val="2">2 BitVec</button>
+                    <button class="ctrl-step" data-ctrl="frame" data-val="3">3 Peers</button>
+                    <button class="ctrl-step" data-ctrl="frame" data-val="4">4 Data</button>
+                  </div>
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Ingress</span>
+                  <select class="ctrl-slider" data-ctrl="ingress" style="width:90px;margin-top:0.25rem;">
+                    <option value="socket">Socket</option>
+                    <option value="dns">Dns</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="plate-scene">
+              <div class="plate-scene-label">Hex dump</div>
+              <div class="scene-canvas" id="scene-wire-format" style="font-family:JetBrains Mono,monospace;font-size:0.78rem;align-items:flex-start;padding:1rem;">
+                <div>
+                  <div style="color:#a8a29e;margin-bottom:0.5rem;font-size:0.72rem;">FRAME 1 — Greeting</div>
+                  <table style="width:auto;border:none;margin:0;">
+                    <tr><td style="border:none;color:#a8a29e;padding:0 1rem 0 0;font-size:0.72rem;">0000</td><td style="border:none;color:#2d6a4f;font-weight:bold;padding:0 0.3rem;">01</td><td style="border:none;color:#1c1917;font-weight:bold;padding:0 0.3rem;">41</td><td style="border:none;color:#1c1917;font-weight:bold;padding:0 0.3rem;">42</td><td style="border:none;color:#1c1917;font-weight:bold;padding:0 0.3rem;">f8</td><td style="border:none;color:#57534e;padding:0 0.3rem;">.. .. ..</td><td style="border:none;color:#1c1917;padding:0 0.3rem;">Info { ingress, timestamp, public_key, signature }</td></tr>
+                  </table>
+                  <div style="margin-top:0.6rem;display:flex;gap:0.75rem;font-size:0.72rem;color:#57534e;">
+                    <span><span style="display:inline-block;width:0.6rem;height:0.6rem;background:#2d6a4f;border-radius:1px;vertical-align:middle;margin-right:0.2rem;"></span>[01] prefix — Greeting variant</span>
+                    <span><span style="display:inline-block;width:0.6rem;height:0.6rem;background:#1c1917;border-radius:1px;vertical-align:middle;margin-right:0.2rem;"></span>Info record (65 bytes)</span>
+                  </div>
+                  <div style="margin-top:1rem;color:#a8a29e;font-size:0.72rem;">Info fields:</div>
+                  <table style="margin-top:0.4rem;font-size:0.78rem;color:#1c1917;">
+                    <tr><td style="border:none;padding:0.1rem 0.5rem 0.1rem 0;"><span style="color:#2d6a4f;font-weight:bold;">[00]</span></td><td style="border:none;padding:0.1rem 0.5rem;font-family:JetBrains Mono,monospace;">Ingress::Socket</td><td style="border:none;padding:0.1rem 0.5rem;color:#57534e;font-size:0.9em;">4 bytes IP + 2 bytes port</td></tr>
+                    <tr><td style="border:none;padding:0.1rem 0.5rem;"><span style="color:#2d6a4f;font-weight:bold;">[01]</span></td><td style="border:none;padding:0.1rem 0.5rem;font-family:JetBrains Mono,monospace;">Ingress::Dns</td><td style="border:none;padding:0.1rem 0.5rem;color:#57534e;font-size:0.9em;">varint(len) + hostname + varint(port)</td></tr>
+                    <tr><td style="border:none;padding:0.1rem 0.5rem;"><span style="color:#57534e;font-weight:bold;">u64</span></td><td style="border:none;padding:0.1rem 0.5rem;font-family:JetBrains Mono,monospace;">timestamp</td><td style="border:none;padding:0.1rem 0.5rem;color:#57534e;font-size:0.9em;">epoch milliseconds (varint)</td></tr>
+                    <tr><td style="border:none;padding:0.1rem 0.5rem;"><span style="color:#57534e;font-weight:bold;">pk</span></td><td style="border:none;padding:0.1rem 0.5rem;font-family:JetBrains Mono,monospace;">public_key</td><td style="border:none;padding:0.1rem 0.5rem;color:#57534e;font-size:0.9em;">bls12_381_g1 or ed25519</td></tr>
+                    <tr><td style="border:none;padding:0.1rem 0.5rem;"><span style="color:#57534e;font-weight:bold;">sig</span></td><td style="border:none;padding:0.1rem 0.5rem;font-family:JetBrains Mono,monospace;">signature</td><td style="border:none;padding:0.1rem 0.5rem;color:#57534e;font-size:0.9em;">covers (ingress, timestamp) only</td></tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="plate-source">
+              <span class="plate-source-label">Source</span>
+              <code>p2p/src/types.rs</code> &middot;
+              <code>p2p/src/authenticated/discovery/types.rs</code> &middot;
+              <code>p2p/src/authenticated/mod.rs</code>
+            </div>
+            <div class="plate-caption">
+              <strong>Greeting frame</strong> — First frame on every new connection. Contains the sender's self-signed <code>Info</code>: ingress (2 variants), timestamp (epoch ms, varint), public_key (identifier), and signature. Prefix bytes: Data=<code>0x00</code>, Greeting=<code>0x01</code>, BitVec=<code>0x02</code>, Peers=<code>0x03</code>. Signature covers <em>only</em> <code>(ingress, timestamp)</code>.
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATE 3: Bitvector Exchange -->
+        <div class="figure-plate" id="plate-bitvector" aria-label="Figure 3: Discovery Bitvector Exchange">
+          <div class="plate-header">
+            <div class="plate-title-group">
+              <div class="plate-number">Figure 3</div>
+              <h3 class="plate-title">Discovery Bitvector Exchange</h3>
+            </div>
+            <div class="plate-tags">
+              <span class="plate-tag">gossip</span>
+              <span class="plate-tag">discovery</span>
+            </div>
+          </div>
+          <div class="plate-body">
+            <div class="plate-goal">
+              <div class="plate-goal-label">Learning goal</div>
+              <p>Understand how gossip-based peer discovery converges without flooding, and why log&#x2082;(N) rounds is sufficient for full connectivity in an honest network.</p>
+            </div>
+            <div class="plate-why">
+              <div class="plate-why-label">Why it matters</div>
+              <p>Peer discovery is the bootstrap problem every distributed system must solve. The bitvector approach is space-efficient (O(N) vs O(N&#xB2;) for full address tables) and converges provably fast.</p>
+            </div>
+            <div class="plate-controls">
+              <div class="plate-controls-label">Controls</div>
+              <div class="control-row">
+                <div class="ctrl-group">
+                  <span class="ctrl-label">N (nodes)</span>
+                  <div style="display:flex;gap:0.3rem;margin-top:0.25rem;">
+                    <button class="ctrl-step" data-ctrl="nodes" data-val="4">4</button>
+                    <button class="ctrl-step active" data-ctrl="nodes" data-val="8">8</button>
+                    <button class="ctrl-step" data-ctrl="nodes" data-val="16">16</button>
+                  </div>
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Failure rate</span>
+                  <select class="ctrl-slider" data-ctrl="failure" style="width:90px;margin-top:0.25rem;">
+                    <option value="0">0%</option>
+                    <option value="10">10%</option>
+                    <option value="20">20%</option>
+                    <option value="40">40%</option>
+                  </select>
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Playback</span>
+                  <div style="display:flex;gap:0.3rem;margin-top:0.25rem;">
+                    <button class="ctrl-toggle active" data-ctrl="play" data-val="pause">&#9646;&#9646; pause</button>
+                    <button class="ctrl-toggle" data-ctrl="play" data-val="step">&#9654; step</button>
+                    <button class="ctrl-toggle" data-ctrl="play" data-val="play">&#9654;&#9654; play</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="plate-scene">
+              <div class="plate-scene-label">Round 0 — initial state</div>
+              <div class="scene-canvas" style="flex-direction:column;gap:1rem;padding:1.25rem;" id="scene-bitvector">
+                <svg class="scene-svg" viewBox="0 0 560 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <!-- Ring of 8 nodes -->
+                  <circle cx="280" cy="60" r="45" fill="none" stroke="#d6cfc4" stroke-width="1" stroke-dasharray="3,3"/>
+                  <!-- Nodes arranged on ring -->
+                  <circle cx="280" cy="15" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="280" y="19" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P0</text>
+
+                  <circle cx="310" cy="24" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="310" y="28" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P1</text>
+
+                  <circle cx="328" cy="50" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="328" y="54" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P2</text>
+
+                  <circle cx="328" cy="80" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="328" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P3</text>
+
+                  <circle cx="310" cy="106" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="310" y="110" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P4</text>
+
+                  <circle cx="280" cy="115" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="280" y="119" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P5</text>
+
+                  <circle cx="250" cy="106" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="250" y="110" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P6</text>
+
+                  <circle cx="232" cy="80" r="14" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="232" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#2d6a4f" font-weight="500">P7</text>
+
+                  <!-- Ring edges -->
+                  <line x1="291" y1="20" x2="296" y2="28" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="312" y1="34" x2="323" y2="48" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="329" y1="64" x2="329" y2="66" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="329" y1="90" x2="324" y2="102" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="313" y1="110" x2="296" y2="113" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="269" y1="115" x2="253" y2="109" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="236" y1="100" x2="233" y2="84" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="232" y1="66" x2="233" y2="64" stroke="#d6cfc4" stroke-width="1"/>
+                  <line x1="246" y1="28" x2="266" y2="17" stroke="#d6cfc4" stroke-width="1"/>
+                </svg>
+                <!-- Bitvector table -->
+                <div style="width:100%;overflow-x:auto;">
+                  <table style="font-family:JetBrains Mono,monospace;font-size:0.72rem;white-space:nowrap;min-width:500px;">
+                    <tr style="color:#a8a29e;"><th style="text-align:left;padding:0.2rem 0.5rem;border-bottom:1px solid #d6cfc4;font-weight:400;">node</th><th style="text-align:left;padding:0.2rem 0.5rem;border-bottom:1px solid #d6cfc4;font-weight:400;">bitvector at index 0</th><th style="text-align:left;padding:0.2rem 0.5rem;border-bottom:1px solid #d6cfc4;font-weight:400;">known</th></tr>
+                    <tr><td style="padding:0.2rem 0.5rem;color:#2d6a4f;font-weight:500;">P0</td><td style="padding:0.2rem 0.5rem;"><span style="display:inline-block;width:12px;height:12px;background:#2d6a4f;border-radius:2px;margin:0 1px;vertical-align:middle;"></span><span style="color:#d6cfc4;margin:0 1px;">&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;</span></td><td style="padding:0.2rem 0.5rem;color:#57534e;">P0</td></tr>
+                    <tr><td style="padding:0.2rem 0.5rem;color:#2d6a4f;font-weight:500;">P1</td><td style="padding:0.2rem 0.5rem;"><span style="color:#d6cfc4;margin:0 1px;">&#9632;</span><span style="display:inline-block;width:12px;height:12px;background:#2d6a4f;border-radius:2px;margin:0 1px;vertical-align:middle;"></span><span style="color:#d6cfc4;margin:0 1px;">&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;</span></td><td style="padding:0.2rem 0.5rem;color:#57534e;">P1</td></tr>
+                    <tr><td style="padding:0.2rem 0.5rem;color:#2d6a4f;font-weight:500;">P2</td><td style="padding:0.2rem 0.5rem;"><span style="color:#d6cfc4;margin:0 1px;">&#9632;&#9632;</span><span style="display:inline-block;width:12px;height:12px;background:#2d6a4f;border-radius:2px;margin:0 1px;vertical-align:middle;"></span><span style="color:#d6cfc4;margin:0 1px;">&#9632;&#9632;&#9632;&#9632;&#9632;&#9632;</span></td><td style="padding:0.2rem 0.5rem;color:#57534e;">P2</td></tr>
+                    <tr><td style="padding:0.2rem 0.5rem;color:#2d6a4f;font-weight:500;">P3</td><td style="padding:0.2rem 0.5rem;"><span style="color:#d6cfc4;margin:0 1px;">&#9632;&#9632;&#9632;</span><span style="display:inline-block;width:12px;height:12px;background:#2d6a4f;border-radius:2px;margin:0 1px;vertical-align:middle;"></span><span style="color:#d6cfc4;margin:0 1px;">&#9632;&#9632;&#9632;&#9632;&#9632;</span></td><td style="padding:0.2rem 0.5rem;color:#57534e;">P3</td></tr>
+                    <tr><td style="padding:0.2rem 0.5rem;color:#57534e;">...</td><td style="padding:0.2rem 0.5rem;color:#d6cfc4;">&#9632; × 8</td><td style="padding:0.2rem 0.5rem;color:#57534e;">...</td></tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="plate-source">
+              <span class="plate-source-label">Source</span>
+              <code>p2p/src/authenticated/discovery/types.rs</code> &middot;
+              <code>p2p/src/authenticated/discovery/network.rs</code> &middot;
+              <code>p2p/src/authenticated/discovery/mod.rs</code>
+            </div>
+            <div class="plate-caption">
+              <strong>Round 0 — Initial state.</strong> Each node's bitvector has only its own bit set (1 at position i for node i). The peer set is sorted by PublicKey, so position i always refers to the same logical peer across all nodes. With N=8 and 0% failure, all bits converge to 1 within &#x2308;log&#x2082;(N)&#x2309; = 3 rounds.
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATE 4: NAT Traversal -->
+        <div class="figure-plate" id="plate-nat" aria-label="Figure 4: Asymmetric Address NAT Traversal">
+          <div class="plate-header">
+            <div class="plate-title-group">
+              <div class="plate-number">Figure 4</div>
+              <h3 class="plate-title">Asymmetric Address NAT Traversal</h3>
+            </div>
+            <div class="plate-tags">
+              <span class="plate-tag">nat</span>
+              <span class="plate-tag">security</span>
+            </div>
+          </div>
+          <div class="plate-body">
+            <div class="plate-goal">
+              <div class="plate-goal-label">Learning goal</div>
+              <p>Understand why Symmetric addressing fails for NAT'd peers, how <code>Asymmetric { ingress, egress }</code> models the NAT problem, and how egress IP filtering prevents address spoofing.</p>
+            </div>
+            <div class="plate-why">
+              <div class="plate-why-label">Why it matters</div>
+              <p>Most peers in production are behind NAT. A naive symmetric address model breaks when both peers are behind different NATs &mdash; each sees the other's public IP but cannot dial it directly. The Asymmetric model separates what is dialable from what is expected on receive.</p>
+            </div>
+            <div class="plate-controls">
+              <div class="plate-controls-label">Controls</div>
+              <div class="control-row">
+                <div class="ctrl-group">
+                  <span class="ctrl-label">Step</span>
+                  <div style="display:flex;gap:0.3rem;margin-top:0.25rem;">
+                    <button class="ctrl-step active" data-ctrl="nat-step" data-val="0">0</button>
+                    <button class="ctrl-step" data-ctrl="nat-step" data-val="1">1</button>
+                    <button class="ctrl-step" data-ctrl="nat-step" data-val="2">2</button>
+                    <button class="ctrl-step" data-ctrl="nat-step" data-val="3">3</button>
+                  </div>
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Spoof attempt</span>
+                  <button class="ctrl-toggle" data-ctrl="spoof" data-val="hidden" style="margin-top:0.25rem;">hide</button>
+                  <button class="ctrl-toggle" data-ctrl="spoof" data-val="shown" style="margin-top:0.25rem;">show</button>
+                </div>
+              </div>
+            </div>
+            <div class="plate-scene">
+              <div class="plate-scene-label">Step 0 — Initial state</div>
+              <div class="scene-canvas" id="scene-nat" style="padding:1.25rem;flex-direction:column;gap:1.25rem;">
+                <div style="display:flex;gap:2rem;align-items:flex-start;flex-wrap:wrap;justify-content:center;">
+
+                  <!-- Node A -->
+                  <div style="text-align:center;">
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:#2d6a4f;margin-bottom:0.4rem;font-weight:500;">NODE A</div>
+                    <div style="border:1.5px solid #2d6a4f;border-radius:4px;padding:0.75rem;background:#f0f7f4;min-width:130px;">
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.7rem;margin-bottom:0.3rem;">A</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#57534e;">ingress:</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.7rem;color:#1c1917;">Dns('node-a.example')</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#57534e;margin-top:0.3rem;">egress:</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.7rem;color:#1c1917;">1.2.3.4</div>
+                    </div>
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;color:#a8a29e;margin-top:0.3rem;">NAT: 1.2.3.4</div>
+                  </div>
+
+                  <!-- Arrows -->
+                  <div style="display:flex;flex-direction:column;gap:1rem;justify-content:center;align-items:center;padding-top:1.5rem;">
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#a8a29e;text-align:center;">
+                      A &rarr; B: resolves Dns<br>connects to 5.6.7.8
+                    </div>
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#dc2626;text-align:center;">
+                      A &larr; B: blocked?<br>egress mismatch
+                    </div>
+                  </div>
+
+                  <!-- Node B -->
+                  <div style="text-align:center;">
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:#2d6a4f;margin-bottom:0.4rem;font-weight:500;">NODE B</div>
+                    <div style="border:1.5px solid #2d6a4f;border-radius:4px;padding:0.75rem;background:#f0f7f4;min-width:130px;">
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.7rem;margin-bottom:0.3rem;">B</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#57534e;">ingress:</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.7rem;color:#1c1917;">Dns('node-b.example')</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#57534e;margin-top:0.3rem;">egress:</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.7rem;color:#1c1917;">5.6.7.8</div>
+                    </div>
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;color:#a8a29e;margin-top:0.3rem;">NAT: 5.6.7.8</div>
+                  </div>
+
+                </div>
+                <div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:#57534e;text-align:center;max-width:400px;margin:0 auto;">
+                  A knows B's DNS name but not B's egress IP. B knows A's DNS name but not A's egress IP. Neither can dial the other directly because NAT boxes don't forward without port forwarding.
+                </div>
+              </div>
+            </div>
+            <div class="plate-source">
+              <span class="plate-source-label">Source</span>
+              <code>p2p/src/types.rs</code> &middot;
+              <code>p2p/src/authenticated/discovery/types.rs</code> &middot;
+              <code>p2p/src/authenticated/discovery/actors/listener.rs</code>
+            </div>
+            <div class="plate-caption">
+              <strong>Asymmetric { ingress, egress }</strong> separates dialable address (ingress) from expected receive address (egress). A connection from unexpected egress IP is rejected even if the dialed ingress was correct. Info is signed by the peer &mdash; egress IP cannot be forged without the private key.
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATE 5: Priority Relay -->
+        <div class="figure-plate" id="plate-relay" aria-label="Figure 5: Priority Relay Backpressure">
+          <div class="plate-header">
+            <div class="plate-title-group">
+              <div class="plate-number">Figure 5</div>
+              <h3 class="plate-title">Priority Relay Backpressure</h3>
+            </div>
+            <div class="plate-tags">
+              <span class="plate-tag">relay</span>
+              <span class="plate-tag">priority</span>
+            </div>
+          </div>
+          <div class="plate-body">
+            <div class="plate-goal">
+              <div class="plate-goal-label">Learning goal</div>
+              <p>Internalize the dual-lane relay design: <code>priority=true</code> always succeeds via unbounded high lane; <code>priority=false</code> goes through bounded low lane and returns an error (via <code>try_send</code>) when full.</p>
+            </div>
+            <div class="plate-why">
+              <div class="plate-why-label">Why it matters</div>
+              <p>In adversarial environments, a slow or malicious peer must not stall important messages. The bounded low lane returns errors on overflow so senders know they're being throttled. The unbounded high lane ensures priority messages never wait behind a slow peer's backlog.</p>
+            </div>
+            <div class="plate-controls">
+              <div class="plate-controls-label">Controls</div>
+              <div class="control-row">
+                <div class="ctrl-group">
+                  <span class="ctrl-label">Send</span>
+                  <div style="display:flex;gap:0.3rem;margin-top:0.25rem;">
+                    <button class="ctrl-toggle active" data-ctrl="relay-action" data-val="low_priority">low priority</button>
+                    <button class="ctrl-toggle" data-ctrl="relay-action" data-val="high_priority">high priority</button>
+                    <button class="ctrl-toggle" data-ctrl="relay-action" data-val="drain">drain</button>
+                  </div>
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Low lane cap.</span>
+                  <select class="ctrl-slider" data-ctrl="low-cap" style="width:90px;margin-top:0.25rem;">
+                    <option value="1">1</option>
+                    <option value="3" selected>3</option>
+                    <option value="8">8</option>
+                    <option value="32">32</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="plate-scene">
+              <div class="plate-scene-label">Idle state</div>
+              <div class="scene-canvas" style="flex-direction:column;gap:1.25rem;padding:1.25rem;" id="scene-relay">
+                <div style="display:flex;gap:2rem;align-items:stretch;flex-wrap:wrap;justify-content:center;">
+                  <!-- LOW lane -->
+                  <div style="text-align:center;min-width:200px;">
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:#57534e;margin-bottom:0.5rem;">LOW (bounded)</div>
+                    <div style="display:flex;gap:0.4rem;justify-content:center;margin-bottom:0.5rem;">
+                      <div style="width:36px;height:36px;border:1.5px solid #d6cfc4;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#a8a29e;background:#f7f4ee;">1</div>
+                      <div style="width:36px;height:36px;border:1.5px solid #d6cfc4;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#a8a29e;background:#f7f4ee;">2</div>
+                      <div style="width:36px;height:36px;border:1.5px solid #d6cfc4;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#a8a29e;background:#f7f4ee;">3</div>
+                    </div>
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#a8a29e;">slots: 0/3</div>
+                  </div>
+                  <!-- Relay box -->
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;">
+                    <div style="border:1.5px solid #1c1917;border-radius:4px;padding:1rem 1.5rem;text-align:center;background:#f7f4ee;">
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;font-weight:500;color:#1c1917;margin-bottom:0.25rem;">Relay</div>
+                      <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#57534e;">try_send semantics</div>
+                    </div>
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#57534e;">&darr; to peer</div>
+                  </div>
+                  <!-- HIGH lane -->
+                  <div style="text-align:center;min-width:120px;">
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:#2d6a4f;margin-bottom:0.5rem;">HIGH (unbounded)</div>
+                    <div style="width:60px;height:60px;border:1.5px solid #2d6a4f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:JetBrains Mono,monospace;font-size:0.85rem;color:#2d6a4f;background:#f0f7f4;">&infin;</div>
+                    <div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#2d6a4f;margin-top:0.5rem;">always succeeds</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;">
+                  <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;padding:0.3rem 0.75rem;border:1px solid #d6cfc4;border-radius:3px;color:#57534e;">messages_dropped_total: <span style="color:#1c1917;">0</span></div>
+                  <div style="font-family:JetBrains Mono,monospace;font-size:0.68rem;padding:0.3rem 0.75rem;border:1px solid #d6cfc4;border-radius:3px;color:#57534e;">messages_in_low_queue: <span style="color:#1c1917;">0</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="plate-source">
+              <span class="plate-source-label">Source</span>
+              <code>p2p/src/authenticated/relay.rs</code> &middot;
+              <code>p2p/src/authenticated/mod.rs</code>
+            </div>
+            <div class="plate-caption">
+              <strong>Non-blocking semantics.</strong> <code>try_send</code> returns an error immediately when the low lane is full &mdash; the sender does not block. The router handles the error by dropping the message and incrementing <code>messages_dropped_total</code>. Priority messages (<code>priority=true</code>) always succeed via the unbounded high lane.
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATE 6: Simulated Network -->
+        <div class="figure-plate" id="plate-simulated" aria-label="Figure 6: Simulated Network Controller">
+          <div class="plate-header">
+            <div class="plate-title-group">
+              <div class="plate-number">Figure 6</div>
+              <h3 class="plate-title">Simulated Network Controller</h3>
+            </div>
+            <div class="plate-tags">
+              <span class="plate-tag">testing</span>
+              <span class="plate-tag">determinism</span>
+            </div>
+          </div>
+          <div class="plate-body">
+            <div class="plate-goal">
+              <div class="plate-goal-label">Learning goal</div>
+              <p>Build intuition for how link parameters (latency, jitter, loss) affect message delivery, how partitions are detected and recovered from, and why deterministic seeding makes distributed bugs reproducible.</p>
+            </div>
+            <div class="plate-why">
+              <div class="plate-why-label">Why it matters</div>
+              <p>Testing distributed systems requires controlling the network. Real networks cannot be paused, slowed, or partitioned. The simulated network lets tests specify exact conditions and reproduce them deterministically.</p>
+            </div>
+            <div class="plate-controls">
+              <div class="plate-controls-label">Controls</div>
+              <div class="control-row">
+                <div class="ctrl-group">
+                  <span class="ctrl-label">Nodes</span>
+                  <div style="display:flex;gap:0.3rem;margin-top:0.25rem;">
+                    <button class="ctrl-step active" data-ctrl="sim-nodes" data-val="4">4</button>
+                    <button class="ctrl-step" data-ctrl="sim-nodes" data-val="6">6</button>
+                    <button class="ctrl-step" data-ctrl="sim-nodes" data-val="8">8</button>
+                  </div>
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Latency</span>
+                  <input type="range" class="ctrl-slider" data-ctrl="latency" min="0" max="500" value="50" style="width:90px;margin-top:0.25rem;">
+                </div>
+                <div class="ctrl-group" style="margin-left:1.5rem;">
+                  <span class="ctrl-label">Loss rate</span>
+                  <select class="ctrl-slider" data-ctrl="loss" style="width:90px;margin-top:0.25rem;">
+                    <option value="0">0%</option>
+                    <option value="5">5%</option>
+                    <option value="20">20%</option>
+                    <option value="50">50%</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="plate-scene">
+              <div class="plate-scene-label">Steady state</div>
+              <div class="scene-canvas" style="padding:1rem;" id="scene-simulated">
+                <svg class="scene-svg" viewBox="0 0 500 160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <!-- Complete graph of 4 nodes -->
+                  <!-- Edges (behind nodes) -->
+                  <line x1="125" y1="40" x2="200" y2="120" stroke="#c3d9ce" stroke-width="1.5"/>
+                  <line x1="125" y1="40" x2="325" y2="120" stroke="#c3d9ce" stroke-width="1.5"/>
+                  <line x1="200" y1="120" x2="325" y2="120" stroke="#c3d9ce" stroke-width="1.5"/>
+                  <line x1="125" y1="40" x2="375" y2="40" stroke="#c3d9ce" stroke-width="1.5"/>
+                  <line x1="200" y1="120" x2="375" y2="40" stroke="#c3d9ce" stroke-width="1.5"/>
+                  <line x1="325" y1="120" x2="375" y2="40" stroke="#c3d9ce" stroke-width="1.5"/>
+
+                  <!-- P0 -->
+                  <circle cx="125" cy="40" r="22" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="125" y="44" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#2d6a4f" font-weight="500">P0</text>
+                  <text x="125" y="70" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7.5" fill="#57534e">50ms 0%</text>
+
+                  <!-- P1 -->
+                  <circle cx="200" cy="120" r="22" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="200" y="124" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#2d6a4f" font-weight="500">P1</text>
+                  <text x="200" y="150" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7.5" fill="#57534e">50ms 0%</text>
+
+                  <!-- P2 -->
+                  <circle cx="325" cy="120" r="22" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="325" y="124" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#2d6a4f" font-weight="500">P2</text>
+                  <text x="325" y="150" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7.5" fill="#57534e">50ms 0%</text>
+
+                  <!-- P3 -->
+                  <circle cx="375" cy="40" r="22" fill="#f0f7f4" stroke="#2d6a4f" stroke-width="1.5"/>
+                  <text x="375" y="44" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#2d6a4f" font-weight="500">P3</text>
+                  <text x="375" y="70" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7.5" fill="#57534e">50ms 0%</text>
+
+                  <!-- Link quality legend -->
+                  <rect x="10" y="5" width="8" height="8" fill="#2d6a4f" rx="1"/>
+                  <text x="22" y="12" font-family="JetBrains Mono,monospace" font-size="8" fill="#57534e">&gt;95% delivery</text>
+                  <rect x="90" y="5" width="8" height="8" fill="#c3d9ce" rx="1"/>
+                  <text x="102" y="12" font-family="JetBrains Mono,monospace" font-size="8" fill="#57534e">80-95%</text>
+                  <rect x="150" y="5" width="8" height="8" fill="#f7f4ee" stroke="#d6cfc4" rx="1"/>
+                  <text x="162" y="12" font-family="JetBrains Mono,monospace" font-size="8" fill="#57534e">&lt;80%</text>
+                </svg>
+              </div>
+            </div>
+            <div class="plate-source">
+              <span class="plate-source-label">Source</span>
+              <code>p2p/src/simulated/mod.rs</code> &middot;
+              <code>p2p/src/simulated/ingress.rs</code>
+            </div>
+            <div class="plate-caption">
+              <strong>Determinism.</strong> <code>commonware_utils::test_rng_seeded(seed)</code> drives all randomness. Two test runs with the same seed produce identical delivery order. Latency is <code>Normal(latency, jitter)</code> per message (produces burst delays). Loss is independent <code>success_rate</code> draw per message (not burst loss).
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ Section 4 ══════════════════════════════════════════════ -->
+        <section id="s4">
+          <h2>Execution Flow and Lifecycle</h2>
+
+          <p>The chapter content covers four flows: startup sequence, outbound connection, inbound connection, and application send. The actor topology plate above (Figure 1) shows the five actors and their mailboxes in a horizontal flow diagram.</p>
+
+          <p>The <strong>outbound dial path</strong> flows: <code>dialer.tick()</code> &rarr; <code>tracker.dialable()</code> &rarr; reservation &rarr; encrypted handshake &rarr; <code>spawner</code> &rarr; <code>tracker.connect()</code> &rarr; <code>router.ready()</code>.</p>
+
+          <p>The <strong>inbound accept path</strong> flows: <code>listener.accept()</code> &rarr; handshake &rarr; <code>tracker.listen()</code> &rarr; <code>spawner</code> &rarr; <code>tracker.connect()</code> &rarr; <code>router.ready()</code>.</p>
+
+          <p>The <strong>application send path</strong>: <code>sender.send()</code> &rarr; router mailbox &rarr; <code>relay.send()</code> &rarr; peer actor &rarr; encrypted stream. If low-priority and the relay's low lane is full, the router drops the message and increments a metric. High-priority messages always go through the unbounded high lane.</p>
+
+          <div class="callout callout-src" role="note">
+            <div class="callout-label">Source</div>
+            <p>The full startup sequence, connection flows, and application send path are documented in <code>p2p/src/authenticated/discovery/network.rs</code> and <code>p2p/src/authenticated/discovery/actors/router/actor.rs</code>. The <code>Metadata</code> enum in the tracker carries who initiated each connection and (for listener) the observed egress IP.</p>
+          </div>
+        </section>
+
+        <!-- ══ Section 5 ══════════════════════════════════════════════ -->
+        <section id="s5">
+          <h2>Concurrency, Protocol, and Systems Semantics</h2>
+
+          <p>This is where the earlier pieces meet real network pressure: fan-out, stale
+            knowledge, retries, uneven traffic, and slow peers. Read this section less as
+            "what knobs exist?" and more as "what kinds of bad network behavior is this
+            system trying to turn into something survivable?"</p>
+
+          <p>The five actors communicate via message passing with fixed mailbox sizes:</p>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Actor</th>
+                <th>Mailbox</th>
+                <th>Bound/Unbounded</th>
+                <th>Backpressure</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>tracker</code></td><td><code>UnboundedMailbox</code></td><td>Unbounded</td><td>Never blocks sender</td></tr>
+              <tr><td><code>router</code></td><td><code>Mailbox</code></td><td>Bounded (<code>mailbox_size</code>)</td><td>App sender blocks at Mailbox when full; relay drops low-priority via <code>try_send</code></td></tr>
+              <tr><td><code>spawner</code></td><td><code>Mailbox</code></td><td>Bounded (<code>mailbox_size</code>)</td><td>Blocks listener/dialer when full; connection stalls until slot frees</td></tr>
+              <tr><td><code>listener</code></td><td>N/A (event loop)</td><td>&mdash;</td><td>Rate limits via <code>KeyedRateLimiter</code></td></tr>
+              <tr><td><code>dialer</code></td><td>N/A (event loop)</td><td>&mdash;</td><td><code>select_loop!</code> on sleep tick</td></tr>
+            </tbody>
+          </table>
+
+          <p>The bounded mailboxes on router and spawner provide <strong>backpressure</strong>: if the router's event loop falls behind, <code>sender.send()</code> blocks at the <code>mailbox_size</code> threshold rather than growing memory indefinitely.</p>
+
+          <p>Discovery gossip uses an <strong>epidemic broadcast</strong> with compact bitvectors. With <code>N</code> fully-connected honest peers and zero failures, all bits converge to <code>1</code> within <code>&#x2308;log&#x2082;(N)&#x2309;</code> gossip rounds. This bound is theoretically sound for epidemic broadcast with full connectivity; the source does not include a machine-checked proof of this property.</p>
+        </section>
+
+        <!-- ══ Section 6 ══════════════════════════════════════════════ -->
+        <section id="s6">
+          <h2>Failure Modes, Cancellation, and Correctness Concerns</h2>
+
+          <p>Networking code is where vague explanations stop being harmless. A peer may be
+            malicious, merely slow, or just reachable from an address you were not expecting.
+            The point of these failure sections is to separate what the protocol forbids from
+            what it merely mitigates.</p>
+
+          <div class="callout callout-inv" role="note">
+            <div class="callout-label">What a Byzantine Peer Cannot Do</div>
+            <p>Given valid <code>Info</code> signatures and a correct <code>InfoVerifier</code>: cannot forge address announcements, cannot announce a future timestamp, cannot announce self as another peer, cannot trigger unbounded memory growth, and cannot block honest peers indefinitely (<code>block_duration</code> is finite).</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Failure</th>
+                <th>Symptom</th>
+                <th>Recovery</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>DNS resolution failure</td><td>Peer shows as <code>0</code> in bitvector after <code>dial_fail_limit</code> attempts</td><td>Inbound connections still accepted; gossip eventually learns working address</td></tr>
+              <tr><td>TCP connection refused</td><td>Dial fails; <code>dial_fail_limit</code> decrements; bitvector clears bit</td><td>Re-dial after cooldown; peer may still be reachable inbound</td></tr>
+              <tr><td>Encrypted handshake timeout</td><td><code>handshake_timeout</code> fires; connection dropped</td><td>Dialer retries on next tick</td></tr>
+              <tr><td>Peer crashes and restarts with new IP</td><td>Old connection closed; <code>Info</code> with new IP gossiped</td><td>Bitvectors converge to new address within <code>log&#x2082;(N)</code> rounds</td></tr>
+              <tr><td>Byzantine peer sends invalid <code>Info</code></td><td><code>InfoVerifier</code> rejects; peer is <code>block!</code>-ed</td><td>Block duration expires; peer can reconnect with valid <code>Info</code></td></tr>
+              <tr><td>Application receive buffer full</td><td><code>Data</code> dropped; discovery protocol unaffected</td><td>Application must drain buffer faster</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- ══ Section 7 ══════════════════════════════════════════════ -->
+        <section id="s7">
+          <h2>How to Read the Source Code</h2>
+
+          <p>Do not read the p2p crate as one giant actor graph all at once. Read it in layers:
+            identity and addressing first, then wire format, then actor ownership, and only then
+            the live event loops. That order keeps the transport design visible.</p>
+
+          <p>A recommended reading order for the <code>commonware-p2p</code> source:</p>
+
+          <ol>
+            <li><code>p2p/src/types.rs</code> &mdash; All addressing semantics (Ingress, Address, DNS resolution, private IP filtering, wire encoding). Every subsequent file assumes familiarity with these types.</li>
+            <li><code>p2p/src/authenticated/mod.rs</code> &mdash; The trait surface (<code>Manager</code>, <code>AddressableManager</code>, <code>Sender</code>, <code>Receiver</code>, <code>Blocker</code>). Understanding what the <code>Oracle</code> actually implements clarifies the two modes.</li>
+            <li><code>p2p/src/authenticated/mailbox.rs</code> &mdash; <code>Mailbox</code> (bounded) and <code>UnboundedMailbox</code> wrappers around <code>mpsc::Sender</code>. Read this to understand the backpressure primitive before tracing it through actors.</li>
+            <li><code>p2p/src/authenticated/discovery/types.rs</code> &mdash; <code>Payload</code>, <code>Info</code>, <code>InfoVerifier</code>, <code>BitVec</code>. This is where the security model is enforced.</li>
+            <li><code>p2p/src/authenticated/discovery/network.rs</code> &mdash; The <code>Network::new</code> constructor shows how all five actors are wired together.</li>
+            <li><code>p2p/src/authenticated/discovery/actors/tracker/actor.rs</code> &mdash; The tracker owns <code>Directory</code>, <code>Record</code>s, <code>Reservation</code>s, and processes all tracker message types.</li>
+            <li><code>p2p/src/authenticated/discovery/actors/router/actor.rs</code> &mdash; The router holds <code>BTreeMap&lt;P, Relay&lt;EncodedData&gt;&gt;</code> and processes <code>Ready</code>, <code>Release</code>, <code>Content</code>, and <code>SubscribePeers</code> messages.</li>
+            <li><code>p2p/src/authenticated/discovery/actors/spawner/actor.rs</code> &mdash; The spawner is a supervisor that bridges connection establishment to peer actors. Calls <code>tracker.connect()</code> and <code>router.ready()</code> on handoff.</li>
+            <li><code>p2p/src/authenticated/discovery/actors/listener.rs</code> &mdash; Inbound connection handler. Applies IP/subnet rate limits, private IP filtering, and concurrent handshake limits before handing off to <code>handshake()</code>.</li>
+            <li><code>p2p/src/authenticated/discovery/actors/dialer.rs</code> &mdash; Timed outbound connection loop. Resolves DNS, picks a random resolved address, and calls <code>encrypted::dial()</code>.</li>
+            <li><code>p2p/src/authenticated/relay.rs</code> &mdash; <code>try_send</code> semantics &mdash; priority senders never block, low-priority senders return an error immediately when the low lane is full.</li>
+            <li><code>p2p/src/simulated/mod.rs</code> &mdash; Read last to understand the test infrastructure.</li>
+          </ol>
+
+          <div class="callout callout-warn" role="note">
+            <div class="callout-label">Key pattern</div>
+            <p><code>Reservation</code> and <code>Releaser</code>: <code>Reservation</code> holds a <code>Releaser</code> which sends a <code>Message::Release</code> on drop. Any early return in the dialer or listener automatically releases the tracker reservation, preventing leaks.</p>
+          </div>
+        </section>
+
+        <!-- ══ Section 8 ══════════════════════════════════════════════ -->
+        <section id="s8">
+          <h2>Glossary and Further Reading</h2>
+
+          <dl style="font-size:0.92rem;" role="list">
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Bitvector (BitVec)</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">A compact representation of which peers a node knows how to dial, encoded as a bitmap over a sorted peer list at a given epoch index.</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Bootstrapper</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">A <code>(PublicKey, Ingress)</code> pair used to seed discovery. Peers attempt to dial bootstrappers first, then learn about the rest of the network via gossip.</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Egress IP</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">The source IP address observed on an inbound connection. Used in <code>Address::Asymmetric</code> for NAT traversal and spoofing prevention.</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Info</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">A signed attestation <code>(ingress, timestamp)</code> used in gossip. Prevents address forgery. Note: <code>public_key</code> is <em>not</em> covered by the signature.</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Oracle</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">The handle returned by <code>Network::new</code>. Implements <code>Manager</code> (discovery) or <code>AddressableManager</code> (lookup).</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Payload</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">The four-variant enum (<code>Data</code>, <code>Greeting</code>, <code>BitVec</code>, <code>Peers</code>) that forms the entire wire protocol.</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Priority relay</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">A two-lane mpsc facade where <code>priority=true</code> messages go through an unbounded high lane and <code>priority=false</code> messages go through a bounded low lane. When low lane is full, <code>try_send</code> returns an error immediately.</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Reservation</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">A tracker-issued permit to dial or accept a connection. Carried from dialer/listener to spawner to tracker to release.</dd>
+
+            <dt style="font-family:var(--mono);font-size:0.82rem;color:var(--ink);margin-top:1rem;"><code>Synchrony bound</code></dt>
+            <dd style="margin-left:0;color:var(--ink-muted);line-height:1.65;">A <code>Duration</code> that bounds how far into the future a gossip timestamp can be. Protects against clock skew and replay.</dd>
+          </dl>
+        </section>
+
+      </article><!-- /prose -->
+
+      <!-- ── End marker ─────────────────────────────────────────── -->
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">&#10022; &#10022; &#10022;</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <!-- ── Chapter footer ─────────────────────────────────────── -->
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="/commonware-book/runtime/page.html" class="foot-prev">
+          <span class="foot-dir">&#8592; previous</span>
+          <span class="foot-title">The Abstract Executor</span>
+          <span class="foot-sub">commonware-runtime</span>
+        </a>
+        <div class="foot-center">
+          commonware-p2p<br>
+          <span style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;">chapter 2 of 3</span>
+        </div>
+        <a href="/commonware-book/consensus/page.html" class="foot-next">
+          <span class="foot-dir">next &#8594;</span>
+          <span class="foot-title">commonware-consensus</span>
+          <span class="foot-sub">chapter 3 &middot; ALPHA</span>
+        </a>
+      </nav>
+
+    </main><!-- /page-content -->
+
+    <!-- Right-rail TOC (desktop) -->
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list">
+        <li class="toc-item"><a class="toc-link" href="#bg">Backgrounder</a></li>
+        <li class="toc-item"><a class="toc-link" href="#s1">1 &mdash; What Problem Does This Module Solve?</a></li>
+        <li class="toc-item"><a class="toc-link" href="#s2">2 &mdash; Mental Model</a></li>
+        <li class="toc-item"><a class="toc-link" href="#s3">3 &mdash; Core Abstractions</a>
+          <ul class="toc-sub">
+            <li><a class="toc-link" href="#s3-1">3.1 &mdash; Addressing</a></li>
+            <li><a class="toc-link" href="#s3-2">3.2 &mdash; Wire Protocol</a></li>
+            <li><a class="toc-link" href="#s3-3">3.3 &mdash; Signed Peer Records</a></li>
+            <li><a class="toc-link" href="#s3-4">3.4 &mdash; Priority Relay</a></li>
+            <li><a class="toc-link" href="#s3-5">3.5 &mdash; Mailbox Primitives</a></li>
+            <li><a class="toc-link" href="#s3-6">3.6 &mdash; Shared Trait Surface</a></li>
+          </ul>
+        </li>
+        <li class="toc-item"><a class="toc-link" href="#s4">4 &mdash; Execution Flow</a></li>
+        <li class="toc-item"><a class="toc-link" href="#s5">5 &mdash; Protocol Semantics</a></li>
+        <li class="toc-item"><a class="toc-link" href="#s6">6 &mdash; Failure Modes</a></li>
+        <li class="toc-item"><a class="toc-link" href="#s7">7 &mdash; Source Reading Guide</a></li>
+        <li class="toc-item"><a class="toc-link" href="#s8">8 &mdash; Glossary</a></li>
+      </ul>
+    </aside>
+
+  </div><!-- /page-shell -->
+
+  <!-- ── Site footer ──────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <a href="/">commonware</a>
+    <span>&middot;</span>
+    <a href="/book">book</a>
+    <span>&middot;</span>
+    <a href="https://github.com/commonwarexyz/monorepo">GitHub</a>
+    <span>&middot;</span>
+    &copy; 2026 Commonware, Inc.
+  </footer>
+
+  <!-- ── Scripts ──────────────────────────────────────────────────── -->
+  <script src="/shared.js"></script>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const media = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      root.dataset.theme = saved || (media.matches ? 'dark' : 'light');
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    // ── TOC active-link tracking ────────────────────────────────────
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose section[id]');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          tocLinks.forEach(l => l.classList.remove('active'));
+          const active = document.querySelector(`.toc-link[href="#${e.target.id}"]`);
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach(s => obs.observe(s));
+
+    // ── Progress bar ─────────────────────────────────────────────────
+    const progFill = document.getElementById('prog-fill');
+    const main = document.getElementById('main-content');
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = main.offsetHeight - window.innerHeight;
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+
+      // Update section label
+      const secLabel = document.querySelector('.prog-label');
+      const active = document.querySelector('.toc-link.active');
+      if (active && secLabel) {
+        const text = active.textContent;
+        const match = text.match(/^(\d+)/);
+        if (match) secLabel.textContent = `sec. ${match[1]} of 8`;
+      }
+    }, { passive: true });
+
+    // ── Control button interactions ──────────────────────────────────
+    document.querySelectorAll('.ctrl-toggle, .ctrl-step').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = btn.closest('.ctrl-group') || btn.parentElement.parentElement;
+        const siblings = group.querySelectorAll('.ctrl-toggle, .ctrl-step');
+        siblings.forEach(s => s.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  </script>
+
+</body>
+</html>

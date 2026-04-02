@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-invariants — commonware-book</title>
+  <meta name="description" content="Most teams already know the two extremes. Ordinary unit tests are cheap and clear, but they only check the few examples we remembered to write down. Full fuzzing is stronger, but it often arrives with">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / invariants
+      </span>
+      <span class="chapter-title">commonware-invariants</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../parallel/page.html">← prev</a>
+        <a class="next" href="../collector/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · invariants · Complete · 11 min read</div>
+    <h1 class="ch-title">commonware-invariants</h1>
+    <p class="ch-deck">Make Invariant Testing the Default</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Most teams already know the two extremes. Ordinary unit tests are cheap and clear, but they only check the few examples we remembered to write down. Full fuzzing is stronger, but it often arrives with enough harnessing, build setup, and replay machinery that the first useful invariant never gets a fair hearing.
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 id="opening-apparatus">Opening Apparatus</h2>
+<p><strong>Promise.</strong> This chapter shows how <code>commonware-invariants</code> makes invariant-driven testing cheap enough to live beside ordinary unit tests.</p>
+<p><strong>Crux.</strong> The crate is not trying to replace serious fuzzing. It is trying to make the <em>first useful invariant search</em> so easy that authors reach for it before they resign themselves to a handful of examples.</p>
+<p><strong>Primary invariant.</strong> A failure should be both discoverable by exploring many nearby structured inputs and replayable through one compact branch token.</p>
+<p><strong>Naive failure.</strong> The usual trap is to stand between two bad defaults: either write one or two example tests and hope they generalize, or postpone the whole effort until there is time for a full fuzz target. <code>minifuzz</code> exists in that gap.</p>
+<p><strong>Reading map.</strong></p>
+<ul><li>Start with <code>invariants/src/minifuzz.rs</code>; almost everything important lives there.</li><li><code>Builder</code> is the search contract: it sets the budget, the replay token, and the stopping rules.</li><li><code>Branch</code> and <code>Sampler</code> show how the search stays local while still moving to nearby possibilities.</li><li>The tests at the bottom pin down the replay and termination behavior that the harness must preserve.</li></ul>
+<p><strong>Assumption ledger.</strong></p>
+<ul><li>The reader is comfortable with property-style testing and <code>arbitrary</code>.</li><li>The chapter is about local search inside unit-test territory, not coverage-guided fuzzing infrastructure.</li><li>A good invariant still matters more than the tool.</li></ul>
+<h2 id="background">Background</h2>
+<p>Testing has three broad modes. Example tests check a few hand-picked cases. Property tests check a rule across many generated cases. Fuzzers explore a much larger input space and try to uncover unexpected states. <code>commonware-invariants</code> borrows the most useful idea from each one: state a rule, explore nearby inputs, and keep the failure reproducible.</p>
+<p>The basic vocabulary is worth naming clearly:</p>
+<ul><li><strong>Invariant</strong>: something that should stay true across many inputs.</li><li><strong>Search space</strong>: the family of nearby cases the harness can explore.</li><li><strong>Structured input</strong>: raw bytes interpreted as a typed object.</li><li><strong>Mutation</strong>: a small change that moves one case to a nearby case.</li><li><strong>Replay</strong>: the ability to reproduce the same failing path later.</li></ul>
+<p>The naive alternatives are both familiar. One is to stop at a few examples and hope the examples cover the real boundary cases. The other is to jump straight to a heavyweight fuzzing setup when the first useful question is still small. The first fails because it is too narrow. The second fails because the setup cost can outrun the bug hunt.</p>
+<p>This crate sits in the middle. It assumes many bugs live near the happy path, where small shifts in shape, length, or ordering reveal a broken assumption. It also assumes that a useful test must be repeatable, because a discovered bug is not much help if nobody can get back to it.</p>
+<p>The tradeoff is depth. A local invariant search is not coverage-guided fuzzing, and it does not try to be. It gives you a cheap, deterministic way to ask, &quot;what if this structure is slightly different?&quot; That is often enough to expose the bug that plain examples would miss.</p></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part III. Shared Machinery</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">16 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">11 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-collector</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-invariants-are-the-unit-of-thought">3.1 Invariants Are the Unit of Thought</a></li><li><a class="toc-link" href="#3-2-branch-is-the-search-identity">3.2 Branch Is the Search Identity</a></li><li><a class="toc-link" href="#3-3-sampler-is-a-small-mutation-engine-not-a-corpus-manager">3.3 Sampler Is a Small Mutation Engine, Not a Corpus Manager</a></li><li><a class="toc-link" href="#3-4-result-classification-is-how-the-search-learns">3.4 Result Classification Is How the Search Learns</a></li><li><a class="toc-link" href="#3-5-builder-keeps-search-bounded-but-replayable">3.5 Builder Keeps Search Bounded but Replayable</a></li><li><a class="toc-link" href="#3-6-arbitrary-unstructured-is-the-boundary-between-bytes-and-meaning">3.6 arbitrary::Unstructured Is the Boundary Between Bytes and Meaning</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-search-starts-from-either-reproduction-or-exploration">4.1 The Search Starts From Either Reproduction or Exploration</a></li><li><a class="toc-link" href="#4-2-one-search-iteration-has-a-clear-lifecycle">4.2 One Search Iteration Has a Clear Lifecycle</a></li><li><a class="toc-link" href="#4-3-search-budgets-count-successful-tries-not-every-allocation-of-bytes">4.3 Search Budgets Count Successful Tries, Not Every Allocation of Bytes</a></li><li><a class="toc-link" href="#4-4-branch-advancement-is-the-smallest-form-of-search-tree-traversal">4.4 Branch Advancement Is the Smallest Form of Search-Tree Traversal</a></li><li><a class="toc-link" href="#4-5-the-tests-at-the-bottom-are-the-real-spec">4.5 The Tests at the Bottom Are the Real Spec</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-low-ceremony">5.1 Low Ceremony</a></li><li><a class="toc-link" href="#5-2-deterministic-replay">5.2 Deterministic Replay</a></li><li><a class="toc-link" href="#5-3-local-exploration">5.3 Local Exploration</a></li><li><a class="toc-link" href="#5-4-bounded-time">5.4 Bounded Time</a></li><li><a class="toc-link" href="#5-5-habit-formation">5.5 Habit Formation</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-it-is-not-coverage-guided">6.1 It Is Not Coverage-Guided</a></li><li><a class="toc-link" href="#6-2-weak-invariants-stay-weak">6.2 Weak Invariants Stay Weak</a></li><li><a class="toc-link" href="#6-3-input-shape-matters">6.3 Input Shape Matters</a></li><li><a class="toc-link" href="#6-4-long-horizon-bugs-still-need-heavier-tools">6.4 Long-Horizon Bugs Still Need Heavier Tools</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>Most teams already know the two extremes. Ordinary unit tests are cheap and clear, but they only check the few examples we remembered to write down. Full fuzzing is stronger, but it often arrives with enough harnessing, build setup, and replay machinery that the first useful invariant never gets a fair hearing.</p>
+<p><code>commonware-invariants</code> exists to close that gap. Its job is to make invariant-driven testing cheap enough to live beside the unit test. The crate does not try to replace serious fuzzing. It tries to make the first useful step so light that people actually take it.</p>
+<p>When the question is, &quot;what should always be true here?&quot;, the answer should not be, &quot;first build a separate fuzzing project.&quot; The answer should be, &quot;write the invariant, then let <code>minifuzz</code> search a small space of structured inputs.&quot;</p>
+<p>That is the habit this crate wants to teach: test the rule, not just the example, and make that habit easy enough to repeat.</p>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>The cleanest mental model is a <strong>pocket searcher</strong>.</p>
+<p>Imagine a unit test that can get curious. You give it a rule instead of a single sample. It starts from a small buffer, nudges that buffer in simple ways, interprets the bytes as structured data, and keeps asking whether the rule still holds. If the answer is no, it keeps the evidence. If the answer is yes, it keeps trying until the search budget says stop.</p>
+<p>That is not full fuzzing. It is smaller, local, and intentionally modest. But it keeps the best part of fuzzing: many related questions instead of one example. And it keeps the best part of unit tests: it is cheap enough to live next to the code it protects.</p>
+<p>The useful picture is this:</p>
+<ul><li>the invariant is the promise,</li><li>the sampler is the curiosity,</li><li>the search budget is the discipline,</li><li>and the replay token is the receipt.</li></ul>
+<p>If a failure appears, the test does not just say &quot;something went wrong.&quot; It prints a token you can paste back in and reproduce the same path.</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-invariants-are-the-unit-of-thought">3.1 Invariants Are the Unit of Thought</h3>
+<p>The crate does not ask you to organize tests around a pile of hand-picked examples. It asks you to state a rule that should survive many inputs.</p>
+<p>That matters because protocol bugs are usually not &quot;this one example string is wrong.&quot; They are &quot;the system accepted a family of inputs it should have rejected&quot; or &quot;the state machine breaks when the input is slightly rearranged.&quot; An invariant turns that into something searchable.</p>
+<p>This is why the chapter should begin from the rule, not from the harness. The harness only matters if the property says something wider than &quot;this one case worked.&quot;</p>
+<h3 id="3-2-branch-is-the-search-identity">3.2 <code>Branch</code> Is the Search Identity</h3>
+<p>The most distinctive type in <code>minifuzz.rs</code> is <code>Branch</code>.</p>
+<p>It stores three numbers:</p>
+<ul><li><code>seed</code>,</li><li><code>thread</code>,</li><li><code>size</code>.</li></ul>
+<p>Together these become the branch token printed on failure as <code>MINIFUZZ_BRANCH = 0x...</code>.</p>
+<p>That token is not just a debugging ornament. It is the identity of the current search path:</p>
+<ul><li><code>seed</code> anchors the overall random family,</li><li><code>thread</code> distinguishes one local branch of exploration from the next,</li><li><code>size</code> tracks how far this branch has grown its input.</li></ul>
+<p>The <code>Display</code> implementation turns that state into a 24-hex-digit receipt. The parser turns it back into a <code>Branch</code>. That makes failures portable. The test runner can rediscover the same path without the author reconstructing the seed, iteration count, or mutation sequence by hand.</p>
+<h3 id="3-3-sampler-is-a-small-mutation-engine-not-a-corpus-manager">3.3 <code>Sampler</code> Is a Small Mutation Engine, Not a Corpus Manager</h3>
+<p>The sampler is intentionally modest.</p>
+<p>It keeps:</p>
+<ul><li>one RNG,</li><li>one current buffer,</li><li>one remaining-count budget for the current branch,</li><li>and one memory of how many bytes the test body actually consumed last time.</li></ul>
+<p>That last field, <code>last_bytes_used</code>, is more important than it first appears. When the test returns <code>IncorrectFormat</code>, the harness learns how much of the sample was actually meaningful before parsing failed. Later strategy choices can use that information to avoid blindly growing unused suffix bytes.</p>
+<p>The mutation strategies themselves are deliberately simple:</p>
+<ul><li>add more bytes,</li><li>modify the prefix,</li><li>copy a portion of the existing bytes,</li><li>clear non-prefix bytes,</li><li>apply arithmetic nudges outside the prefix.</li></ul>
+<p>This is not trying to rival a coverage-guided engine. It is trying to explore a useful local neighborhood around the current structured shape.</p>
+<h3 id="3-4-result-classification-is-how-the-search-learns">3.4 Result Classification Is How the Search Learns</h3>
+<p>The search loop in <code>Builder::test</code> does not treat every non-success the same. It classifies outcomes into different search signals.</p>
+<p>If the test body panics, that is a real failure. The harness reports the branch token and stops.</p>
+<p>If the test returns <code>arbitrary::Error::NotEnoughData</code>, that means the current sample was simply too short to instantiate the structured case. The harness responds by forcibly growing the buffer.</p>
+<p>If the test returns <code>arbitrary::Error::IncorrectFormat</code>, that means the sample did become structured enough to say something about the prefix, even though it did not become a valid full case. The harness records how many bytes were actually consumed so the next mutation can be smarter.</p>
+<p>If the test succeeds, the attempt counts as a real try and advances the search budget.</p>
+<p>This classification is the quiet center of the crate. It is how a tiny harness extracts value from malformed or partial samples without needing global coverage feedback.</p>
+<h3 id="3-5-builder-keeps-search-bounded-but-replayable">3.5 <code>Builder</code> Keeps Search Bounded but Replayable</h3>
+<p><code>Builder</code> is the crate&#x27;s control surface. It sets the seed, the search limit, the wall-clock limit, the minimum iteration floor, and the reproduction token. The important design choice is that time and count bounds are allowed to coexist.</p>
+<p><code>with_search_limit</code> caps the number of successful tries directly. <code>with_search_time</code> caps runtime by wall-clock duration. <code>with_min_iterations</code> says the harness must still perform at least some minimum number of real tries even if the time budget is already exhausted.</p>
+<p>That last rule is what keeps a zero-time or near-zero-time search from degenerating into &quot;did nothing.&quot; The test <code>min_iterations_overrides_search_time</code> exists precisely to nail that down.</p>
+<p><code>with_reproduce</code> is the bridge from discovery back to development. It turns the printed token into the initial branch and skips all the guesswork.</p>
+<h3 id="3-6-arbitrary-unstructured-is-the-boundary-between-bytes-and-meaning">3.6 <code>arbitrary::Unstructured</code> Is the Boundary Between Bytes and Meaning</h3>
+<p>The harness starts from raw bytes, but the test body almost never cares about raw bytes by themselves. It cares about a structure:</p>
+<ul><li>a plan,</li><li>a message,</li><li>a fragment,</li><li>a tree,</li><li>a set of options,</li><li>or some other typed object the code actually reasons about.</li></ul>
+<p><code>Unstructured</code> is where those bytes become a meaningful question.</p>
+<p>This is why the crate belongs in the book of a systems library. Many bugs hide exactly at the point where a byte stream first becomes structure. <code>minifuzz</code> does not search abstract entropy. It searches nearby structured cases.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<p>The control flow is short, which is part of the design.</p>
+<h3 id="4-1-the-search-starts-from-either-reproduction-or-exploration">4.1 The Search Starts From Either Reproduction or Exploration</h3>
+<p><code>Builder::test</code> begins by choosing the starting branch.</p>
+<p>The priority order is:</p>
+<ol><li>explicit <code>with_reproduce(...)</code>,</li><li>explicit <code>with_seed(...)</code>,</li><li><code>MINIFUZZ_BRANCH</code> from the environment,</li><li>otherwise a random branch seed.</li></ol>
+<p>That ordering matters because it makes reproduction a first-class mode, not an afterthought. The same API handles both &quot;go look around&quot; and &quot;re-run this exact failure.&quot;</p>
+<h3 id="4-2-one-search-iteration-has-a-clear-lifecycle">4.2 One Search Iteration Has a Clear Lifecycle</h3>
+<p>A single iteration looks like this:</p>
+<pre><code class="language-text">branch
+  -&gt; sampler produces bytes
+  -&gt; bytes become Unstructured
+  -&gt; test body interprets structure
+  -&gt; result is classified
+  -&gt; sampler learns or branch advances</code></pre>
+<p>That lifecycle is why the crate feels light. There is no external corpus, no coverage engine, and no out-of-process fuzzer handshake. The whole search is a loop inside a test.</p>
+<h3 id="4-3-search-budgets-count-successful-tries-not-every-allocation-of-bytes">4.3 Search Budgets Count Successful Tries, Not Every Allocation of Bytes</h3>
+<p>One subtle but important rule: the harness increments <code>tries</code> only on <code>Ok(())</code>.</p>
+<p>That means malformed inputs do not count as fully explored cases. A test that spends ten samples merely discovering that the current buffer is too short or poorly shaped has not yet consumed ten units of real search budget.</p>
+<p>This is another place where the tests act as a contract:</p>
+<ul><li><code>incorrect_format_does_not_count_as_try</code></li><li><code>search_limit_reduces_min_iterations</code></li></ul>
+<p>Together they explain how the crate thinks about &quot;enough search.&quot;</p>
+<h3 id="4-4-branch-advancement-is-the-smallest-form-of-search-tree-traversal">4.4 Branch Advancement Is the Smallest Form of Search-Tree Traversal</h3>
+<p>When one sampler path runs out of local room, the harness calls <code>branch.next()</code> and switches the sampler to the new branch.</p>
+<p>This is not a deep search tree, but it is enough to give the harness a second dimension beyond &quot;keep mutating the same bytes forever.&quot; The search can move to nearby branches while keeping the same overall format and replay discipline.</p>
+<h3 id="4-5-the-tests-at-the-bottom-are-the-real-spec">4.5 The Tests at the Bottom Are the Real Spec</h3>
+<p>The tests in <code>minifuzz.rs</code> are unusually important because they pin the behavior that makes the harness useful: structured searches still find real panics, replay tokens reproduce the same failure, malformed inputs do not fake progress, and time limits never erase the minimum-iteration rule. That is a better spec than prose alone.</p>
+<hr>
+<h2 id="5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</h2>
+<h3 id="5-1-low-ceremony">5.1 Low Ceremony</h3>
+<p>If the harness is small enough to live in a test module, the invariant gets written sooner. That is the economic argument behind the crate.</p>
+<h3 id="5-2-deterministic-replay">5.2 Deterministic Replay</h3>
+<p>A failure must be reproducible without guesswork, and the branch token gives the bug a handle.</p>
+<h3 id="5-3-local-exploration">5.3 Local Exploration</h3>
+<p>Many useful bugs are not far away from the happy path, and a small mutation loop can find them quickly when the invariant is phrased well.</p>
+<h3 id="5-4-bounded-time">5.4 Bounded Time</h3>
+<p>Full fuzzing is valuable, but not every check deserves a long-running setup. This crate gives you a version of the same idea that can run as part of a normal test workflow.</p>
+<h3 id="5-5-habit-formation">5.5 Habit Formation</h3>
+<p>The real win is not that this harness is powerful enough to replace other testing. The real win is that it is simple enough to become a habit.</p>
+<hr>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>This crate is intentionally smaller than a full fuzzing system, so it has to be honest about what it cannot do.</p>
+<h3 id="6-1-it-is-not-coverage-guided">6.1 It Is Not Coverage-Guided</h3>
+<p>There is no coverage feedback loop, no corpus minimization, and no claim that the harness will discover the deepest state-space bugs on its own.</p>
+<h3 id="6-2-weak-invariants-stay-weak">6.2 Weak Invariants Stay Weak</h3>
+<p>If the property is vague, the test will be vague. If the property only describes the obvious happy path, the harness will only keep confirming the obvious happy path.</p>
+<h3 id="6-3-input-shape-matters">6.3 Input Shape Matters</h3>
+<p>If the structure induced by <code>arbitrary</code> is too rigid, the harness may spend much of its time on malformed samples. That is not always wasted work, but it can limit how much semantic territory the current budget explores.</p>
+<h3 id="6-4-long-horizon-bugs-still-need-heavier-tools">6.4 Long-Horizon Bugs Still Need Heavier Tools</h3>
+<p>A protocol bug that appears only after a long execution history, or only after coverage-guided exploration finds a narrow branch, may still deserve a real fuzzing target.</p>
+<p>The right reading of these limits is not &quot;the crate is weak.&quot; It is &quot;the crate is small on purpose.&quot; It is a bridge, not the whole road.</p>
+<hr>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>Start with <code>invariants/src/minifuzz.rs</code> itself, then read <code>Branch</code> and <code>Sampler</code> as the mechanism for local search, <code>Builder</code> as the budget and replay policy, <code>Builder::test</code> as the full loop, and the tests as the contract for what counts as progress or failure. <code>invariants/README.md</code> is only the shortest external summary; the real explanation is in the source.</p>
+<hr>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>invariant</strong>: a rule the code should satisfy across many inputs.</li><li><strong>branch token</strong>: the compact hex identity of a specific search path.</li><li><strong>sampler</strong>: the local mutation engine that turns one buffer into many nearby cases.</li><li><strong>NotEnoughData</strong>: a signal that the current sample is too short and should be grown.</li><li><strong>IncorrectFormat</strong>: a signal that the sample had partial structure and revealed how many bytes were meaningfully consumed.</li><li><strong>successful try</strong>: a search iteration that produced a well-formed structured case and therefore counts against the search budget.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>invariants/src/minifuzz.rs</code></li><li><code>invariants/README.md</code></li><li><code>commonware-codec</code> and <code>commonware-coding</code> chapters for good examples of invariants that become especially valuable under structured search</li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../parallel/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-parallel</span>
+          <span class="foot-sub">parallel</span>
+        </a>
+        <div class="foot-center">
+          invariants<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../collector/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-collector</span>
+          <span class="foot-sub">collector</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-invariants-are-the-unit-of-thought">3.1 Invariants Are the Unit of Thought</a></li><li><a class="toc-link" href="#3-2-branch-is-the-search-identity">3.2 Branch Is the Search Identity</a></li><li><a class="toc-link" href="#3-3-sampler-is-a-small-mutation-engine-not-a-corpus-manager">3.3 Sampler Is a Small Mutation Engine, Not a Corpus Manager</a></li><li><a class="toc-link" href="#3-4-result-classification-is-how-the-search-learns">3.4 Result Classification Is How the Search Learns</a></li><li><a class="toc-link" href="#3-5-builder-keeps-search-bounded-but-replayable">3.5 Builder Keeps Search Bounded but Replayable</a></li><li><a class="toc-link" href="#3-6-arbitrary-unstructured-is-the-boundary-between-bytes-and-meaning">3.6 arbitrary::Unstructured Is the Boundary Between Bytes and Meaning</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-search-starts-from-either-reproduction-or-exploration">4.1 The Search Starts From Either Reproduction or Exploration</a></li><li><a class="toc-link" href="#4-2-one-search-iteration-has-a-clear-lifecycle">4.2 One Search Iteration Has a Clear Lifecycle</a></li><li><a class="toc-link" href="#4-3-search-budgets-count-successful-tries-not-every-allocation-of-bytes">4.3 Search Budgets Count Successful Tries, Not Every Allocation of Bytes</a></li><li><a class="toc-link" href="#4-4-branch-advancement-is-the-smallest-form-of-search-tree-traversal">4.4 Branch Advancement Is the Smallest Form of Search-Tree Traversal</a></li><li><a class="toc-link" href="#4-5-the-tests-at-the-bottom-are-the-real-spec">4.5 The Tests at the Bottom Are the Real Spec</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-low-ceremony">5.1 Low Ceremony</a></li><li><a class="toc-link" href="#5-2-deterministic-replay">5.2 Deterministic Replay</a></li><li><a class="toc-link" href="#5-3-local-exploration">5.3 Local Exploration</a></li><li><a class="toc-link" href="#5-4-bounded-time">5.4 Bounded Time</a></li><li><a class="toc-link" href="#5-5-habit-formation">5.5 Habit Formation</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-it-is-not-coverage-guided">6.1 It Is Not Coverage-Guided</a></li><li><a class="toc-link" href="#6-2-weak-invariants-stay-weak">6.2 Weak Invariants Stay Weak</a></li><li><a class="toc-link" href="#6-3-input-shape-matters">6.3 Input Shape Matters</a></li><li><a class="toc-link" href="#6-4-long-horizon-bugs-still-need-heavier-tools">6.4 Long-Horizon Bugs Still Need Heavier Tools</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

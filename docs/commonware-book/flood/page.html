@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-flood — commonware-book</title>
+  <meta name="description" content="A p2p network is not healthy just because two peers can exchange a packet. The interesting failures show up when many peers talk at once, queues begin to fill, and the scheduler has to decide what can">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / flood
+      </span>
+      <span class="chapter-title">commonware-flood</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../reshare/page.html">← prev</a>
+        <a class="next" href="../index.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · flood · Complete · 7 min read</div>
+    <h1 class="ch-title">commonware-flood</h1>
+    <p class="ch-deck">A pressure chamber for p2p deployments, and a guide to reading the result.</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        A p2p network is not healthy just because two peers can exchange a packet. The interesting failures show up when many peers talk at once, queues begin to fill, and the scheduler has to decide what can move now and what has to wait. That is the difference between a link test and a deployment test.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part IV. Case Studies</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">25 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">7 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">Book Index</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#why-networks-need-a-wind-tunnel">Why Networks Need a Wind Tunnel</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-the-config-describes-the-experiment">3.1 The config describes the experiment</a></li><li><a class="toc-link" href="#3-2-setup-turns-topology-into-part-of-the-test">3.2 setup turns topology into part of the test</a></li><li><a class="toc-link" href="#3-3-flood-makes-every-peer-both-source-and-sink">3.3 flood makes every peer both source and sink</a></li><li><a class="toc-link" href="#3-4-the-first-8-bytes-are-the-measurement">3.4 The first 8 bytes are the measurement</a></li><li><a class="toc-link" href="#3-5-pressure-valves-matter-as-much-as-message-creation">3.5 Pressure valves matter as much as message creation</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-to-read-a-run">4. How to Read a Run</a></li><li class="toc-item"><a class="toc-link" href="#5-bottleneck-diagnosis">5. Bottleneck Diagnosis</a><ul class="toc-sub"><li><a class="toc-link" href="#fan-out-pressure">Fan-out pressure</a></li><li><a class="toc-link" href="#queue-pressure">Queue pressure</a></li><li><a class="toc-link" href="#cross-region-pressure">Cross-region pressure</a></li><li><a class="toc-link" href="#scheduler-pressure">Scheduler pressure</a></li><li><a class="toc-link" href="#observability-pressure">Observability pressure</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="why-networks-need-a-wind-tunnel">Why Networks Need a Wind Tunnel</h2>
+<p>A p2p network is not healthy just because two peers can exchange a packet. The interesting failures show up when many peers talk at once, queues begin to fill, and the scheduler has to decide what can move now and what has to wait. That is the difference between a link test and a deployment test.</p>
+<p><code>commonware-flood</code> exists to make that difference visible. It creates a controlled broadcast workload, runs it against a real EC2 deployment, and then helps you interpret what happened. The example is not only about pressure creation. It is about diagnosing where the pressure landed.</p>
+<p>The useful vocabulary is fan-out, backlog, mailbox, latency, throughput, and observability. Fan-out is how many recipients one send becomes. Backlog is the work waiting to be handled. A mailbox is the bounded place where inbound work lands. Latency tells you how long the message spent in the system. Throughput tells you how much traffic survived the path. Observability tells you which of those limits you actually hit.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>It is easy to make a p2p deployment look fine if you only test one connection at a time. Two nodes can shake hands, exchange a few packets, and leave you with the false impression that the network is healthy.</p>
+<p>That does not tell you what happens when the whole deployment behaves like a single loud participant:</p>
+<ul><li>every peer is sending,</li><li>every peer is receiving,</li><li>every queue is under pressure,</li><li>every link is carrying more than the happy path.</li></ul>
+<p>The example turns that situation on purpose. It is a stress exercise for Commonware p2p deployments, but it is also a measurement exercise. The point is to see whether the mesh slows down, where the slowdown begins, and whether the cloud itself is part of the bottleneck.</p>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>Think of the example as a pressure chamber.</p>
+<ul><li><code>setup</code> builds the chamber.</li><li><code>flood</code> turns on the pump.</li><li>the p2p network is the surface being stressed.</li><li>the histogram and counters are the gauges.</li></ul>
+<p>Each message is a probe. The first 8 bytes carry the send timestamp, and the rest is random data. The payload is intentionally uninteresting. The timestamp is what matters. By the time the receiver reads it back, the message has already explained how long it spent in transit.</p>
+<p>The crucial detail is fan-out. One send becomes traffic to all peers. That means the interesting question is not whether a packet can move. It is what happens when many packets are trying to move through the same mesh at once.</p>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-the-config-describes-the-experiment">3.1 The config describes the experiment</h3>
+<p>[<code>examples/flood/src/lib.rs</code>](/home/r/coding/monorepo/examples/flood/src/lib.rs) defines <code>Config</code>, and its fields are workload shape, not just tuning knobs:</p>
+<ul><li><code>worker_threads</code> controls how much concurrency the runtime can drive.</li><li><code>message_size</code> controls how much data each probe carries.</li><li><code>message_backlog</code> controls how many sends can pile up.</li><li><code>mailbox_size</code> controls how much inbound pressure each actor can absorb.</li><li><code>instrument</code> controls whether the evidence is exported.</li></ul>
+<p>This matters because the example is teaching a systems lesson, not a benchmark number. Performance is the result of a workload shape meeting a queueing system.</p>
+<h3 id="3-2-setup-turns-topology-into-part-of-the-test">3.2 <code>setup</code> turns topology into part of the test</h3>
+<p>[<code>examples/flood/src/bin/setup.rs</code>](/home/r/coding/monorepo/examples/flood/src/bin/setup.rs) generates one private key per peer, derives the allowed peer list, chooses a subset of bootstrappers, and spreads the peers across the requested regions. Then it writes the deployer config, one host file per peer, and the dashboard artifact.</p>
+<p>That is not scaffolding around the test. It is the test. If you change the regions, you change the latency profile. If you change the bootstrappers, you change discovery. If you change the instance type, you change where throttling appears.</p>
+<h3 id="3-3-flood-makes-every-peer-both-source-and-sink">3.3 <code>flood</code> makes every peer both source and sink</h3>
+<p>[<code>examples/flood/src/bin/flood.rs</code>](/home/r/coding/monorepo/examples/flood/src/bin/flood.rs) loads the generated deployment, constructs an authenticated discovery network, registers a flood channel, and starts the runtime loop.</p>
+<p>The important shape is:</p>
+<ul><li>all peer keys are tracked as authorized participants,</li><li>the sender broadcasts to <code>Recipients::All</code>,</li><li>the receiver measures end-to-end delay,</li><li>every node emits traffic and absorbs traffic at the same time.</li></ul>
+<p>That symmetry is what creates the pressure. A node is not just a client or just a server. In this example it is both.</p>
+<h3 id="3-4-the-first-8-bytes-are-the-measurement">3.4 The first 8 bytes are the measurement</h3>
+<p>The sender loop does three things:</p>
+<ol><li>write the current time into the first 8 bytes,</li><li>fill the rest with random bytes,</li><li>send the message to all peers.</li></ol>
+<p>The receiver decodes that timestamp and records latency in a histogram. The payload itself is only there to keep the traffic realistic and nontrivial. The timestamp is the actual instrument.</p>
+<p>This is the simplest possible probe that still tells the truth.</p>
+<h3 id="3-5-pressure-valves-matter-as-much-as-message-creation">3.5 Pressure valves matter as much as message creation</h3>
+<p>Flood does not remove queues. It exposes them.</p>
+<p>The p2p network is configured with <code>message_backlog</code> and <code>mailbox_size</code>. Those limits decide how much burst pressure can be absorbed before something has to give. The send loop logs failures instead of hiding them, because a stress tool should make saturation visible.</p>
+<h2 id="4-how-to-read-a-run">4. How to Read a Run</h2>
+<p>The best flood runs are the ones you can interpret.</p>
+<p>If the <code>messages</code> counter climbs steadily and the latency histogram stays tight, the deployment is keeping up. If the histogram widens before send errors appear, queueing is starting to dominate. If send errors show up first, the sender side or the network path is hitting a limit before the receiver path does.</p>
+<p>Some common patterns are worth reading directly:</p>
+<ul><li>Rising latency with no send errors usually means buffering, not failure.</li><li>Send failures plus <code>bw_out_allowance_exceeded</code> or similar EC2 counters point at cloud throttling.</li><li>One region lagging behind the others usually points to topology or cross-region distance.</li><li>A stalled receiver with a busy sender usually means the mailbox or worker budget is too small for the workload.</li><li>A flat histogram with very few samples often means the workload never really left the sender, or the deployment never formed correctly.</li></ul>
+<p>The example is only useful if you read the metrics and logs together. Silence is not success here.</p>
+<h2 id="5-bottleneck-diagnosis">5. Bottleneck Diagnosis</h2>
+<p>The chapter is trying to teach diagnosis, not just pressure generation.</p>
+<h3 id="fan-out-pressure">Fan-out pressure</h3>
+<p>Broadcasting to all peers multiplies the work per send. Even a small message creates coordination cost because every peer has to receive, queue, and process traffic.</p>
+<h3 id="queue-pressure">Queue pressure</h3>
+<p>Finite <code>message_backlog</code> and <code>mailbox_size</code> are intentional. They define the place where the system starts to say &quot;enough.&quot; If the queue never fills, the workload is too small. If it fills immediately, the workload is too large.</p>
+<h3 id="cross-region-pressure">Cross-region pressure</h3>
+<p>Because <code>setup</code> can distribute peers across regions, the workload can expose the difference between local success and distributed reality. If the slow tail only appears cross-region, the problem is likely distance or routing, not the protocol itself.</p>
+<h3 id="scheduler-pressure">Scheduler pressure</h3>
+<p><code>worker_threads</code> matters because the runtime has to keep the sender, receiver, network actors, and telemetry active together. If the machine cannot keep up, the histogram will tell you long before the deployment looks obviously broken.</p>
+<h3 id="observability-pressure">Observability pressure</h3>
+<p>The counters and histogram are the evidence. Without them, flood is just a noisy script. With them, it becomes a way to locate the bottleneck.</p>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>The example is honest about what it can and cannot tell you.</p>
+<ul><li>It does not prove correctness. For that you need protocol tests and invariants.</li><li>It depends on the cloud being part of the test. If EC2 throttles traffic, the measurements should reflect that.</li><li>It assumes the deployment was generated correctly. Bad credentials, a wrong host map, or an inconsistent peer set should fail early.</li><li>It does not hide queue pressure. Send failures are logged, not papered over.</li><li>It has hard size and topology rules. <code>message_size</code> is forced to at least 8 bytes so the timestamp fits, and the bootstrapper and region counts must be consistent with the requested deployment.</li></ul>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<ol><li>Read [<code>examples/flood/src/lib.rs</code>](/home/r/coding/monorepo/examples/flood/src/lib.rs) first. It names the workload shape.</li><li>Read [<code>examples/flood/src/bin/setup.rs</code>](/home/r/coding/monorepo/examples/flood/src/bin/setup.rs) next. It turns the workload into a real deployment.</li><li>Read [<code>examples/flood/src/bin/flood.rs</code>](/home/r/coding/monorepo/examples/flood/src/bin/flood.rs) last. It shows how load, fan-out, and measurement meet.</li><li>Use the p2p discovery docs to understand how <code>oracle.track(...)</code> defines the active set.</li><li>Use the deployer docs to see how the cloud becomes part of the experiment.</li></ol>
+<p>Read that way, the example is not a CLI reference. It is a method for turning a deployment into a readable pressure test.</p>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>Fan-out</strong> - One send becoming traffic to every peer.</li><li><strong>Backlog</strong> - Messages waiting to be sent.</li><li><strong>Mailbox</strong> - The bounded queue for an actor or channel.</li><li><strong>Bootstrapper</strong> - A seed peer that helps the network get started.</li><li><strong>Oracle</strong> - The handle returned by the p2p network for registering the peer set.</li><li><strong>Pressure chamber</strong> - A useful mental model for this example: a place where the deployment is deliberately stressed so bottlenecks become visible.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>examples/flood/README.md</code> for the operator workflow</li><li><code>examples/flood/src/bin/setup.rs</code> for deployment generation</li><li><code>examples/flood/src/bin/flood.rs</code> for the runtime pressure loop</li><li><code>docs/commonware-book/p2p/chapter.md</code> for the networking model this example depends on</li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../reshare/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-reshare</span>
+          <span class="foot-sub">reshare</span>
+        </a>
+        <div class="foot-center">
+          flood<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../index.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">Book Index</span>
+          <span class="foot-sub">commonware-book</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#why-networks-need-a-wind-tunnel">Why Networks Need a Wind Tunnel</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-the-config-describes-the-experiment">3.1 The config describes the experiment</a></li><li><a class="toc-link" href="#3-2-setup-turns-topology-into-part-of-the-test">3.2 setup turns topology into part of the test</a></li><li><a class="toc-link" href="#3-3-flood-makes-every-peer-both-source-and-sink">3.3 flood makes every peer both source and sink</a></li><li><a class="toc-link" href="#3-4-the-first-8-bytes-are-the-measurement">3.4 The first 8 bytes are the measurement</a></li><li><a class="toc-link" href="#3-5-pressure-valves-matter-as-much-as-message-creation">3.5 Pressure valves matter as much as message creation</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-to-read-a-run">4. How to Read a Run</a></li><li class="toc-item"><a class="toc-link" href="#5-bottleneck-diagnosis">5. Bottleneck Diagnosis</a><ul class="toc-sub"><li><a class="toc-link" href="#fan-out-pressure">Fan-out pressure</a></li><li><a class="toc-link" href="#queue-pressure">Queue pressure</a></li><li><a class="toc-link" href="#cross-region-pressure">Cross-region pressure</a></li><li><a class="toc-link" href="#scheduler-pressure">Scheduler pressure</a></li><li><a class="toc-link" href="#observability-pressure">Observability pressure</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-sync — commonware-book</title>
+  <meta name="description" content="Synchronization sounds like copying, but copying is only the last mile. The real problem is that the thing you are copying keeps moving while you are trying to copy it. So the system has to answer thr">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / sync
+      </span>
+      <span class="chapter-title">commonware-sync</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../bridge/page.html">← prev</a>
+        <a class="next" href="../chat/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · sync · Complete · 17 min read</div>
+    <h1 class="ch-title">commonware-sync</h1>
+    <p class="ch-deck">Chasing a Moving Proof-Backed Target</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Synchronization sounds like copying, but copying is only the last mile. The real problem is that the thing you are copying keeps moving while you are trying to copy it. So the system has to answer three questions in order: what target do I want, what evidence gets me there, and how do I know the target has not changed underneath me?
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 id="opening-apparatus">Opening Apparatus</h2>
+<p><strong>Promise.</strong> This chapter shows how a client stays aligned with a remote database that keeps changing, without mistaking &quot;the server said so&quot; for a proof-backed state transition.</p>
+<p><strong>Crux.</strong> Synchronization is not copying. It is a repeated act of naming a target root, fetching just enough history to justify it, verifying the proof, and then starting over when the target has already moved again.</p>
+<p><strong>Primary invariant.</strong> The client should only advance by operations and proofs that match one concrete target. A root is only worth chasing if the transition to it is still legible.</p>
+<p><strong>Naive failure.</strong> The easy story is &quot;dial the server, download what it has, and call that sync.&quot; That fails the moment the server keeps writing, the wire reorders responses, or the database flavor changes what &quot;current state&quot; means.</p>
+<p><strong>Reading map.</strong></p>
+<ul><li><code>examples/sync/src/databases/mod.rs</code> names the shared <code>Syncable</code> contract.</li><li><code>examples/sync/src/net/wire.rs</code> names the two actual questions on the wire.</li><li><code>examples/sync/src/net/resolver.rs</code> and <code>io.rs</code> show how the client keeps requests and responses straight.</li><li><code>examples/sync/src/bin/server.rs</code> shows how targets and proofs are served.</li><li><code>examples/sync/src/bin/client.rs</code> shows the repeated reconciliation loop.</li></ul>
+<p><strong>Assumption ledger.</strong></p>
+<ul><li>The reader is comfortable with request/response protocols and asynchronous tasks.</li><li>The target root is assumed to be cryptographically meaningful, even though the example lets the server announce it directly for simplicity.</li><li>The chapter is about the mechanism of proof-backed synchronization, not the CLI flags.</li></ul></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part IV. Case Studies</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">20 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">17 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-chat</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#synchronization-before-the-code">Synchronization Before the Code</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-syncable-is-the-shared-contract">3.1 Syncable Is the Shared Contract</a></li><li><a class="toc-link" href="#3-2-the-wire-protocol-only-asks-two-real-questions">3.2 The Wire Protocol Only Asks Two Real Questions</a></li><li><a class="toc-link" href="#3-3-request-ids-are-the-memory-of-the-conversation">3.3 Request IDs Are the Memory of the Conversation</a></li><li><a class="toc-link" href="#3-4-the-resolver-is-a-narrow-trust-boundary">3.4 The Resolver Is a Narrow Trust Boundary</a></li><li><a class="toc-link" href="#3-5-the-i-o-loop-is-split-to-stay-cancellation-safe">3.5 The I/O Loop Is Split to Stay Cancellation-Safe</a></li><li><a class="toc-link" href="#3-6-the-three-database-flavors-do-not-mean-the-same-thing">3.6 The Three Database Flavors Do Not Mean the Same Thing</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-server-keeps-manufacturing-new-targets">4.1 The Server Keeps Manufacturing New Targets</a></li><li><a class="toc-link" href="#4-2-naming-a-target-means-naming-both-root-and-range">4.2 Naming a Target Means Naming Both Root and Range</a></li><li><a class="toc-link" href="#4-3-the-operations-path-is-a-bounded-proof-ladder">4.3 The Operations Path Is a Bounded Proof Ladder</a></li><li><a class="toc-link" href="#4-4-the-client-runs-a-two-loop-reconciliation-system">4.4 The Client Runs a Two-Loop Reconciliation System</a></li><li><a class="toc-link" href="#4-5-the-client-s-network-edge-is-also-cancellation-safe">4.5 The Client&#x27;s Network Edge Is Also Cancellation-Safe</a></li><li><a class="toc-link" href="#4-6-re-anchoring-is-the-real-point-of-the-example">4.6 Re-Anchoring Is the Real Point of the Example</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-database-semantics-and-why-they-matter">5. Database Semantics and Why They Matter</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-any-is-the-clean-baseline">5.1 any Is the Clean Baseline</a></li><li><a class="toc-link" href="#5-2-current-teaches-why-a-canonical-root-is-not-always-the-sync-root">5.2 current Teaches Why a Canonical Root Is Not Always the Sync Root</a></li><li><a class="toc-link" href="#5-3-immutable-changes-the-meaning-of-activity">5.3 immutable Changes the Meaning of Activity</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-continuous-writes">6.1 Continuous Writes</a></li><li><a class="toc-link" href="#6-2-verification-pressure">6.2 Verification Pressure</a></li><li><a class="toc-link" href="#6-3-reconnection-pressure">6.3 Reconnection Pressure</a></li><li><a class="toc-link" href="#6-4-bounded-work">6.4 Bounded Work</a></li><li><a class="toc-link" href="#6-5-transport-disorder">6.5 Transport Disorder</a></li><li><a class="toc-link" href="#6-6-async-cancellation-hazards">6.6 Async Cancellation Hazards</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-failure-modes-and-limits">7. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#8-how-to-read-the-source">8. How To Read The Source</a></li><li class="toc-item"><a class="toc-link" href="#9-glossary-and-further-reading">9. Glossary And Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="synchronization-before-the-code">Synchronization Before the Code</h2>
+<p>Synchronization sounds like copying, but copying is only the last mile. The real problem is that the thing you are copying keeps moving while you are trying to copy it. So the system has to answer three questions in order: what target do I want, what evidence gets me there, and how do I know the target has not changed underneath me?</p>
+<p>A useful vocabulary helps. A root is a compact name for a state. An operation is one step in the history that led there. A proof explains why a batch of operations is enough to justify the root. Reconciliation is the act of comparing the local view with the remote view and deciding what to do next. The target is not just &quot;the latest thing&quot;. It is a concrete state named by a root and supported by proof.</p>
+<p>The naive approach is to fetch everything, verify it once, and call the result synchronized. That fails if the source keeps appending data, if the network reorders messages, or if the database flavor changes the meaning of &quot;current&quot;. Another naive approach is to poll the server until it stops changing. That can livelock forever in a live system, and it still does not tell you which transitions were justified.</p>
+<p>The better tradeoff is to sync in bounded pieces. You name one target, fetch only the proof-backed history needed for that target, verify it, and then repeat. That gives you a narrow protocol surface, predictable work per step, and a clean place to detect cancellation, retries, and stale responses. The cost is that the client must tolerate churn, because the target may move again before the next round begins.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>This chapter is not about wiring two binaries together. It is about what it means to keep a local database aligned with a remote database that does not stop moving.</p>
+<p>That distinction matters. If the client copied the server once and treated the result as permanent, it would be stale almost immediately. If it accepted whatever the server sent without proof, it would be fast but untrustworthy. <code>commonware-sync</code> shows the middle path: chase a target root, verify the proof that justifies it, and repeat when the target moves.</p>
+<p>That gives the chapter its real sentence:</p>
+<blockquote><p>synchronization is not a copy operation. It is a reconciliation loop with evidence.</p></blockquote>
+<p>The important roles are:</p>
+<ul><li>the <strong>server</strong>, which keeps extending the log and serving evidence,</li><li>the <strong>wire protocol</strong>, which names the exact questions the client is allowed to ask,</li><li>the <strong>resolver</strong>, which turns those replies into typed sync results,</li><li>the <strong>sync engine</strong>, which applies batches and verifies proofs,</li><li>and the <strong>database flavor</strong>, which decides what the same operations mean once they land.</li></ul>
+<p>The example keeps those roles separate on purpose. That is what lets the reader see the moving target, the proof that supports it, and the reconciliation work that bridges them.</p>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>The cleanest image is a surveyor following a boundary that keeps being redrawn.</p>
+<ul><li>The <strong>server</strong> moves the boundary by appending new operations.</li><li>The <strong>target root</strong> is the current line the client is trying to reach.</li><li>The <strong>historical proof</strong> is the record that shows how the old line connects to the new one.</li><li>The <strong>client</strong> is the surveyor, checking each segment before stepping forward.</li><li>The <strong>resolver</strong> is the messenger that carries the questions and answers across the network.</li></ul>
+<p>The surveyor does not trust a new line because it looks convenient. The surveyor wants the evidence that makes the line legible. That is why the server serves both the current target and the operations needed to reach it. The client only advances after the proof and the target agree.</p>
+<p>The database flavor is the terrain:</p>
+<ul><li><code>any</code> shows a direct operations log and a direct root.</li><li><code>current</code> shows the same operations, but rebuilds a current-state view after sync.</li><li><code>immutable</code> shows a log-oriented database whose retained operations stay active.</li></ul>
+<p>Different terrain, same lecture. The reader keeps learning the same lesson: follow the target, verify the proof, reconcile the state.</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-syncable-is-the-shared-contract">3.1 <code>Syncable</code> Is the Shared Contract</h3>
+<p><code>examples/sync/src/databases/mod.rs</code> defines <code>Syncable</code>, and that trait is the center of the example.</p>
+<p>It requires a database to:</p>
+<ul><li>create deterministic test operations,</li><li>accept operations in batches,</li><li>report its root,</li><li>report its current size,</li><li>report its inactivity floor,</li><li>produce historical proofs,</li><li>and provide pinned nodes for the sync engine.</li></ul>
+<p>That is enough to compare three storage shapes without pretending they are the same thing internally. The contract stays fixed while the semantics vary.</p>
+<p>This is the most important abstraction boundary in the example. It says the sync loop does not care how the database stores bytes internally. It cares about a smaller, sharper question:</p>
+<blockquote><p>Can this database name a target, justify the path to it, and apply the operations needed to get there?</p></blockquote>
+<h3 id="3-2-the-wire-protocol-only-asks-two-real-questions">3.2 The Wire Protocol Only Asks Two Real Questions</h3>
+<p>Once the client connects, the protocol in <code>examples/sync/src/net/wire.rs</code> does not expose a sprawling RPC surface. It exposes two main questions.</p>
+<p>The first is:</p>
+<blockquote><p>What target should I be chasing right now?</p></blockquote>
+<p>That is <code>GetSyncTargetRequest</code> and <code>GetSyncTargetResponse</code>. The answer is a <code>Target&lt;D&gt;</code>: a root plus a non-empty range.</p>
+<p>The second is:</p>
+<blockquote><p>Starting from this operation location, give me the next proof-backed segment toward that target.</p></blockquote>
+<p>That is <code>GetOperationsRequest</code> and <code>GetOperationsResponse</code>. The request carries:</p>
+<ul><li><code>request_id</code>, so the response can be matched later,</li><li><code>op_count</code>, the operation boundary the client believes it is syncing toward,</li><li><code>start_loc</code>, the location from which it wants more history,</li><li><code>max_ops</code>, the requested batch size,</li><li><code>include_pinned_nodes</code>, which asks the server to include extra MMR anchors when the sync engine needs them.</li></ul>
+<p>The response carries exactly the material the client needs to keep going:</p>
+<ul><li>the same <code>request_id</code>,</li><li>a historical <code>Proof&lt;D&gt;</code>,</li><li>a batch of operations,</li><li>and optionally <code>pinned_nodes</code>.</li></ul>
+<p>That compactness matters. The protocol is not &quot;send me your database.&quot; It is &quot;name the line, then give me the next justified segment.&quot;</p>
+<h3 id="3-3-request-ids-are-the-memory-of-the-conversation">3.3 Request IDs Are the Memory of the Conversation</h3>
+<p>The whole protocol would become slippery without <code>request_id</code>.</p>
+<p><code>examples/sync/src/net/request_id.rs</code> uses an atomic counter to generate monotonically increasing <code>u64</code> request IDs. That seems almost too small to be a chapter point, but it is one of the example&#x27;s real discipline moves.</p>
+<p>The client has multiple requests in flight over time. A response can arrive late. A target update can race with an operations reply. The wrong response type can arrive for the right channel. The resolver therefore never asks &quot;did I receive a response?&quot; It asks &quot;did I receive the response for <em>this</em> request?&quot;</p>
+<p>That is why both success and error messages carry <code>request_id</code>, and why the resolver treats any mismatched response shape as <code>UnexpectedResponse { request_id }</code>. In a live sync loop, request correlation is not bookkeeping. It is what prevents the transport from becoming a source of semantic confusion.</p>
+<h3 id="3-4-the-resolver-is-a-narrow-trust-boundary">3.4 The Resolver Is a Narrow Trust Boundary</h3>
+<p><code>examples/sync/src/net/resolver.rs</code> is deliberately boring in the best way. It does not verify storage proofs. It does not interpret operations. It does not decide whether the server is morally trustworthy.</p>
+<p>It does something smaller and more reliable:</p>
+<ul><li>allocate a fresh request ID,</li><li>send one typed wire message,</li><li>wait for one typed reply,</li><li>convert server-side errors into local <code>Error</code>,</li><li>reject wrong response types,</li><li>and hand the result to the sync engine.</li></ul>
+<p>That narrowness is the right design. The resolver should not become a second algorithm with its own opinion about synchronization. It is the transport edge for a proof-driven system.</p>
+<h3 id="3-5-the-i-o-loop-is-split-to-stay-cancellation-safe">3.5 The I/O Loop Is Split to Stay Cancellation-Safe</h3>
+<p>One of the most instructive parts of the example is <code>examples/sync/src/net/io.rs</code>.</p>
+<p>At first glance, it looks like ordinary plumbing: a request channel, a response channel, and a network loop. But the split is there to defend a real invariant.</p>
+<p><code>recv_frame</code> is not cancellation-safe. If an async select dropped it halfway through reading a frame, the stream could be left in a corrupted state. The code therefore spawns a dedicated <code>recv_loop</code> task whose only job is:</p>
+<ol><li>read complete frames from the stream,</li><li>forward them over an internal channel,</li><li>never be canceled in the middle of a frame.</li></ol>
+<p>The main <code>run_loop</code> then uses <code>select_loop!</code> only on cancellation-safe channel operations:</p>
+<ul><li>incoming outbound requests from the resolver,</li><li>and complete inbound frames from the recv task.</li></ul>
+<p>This is a classic Commonware move. The example is small, but it still teaches that async control flow has transport semantics. Cancellation is not free.</p>
+<h3 id="3-6-the-three-database-flavors-do-not-mean-the-same-thing">3.6 The Three Database Flavors Do Not Mean the Same Thing</h3>
+<p>The example is much better once you stop treating <code>any</code>, <code>current</code>, and <code>immutable</code> as three skins on the same state machine.</p>
+<p><code>any</code> is the straightest case. The synced root is the direct database root, and the historical proof is the obvious operations proof.</p>
+<p><code>current</code> is subtler. Its canonical state includes more than the raw operations log. It rebuilds current-state machinery after sync, so the example deliberately targets the <strong>ops root</strong>, not the canonical root. That keeps the sync proof surface aligned with the operations the engine can verify directly. The client then reconstructs the bitmap and grafted structure deterministically afterward.</p>
+<p><code>immutable</code> changes the meaning of the inactivity floor. In that flavor, all retained operations stay active, so the inactivity floor collapses to the pruning boundary. The proof story is still historical, but the state semantics are different.</p>
+<p>That is why the chapter should never say &quot;the three databases are equivalent.&quot; They are comparable because <code>Syncable</code> names the same reconciliation surface, not because their internal meaning is the same.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<h3 id="4-1-the-server-keeps-manufacturing-new-targets">4.1 The Server Keeps Manufacturing New Targets</h3>
+<p><code>examples/sync/src/bin/server.rs</code> begins by initializing one of the three database flavors with deterministic test operations. Then it does something that turns the example from a one-shot transfer into a real sync study: it keeps adding new operations on a timer.</p>
+<p><code>maybe_add_operations</code> checks whether <code>op_interval</code> has elapsed since the last write. If so, it generates more deterministic operations, appends them, and logs the new root. That means the source of truth is intentionally unstable.</p>
+<p>The server is therefore always serving from a moving frontier. That is not noise. It is the condition the client must learn to survive.</p>
+<h3 id="4-2-naming-a-target-means-naming-both-root-and-range">4.2 Naming a Target Means Naming Both Root and Range</h3>
+<p>When the client asks for the current target, the server does not return only a root. <code>handle_get_sync_target</code> reads three facts from the database:</p>
+<ul><li><code>root</code>,</li><li><code>inactivity_floor</code>,</li><li><code>size</code>.</li></ul>
+<p>It then constructs <code>Target { root, range: non_empty_range!(inactivity_floor, size) }</code>.</p>
+<p>That range matters. Synchronization is not just &quot;head hash equals head hash.&quot; The range says where the live window of relevant operations currently begins and ends. For <code>current</code>, that lower bound is especially important because it marks which operations are still active in the rebuilt state view.</p>
+<p>So the target is not merely a digest to admire. It is a digest plus an interval that tells the client how much history is still relevant to the present claim.</p>
+<h3 id="4-3-the-operations-path-is-a-bounded-proof-ladder">4.3 The Operations Path Is a Bounded Proof Ladder</h3>
+<p>The more interesting server path is <code>handle_get_operations</code>.</p>
+<p>The request is validated first. <code>GetOperationsRequest::validate()</code> rejects the obvious nonsense case where <code>start_loc &gt;= op_count</code>. The handler then checks the live database size and clamps the request by two ceilings:</p>
+<ul><li>the client&#x27;s requested <code>max_ops</code>,</li><li>and the server&#x27;s own <code>MAX_BATCH_SIZE</code>.</li></ul>
+<p>This means batching is jointly owned. The client asks for a batch size, but the server still enforces a hard upper bound. That keeps the protocol readable under pressure and prevents a single request from turning into an unbounded proof response.</p>
+<p>After that, the server calls <code>historical_proof(op_count, start_loc, max_ops)</code>. If the request asked for them, it also fetches <code>pinned_nodes_at(start_loc)</code>.</p>
+<p>This is a nice systems detail. The client is not always asking for the same proof payload. Sometimes it needs the extra pinned nodes that anchor the proof at a specific boundary. The wire protocol makes that explicit with <code>include_pinned_nodes</code>.</p>
+<h3 id="4-4-the-client-runs-a-two-loop-reconciliation-system">4.4 The Client Runs a Two-Loop Reconciliation System</h3>
+<p><code>examples/sync/src/bin/client.rs</code> is easiest to understand as two loops.</p>
+<p>The first is the <strong>target update loop</strong> in <code>target_update_task</code>.</p>
+<p>It sleeps for <code>target_update_interval</code>, asks the server for the latest target, and compares only the root against the current target. If the root changed, it tries to send the new target over a bounded channel to the sync engine.</p>
+<p>That bounded channel is important. The example does not want an infinite queue of stale targets piling up behind the engine. It wants the newest meaningful change, or a clear failure if the update consumer is gone.</p>
+<p>The second is the <strong>sync iteration loop</strong> in <code>run_any</code>, <code>run_current</code>, and <code>run_immutable</code>.</p>
+<p>Each iteration:</p>
+<ol><li>opens a fresh resolver connection,</li><li>asks for the current target,</li><li>spawns the background target-update task,</li><li>runs <code>sync::sync</code> with explicit batching and outstanding-request limits,</li><li>logs the resulting root,</li><li>aborts the updater,</li><li>sleeps for <code>sync_interval</code>,</li><li>starts over.</li></ol>
+<p>That repeated restart is not waste. It teaches that recovery from a previous run is part of synchronization. A client should be able to reopen state, ask for the new boundary, and continue.</p>
+<h3 id="4-5-the-client-s-network-edge-is-also-cancellation-safe">4.5 The Client&#x27;s Network Edge Is Also Cancellation-Safe</h3>
+<p>The resolver itself does not touch sockets directly. It hands requests to the I/O task in <code>net/io.rs</code>.</p>
+<p>That task keeps a <code>pending_requests: HashMap&lt;RequestId, oneshot::Sender&lt;_&gt;&gt;</code>. When a request arrives:</p>
+<ul><li>the request ID is inserted into the pending map,</li><li>the message is encoded and framed,</li><li><code>send_frame</code> writes it to the sink.</li></ul>
+<p>When a complete response frame arrives from the dedicated recv task:</p>
+<ul><li>the message is decoded,</li><li>its request ID is extracted,</li><li>the matching oneshot sender is removed from the pending map,</li><li>the typed response is delivered.</li></ul>
+<p>This is the wire-level version of the same discipline the chapter has been teaching all along: keep the current frontier explicit. Here the frontier is not a root. It is the set of requests that still have a live reply path.</p>
+<h3 id="4-6-re-anchoring-is-the-real-point-of-the-example">4.6 Re-Anchoring Is the Real Point of the Example</h3>
+<p>The most instructive moment is not the first successful sync. It is the moment the target update task observes that the server root changed while the client is still working.</p>
+<p>At that point the client does not throw everything away. It sends the new target into the sync engine and lets the engine reconcile against the fresher boundary. The work already done still matters, but the interpretation of &quot;done&quot; has changed.</p>
+<p>That is the habit the example is teaching:</p>
+<blockquote><p>in a live system, &quot;up to date&quot; is only a temporary name for the current proof-backed boundary.</p></blockquote>
+<hr>
+<h2 id="5-database-semantics-and-why-they-matter">5. Database Semantics and Why They Matter</h2>
+<h3 id="5-1-any-is-the-clean-baseline">5.1 <code>any</code> Is the Clean Baseline</h3>
+<p><code>any</code> is the simplest lecture version.</p>
+<ul><li>the root being chased is the direct database root,</li><li><code>historical_proof</code> is the direct proof path,</li><li>replayed operations land exactly where the proof surface says they should.</li></ul>
+<p>This is the best flavor for first understanding the sync loop because the storage semantics do not add a second layer of interpretation.</p>
+<h3 id="5-2-current-teaches-why-a-canonical-root-is-not-always-the-sync-root">5.2 <code>current</code> Teaches Why a Canonical Root Is Not Always the Sync Root</h3>
+<p><code>current</code> is the most pedagogically useful flavor because it forces a subtle distinction.</p>
+<p>Its full canonical state includes more than the operations log. The bitmap and grafted structure express which operations are currently active. But the sync engine does not directly chase that canonical root. It chases <code>ops_root()</code>.</p>
+<p>That is not a shortcut. It is the correct separation of concerns.</p>
+<p>The server serves proof material about the operations history. The client syncs that operations history first. Then, because the reconstruction of the bitmap and grafted view is deterministic from the operations, the richer canonical state can be rebuilt locally.</p>
+<p>This is exactly the kind of design lesson the example should teach: the most natural application root is not always the right network proof root.</p>
+<h3 id="5-3-immutable-changes-the-meaning-of-activity">5.3 <code>immutable</code> Changes the Meaning of Activity</h3>
+<p><code>immutable</code> is different again.</p>
+<p>Its operations are not updates to a mutable current-state view in the same way. Retained operations stay active, so <code>inactivity_floor()</code> is effectively the pruning boundary. That changes the interpretation of the target range even though the sync engine still sees a root, a proof, and operations.</p>
+<p>This is why the example is stronger than a single storage demo. It shows that a shared sync mechanism can survive a change in state semantics as long as the proof surface stays explicit.</p>
+<hr>
+<h2 id="6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</h2>
+<h3 id="6-1-continuous-writes">6.1 Continuous Writes</h3>
+<p>The server keeps appending operations while the client is still working. The design assumes the target may change between the first fetch and the last.</p>
+<h3 id="6-2-verification-pressure">6.2 Verification Pressure</h3>
+<p>The client does not accept a root by reputation. It fetches proofs and operations, then relies on the sync engine to verify the transition.</p>
+<h3 id="6-3-reconnection-pressure">6.3 Reconnection Pressure</h3>
+<p>The example creates a fresh sync iteration each time through the loop. That shows the protocol can recover from a previous run and pick up again without having to restart the whole system by hand.</p>
+<h3 id="6-4-bounded-work">6.4 Bounded Work</h3>
+<p>Batch size, update cadence, and <code>max_outstanding_requests</code> keep the system from turning into an uncontrolled flood of fetches. The example stays readable because the pressure is bounded.</p>
+<h3 id="6-5-transport-disorder">6.5 Transport Disorder</h3>
+<p>Request IDs, typed replies, and the pending-request map keep the protocol sane even if responses are late, unexpected, or arrive after the logical moment that caused them.</p>
+<h3 id="6-6-async-cancellation-hazards">6.6 Async Cancellation Hazards</h3>
+<p>The dedicated recv tasks on both client and server exist because frame reads are not cancellation-safe. The example is therefore also teaching a more general lesson: not every async operation belongs directly inside a select loop.</p>
+<hr>
+<h2 id="7-failure-modes-and-limits">7. Failure Modes and Limits</h2>
+<p>The example is honest about what it does not solve.</p>
+<p>It does not authenticate the server. The client dials the address and trusts the responses enough to demonstrate the sync mechanism. In production, that trust boundary should be explicit.</p>
+<p>It also does not source the target from a stronger authority. The example asks the server for the current target, which is convenient for a tutorial but not the same as getting a target from consensus or another trusted source.</p>
+<p>There is no rate limiting for target updates, either. That is fine for a case study, but a real deployment needs to protect the server from unnecessary polling.</p>
+<p>And like any sync system, this one depends on the server having the data it claims to have. Proofs can verify a transition only if the target you are chasing is itself trustworthy.</p>
+<p>The limit to keep in mind is simple:</p>
+<blockquote><p>this example shows how to follow a moving target, not how to decide what the target should be in the first place.</p></blockquote>
+<hr>
+<h2 id="8-how-to-read-the-source">8. How To Read The Source</h2>
+<p>Read the example as a sequence of boundaries, from storage contract to client loop.</p>
+<ol><li><code>examples/sync/src/databases/mod.rs</code> Start with the shared sync contract. <code>Syncable</code> names the surface all three storage shapes must satisfy.</li></ol>
+<ol><li><code>examples/sync/src/net/wire.rs</code> and <code>examples/sync/src/net/request_id.rs</code> Read these together to see the wire questions and the correlation rule that keeps replies attached to the right request.</li></ol>
+<ol><li><code>examples/sync/src/net/io.rs</code> and <code>examples/sync/src/net/resolver.rs</code> Read these as the transport boundary. The recv task, pending-request map, and typed responses keep the sync loop from confusing transport with state.</li></ol>
+<ol><li><code>examples/sync/src/databases/any.rs</code>, <code>current.rs</code>, and <code>immutable.rs</code> Compare how each database turns the same proof surface into a different notion of root, inactivity floor, and retained history.</li></ol>
+<ol><li><code>examples/sync/src/bin/server.rs</code> See how the moving source of truth names targets and serves proof-backed segments.</li></ol>
+<ol><li><code>examples/sync/src/bin/client.rs</code> Finish with the reconciliation loop once the wire and storage boundaries already make sense.</li></ol>
+<p>If you read the files in that order, the example stops looking like two binaries and starts looking like one proof-backed reconciliation system with two roles.</p>
+<hr>
+<h2 id="9-glossary-and-further-reading">9. Glossary And Further Reading</h2>
+<ul><li><strong>Target</strong> - the root and range the client is currently trying to reach.</li><li><strong>Proof</strong> - the evidence that connects the current target to the operations that justify it.</li><li><strong>Reconciliation</strong> - the work of fetching, verifying, and re-anchoring until local state matches the proof-backed target.</li><li><strong>Inactivity floor</strong> - the boundary below which operations are no longer considered active for that database flavor.</li><li><strong>Pinned nodes</strong> - extra MMR anchors the sync engine may need to verify a historical segment at a specific boundary.</li><li><strong>Resolver</strong> - the client-side bridge from typed wire messages to sync requests.</li><li><strong>Request ID</strong> - the unique token that keeps one wire reply attached to one logical question.</li><li><strong>Syncable</strong> - the shared contract that makes the three database flavors comparable.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>commonware-storage</code> for the sync engine the example is exercising.</li><li><code>commonware-resolver</code> for the wider fetch-and-validate pattern this example borrows from.</li><li><code>examples/sync/README.md</code> for the operational shortcuts the example takes on purpose.</li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../bridge/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-bridge</span>
+          <span class="foot-sub">bridge</span>
+        </a>
+        <div class="foot-center">
+          sync<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../chat/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-chat</span>
+          <span class="foot-sub">chat</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#synchronization-before-the-code">Synchronization Before the Code</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-syncable-is-the-shared-contract">3.1 Syncable Is the Shared Contract</a></li><li><a class="toc-link" href="#3-2-the-wire-protocol-only-asks-two-real-questions">3.2 The Wire Protocol Only Asks Two Real Questions</a></li><li><a class="toc-link" href="#3-3-request-ids-are-the-memory-of-the-conversation">3.3 Request IDs Are the Memory of the Conversation</a></li><li><a class="toc-link" href="#3-4-the-resolver-is-a-narrow-trust-boundary">3.4 The Resolver Is a Narrow Trust Boundary</a></li><li><a class="toc-link" href="#3-5-the-i-o-loop-is-split-to-stay-cancellation-safe">3.5 The I/O Loop Is Split to Stay Cancellation-Safe</a></li><li><a class="toc-link" href="#3-6-the-three-database-flavors-do-not-mean-the-same-thing">3.6 The Three Database Flavors Do Not Mean the Same Thing</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-server-keeps-manufacturing-new-targets">4.1 The Server Keeps Manufacturing New Targets</a></li><li><a class="toc-link" href="#4-2-naming-a-target-means-naming-both-root-and-range">4.2 Naming a Target Means Naming Both Root and Range</a></li><li><a class="toc-link" href="#4-3-the-operations-path-is-a-bounded-proof-ladder">4.3 The Operations Path Is a Bounded Proof Ladder</a></li><li><a class="toc-link" href="#4-4-the-client-runs-a-two-loop-reconciliation-system">4.4 The Client Runs a Two-Loop Reconciliation System</a></li><li><a class="toc-link" href="#4-5-the-client-s-network-edge-is-also-cancellation-safe">4.5 The Client&#x27;s Network Edge Is Also Cancellation-Safe</a></li><li><a class="toc-link" href="#4-6-re-anchoring-is-the-real-point-of-the-example">4.6 Re-Anchoring Is the Real Point of the Example</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-database-semantics-and-why-they-matter">5. Database Semantics and Why They Matter</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-any-is-the-clean-baseline">5.1 any Is the Clean Baseline</a></li><li><a class="toc-link" href="#5-2-current-teaches-why-a-canonical-root-is-not-always-the-sync-root">5.2 current Teaches Why a Canonical Root Is Not Always the Sync Root</a></li><li><a class="toc-link" href="#5-3-immutable-changes-the-meaning-of-activity">5.3 immutable Changes the Meaning of Activity</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-continuous-writes">6.1 Continuous Writes</a></li><li><a class="toc-link" href="#6-2-verification-pressure">6.2 Verification Pressure</a></li><li><a class="toc-link" href="#6-3-reconnection-pressure">6.3 Reconnection Pressure</a></li><li><a class="toc-link" href="#6-4-bounded-work">6.4 Bounded Work</a></li><li><a class="toc-link" href="#6-5-transport-disorder">6.5 Transport Disorder</a></li><li><a class="toc-link" href="#6-6-async-cancellation-hazards">6.6 Async Cancellation Hazards</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-failure-modes-and-limits">7. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#8-how-to-read-the-source">8. How To Read The Source</a></li><li class="toc-item"><a class="toc-link" href="#9-glossary-and-further-reading">9. Glossary And Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

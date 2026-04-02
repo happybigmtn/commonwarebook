@@ -1,0 +1,26 @@
+version = 1
+graph = "../../workflows/module-page/workflow.fabro"
+goal = "Assemble a navigable HTML chapter page for commonware-consensus with embedded visual sections."
+
+[llm]
+provider = "anthropic"
+model = "MiniMax-M2.7-highspeed"
+
+[sandbox]
+provider = "local"
+
+[sandbox.env]
+ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic"
+ANTHROPIC_AUTH_TOKEN = "${env.MINIMAX_API_KEY}"
+API_TIMEOUT_MS = "3000000"
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+ANTHROPIC_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.7-highspeed"
+
+[vars]
+module_slug = "consensus"
+module_display_name = "commonware-consensus"
+chapter_dir = "docs/commonware-book/consensus"

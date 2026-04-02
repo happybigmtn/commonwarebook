@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-chat — commonware-book</title>
+  <meta name="description" content="A group chat looks like a message stream, but the hard part is membership. If peers do not agree on who is in the room, they are not sharing one room. The example therefore spends most of its effort o">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / chat
+      </span>
+      <span class="chapter-title">commonware-chat</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../sync/page.html">← prev</a>
+        <a class="next" href="../estimator/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · chat · Complete · 5 min read</div>
+    <h1 class="ch-title">commonware-chat</h1>
+    <p class="ch-deck">Invitation-Only Conversation</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        A group chat looks like a message stream, but the hard part is membership. If peers do not agree on who is in the room, they are not sharing one room. The example therefore spends most of its effort on identity, discovery, and authorized membership before it ever gets to the text box.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part IV. Case Studies</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">21 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">5 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-estimator</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#the-problem-beneath-chat">The Problem Beneath Chat</a></li><li class="toc-item"><a class="toc-link" href="#1-what-the-example-is-actually-teaching">1. What the Example Is Actually Teaching</a></li><li class="toc-item"><a class="toc-link" href="#2-identity-and-membership">2. Identity and Membership</a></li><li class="toc-item"><a class="toc-link" href="#3-discovery-and-transport-wiring">3. Discovery and Transport Wiring</a></li><li class="toc-item"><a class="toc-link" href="#4-the-live-loop">4. The Live Loop</a></li><li class="toc-item"><a class="toc-link" href="#5-what-to-watch-in-real-runs">5. What to Watch in Real Runs</a></li><li class="toc-item"><a class="toc-link" href="#6-how-to-read-the-source">6. How to Read the Source</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="the-problem-beneath-chat">The Problem Beneath Chat</h2>
+<p>A group chat looks like a message stream, but the hard part is membership. If peers do not agree on who is in the room, they are not sharing one room. The example therefore spends most of its effort on identity, discovery, and authorized membership before it ever gets to the text box.</p>
+<p>That is the right order. Identity says who a participant is. Membership says who may join. Discovery says how the invited peers find one another. Conversation is the last step, not the first. The example is really about keeping those responsibilities separate so a private room does not collapse into a public socket with encryption on top.</p>
+<p>The code uses familiar primitives:</p>
+<ul><li><code>commonware-cryptography::ed25519</code> gives each peer a stable identity.</li><li><code>commonware-p2p::authenticated::discovery</code> turns membership into reachable overlay state.</li><li><code>commonware-runtime</code> keeps the event loop moving.</li><li><code>commonware-utils</code> provides the small collection helpers the example needs.</li><li><code>commonware_macros::select!</code> lets human input and network input run together.</li></ul>
+<p>The chapter keeps one question in view the whole time: what makes this room the same room for every invited peer?</p>
+<h2 id="1-what-the-example-is-actually-teaching">1. What the Example Is Actually Teaching</h2>
+<p><code>commonware-chat</code> is not a terminal demo that happens to send bytes. It is a lecture on how to build a private conversation without mixing up addresses, badges, guest lists, and transport paths.</p>
+<p>The warning is subtle but important. A network address is a route, not a person. A socket is a path, not permission. An encrypted payload can hide the contents of a message while still leaving the group boundary vague. If the membership rule is not shared, the room itself is undefined.</p>
+<p>That is why the example is intentionally invitation-only. It teaches how to make a room that only exists for peers that were admitted, and how to keep the transport layer from deciding who belongs.</p>
+<h2 id="2-identity-and-membership">2. Identity and Membership</h2>
+<p>[<code>examples/chat/src/main.rs</code>](/home/r/coding/monorepo/examples/chat/src/main.rs) begins by parsing <code>--me</code> into an <code>ed25519::PrivateKey</code>, then deriving the public key that names the local peer.</p>
+<p>That choice removes ambiguity. The local participant is no longer a nickname or a host address that can drift. It is a cryptographic identity that can be carried through discovery, logging, and message handling without translation.</p>
+<p>The friend list follows the same rule. The example turns <code>--friends</code> into a canonical <code>Set&lt;PublicKey&gt;</code> and rejects duplicates with <code>TryCollect</code>. That is not cleanup for its own sake. Duplicate peers mean the guest list is not a clean statement of membership yet.</p>
+<p>Then the example gives that set to discovery with <code>oracle.track(0, recipients)</code>. That line is the membership boundary. It tells discovery which peers should be treated as part of the same active room.</p>
+<p>The requirement that every participant agree on the same friend set is not a nice-to-have. If the sets diverge, some pairs may still connect, but the room is no longer globally the same room. The discovery overlay can only describe a shared membership rule if every peer is using the same rule.</p>
+<h2 id="3-discovery-and-transport-wiring">3. Discovery and Transport Wiring</h2>
+<p><code>discovery::Config::local</code> is where the room becomes concrete. The example passes the local signer, the namespace <code>_COMMONWARE_EXAMPLES_CHAT</code>, the local socket address, and the bootstrapper list.</p>
+<p>The namespace matters. It is the stream identity, and it prevents this chat room from being confused with any other protocol that happens to reuse the same transport. Changing it is not a cosmetic refactor. It changes the stream identity.</p>
+<p>The bootstrapper list is not the membership list. It is only the hallway into the room. The invited peers still come from the friend set, while the bootstrappers are just the first places discovery can look.</p>
+<p>The network then registers the chat channel with a quota and a backlog: <code>Quota::per_second(NZU32!(128))</code> and <code>MAX_MESSAGE_BACKLOG</code>. That is the example telling the truth about pressure. A live conversation is bounded. It is not an infinite pipe.</p>
+<p>The resulting boundary is clean:</p>
+<ul><li><code>chat_sender</code> is how the UI enters the network.</li><li><code>chat_receiver</code> is how the UI hears from the network.</li></ul>
+<p>No raw sockets leak into the application layer. The room speaks through its own channel.</p>
+<h2 id="4-the-live-loop">4. The Live Loop</h2>
+<p>[<code>examples/chat/src/handler.rs</code>](/home/r/coding/monorepo/examples/chat/src/handler.rs) is where the example stops being a setup story and becomes a live system.</p>
+<p><code>select!</code> balances keyboard events against network receives. That matters because the two streams are independent. Human intent and peer traffic do not arrive in lockstep, and neither should block the other.</p>
+<p>When the user presses Enter, the current line is sent to <code>Recipients::All</code>. That is not just a convenience API. It is the example saying that once a peer is inside the room, the message is addressed to the room.</p>
+<p>The return value from <code>send</code> is part of the lesson. If the returned set is empty, the example warns the user. A message with no recipients is not the same thing as a delivered message, and the UI makes that distinction visible.</p>
+<p>Incoming messages are handled just as plainly. The receiver yields bytes, the UI turns them into text, and the message appears in the pane. The transport layer does not get to narrate meaning. It only carries data for the room.</p>
+<p>Logs and metrics stay inside the interface too. <code>examples/chat/src/logger.rs</code> feeds tracing into the terminal, and <code>context.encode()</code> makes the metrics pane part of the explanation rather than a separate debugging tool.</p>
+<h2 id="5-what-to-watch-in-real-runs">5. What to Watch in Real Runs</h2>
+<p>The most useful chat runs are the ones that tell you something about the room.</p>
+<ul><li>If <code>p2p_connections</code> is lower than <code>count(friends) - 1</code>, someone is not connected yet.</li><li>If a friend is offline when you send, <code>authenticated::discovery</code> drops the message instead of pretending delivery happened.</li><li>If the friend set is not synchronized, discovery may work for a subset of peers while the full room never forms.</li><li>If the input pane keeps accepting text but nothing appears in the message pane, the problem is likely connection state, membership, or an empty recipient set, not the terminal.</li><li>If the queue fills, the bounded channel makes that pressure visible instead of silently absorbing it.</li></ul>
+<p>The example is deliberately live-only. It does not store offline messages, it does not create durable history, and it does not try to repair disagreement about membership after the fact. Those are boundaries, not omissions.</p>
+<h2 id="6-how-to-read-the-source">6. How to Read the Source</h2>
+<ol><li>Start with [<code>examples/chat/src/main.rs</code>](/home/r/coding/monorepo/examples/chat/src/main.rs). This is the composition root. It shows how identity, membership, and discovery become one room.</li><li>Move to [<code>examples/chat/src/handler.rs</code>](/home/r/coding/monorepo/examples/chat/src/handler.rs). This is the live loop. Watch how <code>select!</code> keeps human input and network input in the same control path.</li><li>Finish with [<code>examples/chat/src/logger.rs</code>](/home/r/coding/monorepo/examples/chat/src/logger.rs). This is observability as part of the room, not a sidecar service.</li><li>Only after those files should you revisit the p2p discovery docs. At that point discovery reads like a membership rule instead of a helper API.</li></ol>
+<p>Read in that order, the example stays focused on how a private conversation is assembled from distinct responsibilities.</p>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../sync/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-sync</span>
+          <span class="foot-sub">sync</span>
+        </a>
+        <div class="foot-center">
+          chat<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../estimator/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-estimator</span>
+          <span class="foot-sub">estimator</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#the-problem-beneath-chat">The Problem Beneath Chat</a></li><li class="toc-item"><a class="toc-link" href="#1-what-the-example-is-actually-teaching">1. What the Example Is Actually Teaching</a></li><li class="toc-item"><a class="toc-link" href="#2-identity-and-membership">2. Identity and Membership</a></li><li class="toc-item"><a class="toc-link" href="#3-discovery-and-transport-wiring">3. Discovery and Transport Wiring</a></li><li class="toc-item"><a class="toc-link" href="#4-the-live-loop">4. The Live Loop</a></li><li class="toc-item"><a class="toc-link" href="#5-what-to-watch-in-real-runs">5. What to Watch in Real Runs</a></li><li class="toc-item"><a class="toc-link" href="#6-how-to-read-the-source">6. How to Read the Source</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

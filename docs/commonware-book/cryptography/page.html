@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-cryptography — commonware-book</title>
+  <meta name="description" content="Before the library-specific machinery matters, it helps to name the broad problem cryptography solves in a distributed system: it turns private acts into publicly checkable evidence.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / cryptography
+      </span>
+      <span class="chapter-title">commonware-cryptography</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../consensus/page.html">← prev</a>
+        <a class="next" href="../stream/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · cryptography · Complete · 22 min read</div>
+    <h1 class="ch-title">commonware-cryptography</h1>
+    <p class="ch-deck">How distributed systems manufacture evidence: identities, commitments, certificates, and shared keys.</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Before the library-specific machinery matters, it helps to name the broad problem cryptography solves in a distributed system: it turns private acts into publicly checkable evidence.
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 class="chapter-contract__heading" id="0-chapter-contract">0. Chapter Contract</h2>
+<p><code>commonware-cryptography</code> is the part of the library that turns cryptographic work into evidence the rest of the stack can trust.</p>
+<p>The promise of this chapter is to show how identities, transcripts, certificates, handshakes, and DKG all answer the same question: what fact is the system allowed to trust now?</p>
+<p>The crux is that a primitive only matters here when it preserves meaning across protocol stages, peers, and later verification.</p>
+<p>The primary invariant is that no signature, digest, certificate, or shared key may be interpreted without the namespace, transcript state, and committee context that made it valid.</p>
+<p>The naive failure is to hash or sign raw bytes in isolation, then assume the same bytes mean the same thing everywhere. That is how replay, ambiguity, and blame confusion enter a protocol.</p>
+<p class="section-kicker">Reading map</p>
+<ul class="reading-map"><li><code>cryptography/src/lib.rs</code> for the vocabulary of signers, verifiers, digests, and commitments</li><li><code>cryptography/src/transcript.rs</code> for context binding and domain separation</li><li><code>cryptography/src/certificate.rs</code> and the BLS certificate modules for attributable and threshold evidence</li><li><code>cryptography/src/secret.rs</code> for custody discipline around private material</li><li><code>cryptography/src/secp256r1/recoverable.rs</code> for signatures that can recover the signer key from the signature itself</li><li><code>cryptography/src/bls12381/tle.rs</code> for delayed evidence release through timelock encryption</li><li><code>cryptography/src/handshake.rs</code> for evidence turned into a live authenticated channel</li><li><code>cryptography/src/bls12381/dkg.rs</code> for stable public identity under changing private custody</li></ul>
+<p class="section-kicker">Assumption ledger</p>
+<ul class="assumption-ledger"><li>Adversary: active network peers, replay, stale evidence, and dishonest committee members</li><li>Trusted boundary: transcript construction, namespace binding, certificate formation, and handshake state</li><li>Invariant: every proof stays tied to the exact protocol meaning that created it</li><li>Guarantee edge: the crate can reject misbound or stale evidence and preserve evidence semantics, but it cannot infer the caller&#x27;s intent or repair a wrong protocol design</li></ul>
+<p>Read the chapter in that order and keep the contract in view. The tone should stay lecture-like: start from doubt, build a mental model, and only then name the mechanisms that resolve it.</p></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part II. Evidence and State</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">4 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">22 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-stream</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-background-cryptography-as-checkable-evidence">1. Background: Cryptography as Checkable Evidence</a></li><li class="toc-item"><a class="toc-link" href="#2-what-problem-does-this-solve">2. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#3-the-basic-contract-who-what-and-in-what-context">3. The Basic Contract: Who, What, and In What Context?</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-identities-are-more-than-verification-keys">3.1 Identities Are More Than Verification Keys</a></li><li><a class="toc-link" href="#3-2-commitments-are-facts-with-boundaries">3.2 Commitments Are Facts With Boundaries</a></li><li><a class="toc-link" href="#3-3-identity-keys-and-signing-keys-can-differ">3.3 Identity Keys and Signing Keys Can Differ</a></li><li><a class="toc-link" href="#3-4-scheme-matrix-pick-the-product-not-the-brand-name">3.4 Scheme Matrix: Pick the Product, Not the Brand Name</a></li><li><a class="toc-link" href="#3-5-recoverable-signatures-when-the-signature-carries-the-signer-hint">3.5 Recoverable Signatures: When the Signature Carries the Signer Hint</a></li><li><a class="toc-link" href="#3-6-secret-handling-what-the-wrapper-protects-and-what-it-cannot">3.6 Secret Handling: What the Wrapper Protects, and What It Cannot</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-transcript-discipline-meaning-before-math">4. Transcript Discipline: Meaning Before Math</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-commit-versus-append">4.1 commit Versus append</a></li><li><a class="toc-link" href="#4-2-fork-summarize-and-resume">4.2 fork, summarize, and resume</a></li><li><a class="toc-link" href="#4-3-derived-randomness-is-still-evidence-bound">4.3 Derived Randomness Is Still Evidence-Bound</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-committee-evidence-agreement-blame-and-compression">5. Committee Evidence: Agreement, Blame, and Compression</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-what-the-certificate-module-actually-models">5.1 What the Certificate Module Actually Models</a></li><li><a class="toc-link" href="#5-2-attributable-evidence">5.2 Attributable Evidence</a></li><li><a class="toc-link" href="#5-3-threshold-evidence">5.3 Threshold Evidence</a></li><li><a class="toc-link" href="#5-4-threshold-versus-attributable-two-different-kinds-of-proof">5.4 Threshold Versus Attributable: Two Different Kinds of Proof</a></li><li><a class="toc-link" href="#5-5-the-trust-question-changes-with-the-product">5.5 The Trust Question Changes With the Product</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-authenticated-key-exchange-turning-evidence-into-a-channel">6. Authenticated Key Exchange: Turning Evidence Into a Channel</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-why-three-messages">6.1 Why Three Messages?</a></li><li><a class="toc-link" href="#6-2-directionality-is-part-of-the-safety-story">6.2 Directionality Is Part of the Safety Story</a></li><li><a class="toc-link" href="#6-3-time-is-also-evidence">6.3 Time Is Also Evidence</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-shared-keys-over-time-continuity-without-central-custody">7. Shared Keys Over Time: Continuity Without Central Custody</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-what-dkg-produces">7.1 What DKG Produces</a></li><li><a class="toc-link" href="#7-2-why-resharing-is-the-real-operational-story">7.2 Why Resharing Is the Real Operational Story</a></li><li><a class="toc-link" href="#7-3-why-the-dkg-source-is-long">7.3 Why the DKG Source Is Long</a></li><li><a class="toc-link" href="#7-4-tle-delayed-evidence-release-not-just-another-encryption-primitive">7.4 TLE: Delayed Evidence Release, Not Just Another Encryption Primitive</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-pressure-limits-and-reading-order">8. Pressure, Limits, and Reading Order</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="1-background-cryptography-as-checkable-evidence">1. Background: Cryptography as Checkable Evidence</h2>
+<p>Before the library-specific machinery matters, it helps to name the broad problem cryptography solves in a distributed system: it turns private acts into publicly checkable evidence.</p>
+<p>At the code level, the basic vocabulary is already explicit:</p>
+<ul><li><code>Signer::sign(namespace, msg)</code> binds a signature to a namespace and message.</li><li><code>Verifier::verify(namespace, msg, sig)</code> checks that same binding later.</li><li><code>Transcript::commit</code>, <code>append</code>, <code>fork</code>, <code>resume</code>, and <code>summarize</code> build the context that gives those bytes meaning.</li><li><code>Digestible</code> and <code>Committable</code> separate &quot;one unique digest&quot; from &quot;the commitment this larger protocol needs.&quot;</li></ul>
+<p>That separation is not decorative. The code in <code>transcript.rs</code> proves the point. <code>Transcript::new</code> starts from a namespace, <code>commit</code> flushes byte boundaries into the state, and <code>append</code> lets the caller keep building one message without accidentally changing the meaning of earlier bytes.</p>
+<p>The temptation is to treat these tools as independent tricks. They are not. They solve the same deeper problem: how do we make a claim that survives being checked later, in a different process, by someone who was not present when the claim was made?</p>
+<p>That is why naive approaches fail so often.</p>
+<ul><li>Signing raw bytes without a namespace makes the same signature mean too many things.</li><li>Hashing data without saying what the digest represents leaves room for replay and substitution.</li><li>Using the same key or transcript for unrelated protocol steps makes evidence portable in the wrong way.</li><li>Assuming &quot;a quorum signed this&quot; is the same as &quot;a quorum agreed on the same meaning&quot; confuses compression with correctness.</li></ul>
+<p>Keep that picture in mind: the rest of the chapter is not a tour of isolated primitives. It is a study of how evidence stays meaningful as it moves through a distributed protocol.</p>
+<hr>
+<h2 id="2-what-problem-does-this-solve">2. What Problem Does This Solve?</h2>
+<p>A distributed system does not wake up wanting elliptic curves. It wakes up with doubt.</p>
+<ul><li>Who exactly sent this message?</li><li>What did they believe they were signing?</li><li>Is this evidence local to one protocol step, or can I carry it to a third party?</li><li>Did one node act, or did a committee act?</li><li>Can the committee keep the same public identity while the private holders behind it change?</li></ul>
+<p><code>commonware-cryptography</code> exists to answer those questions.</p>
+<p>That is the first mental shift to make before reading the crate. The crate is not mainly about computation. It is about evidence.</p>
+<p>Computation turns bytes into other bytes. Evidence turns an event into a fact that other components can rely on.</p>
+<p>Sometimes the evidence is simple:</p>
+<ul><li>a public key that names a participant,</li><li>a signature that ties that participant to a statement,</li><li>a digest that commits to a value.</li></ul>
+<p>Sometimes the evidence is collective:</p>
+<ul><li>a certificate that says a quorum endorsed the same subject,</li><li>a threshold signature that compresses committee agreement into one proof,</li><li>a public polynomial that tells the world what key a committee is jointly holding.</li></ul>
+<p>Sometimes the evidence is procedural:</p>
+<ul><li>a transcript that records what context was bound before signing or deriving randomness,</li><li>a handshake that proves two peers landed in the same conversation,</li><li>a resharing protocol that preserves a committee&#x27;s public identity across membership change.</li></ul>
+<p>The crate is therefore best read as a sequence of evidence transforms. Raw inputs enter, a protocol binds meaning to them, and the output becomes a fact that another component may trust later.</p>
+<hr>
+<h2 id="3-the-basic-contract-who-what-and-in-what-context">3. The Basic Contract: Who, What, and In What Context?</h2>
+<p>Before the crate becomes sophisticated, it establishes a common language in <code>cryptography/src/lib.rs</code>.</p>
+<p>That language separates three concerns that systems often blur together:</p>
+<ol><li>who acted</li><li>what was being referred to</li><li>what context gave that act its meaning</li></ol>
+<p>The first concern appears in the familiar traits:</p>
+<ul><li><code>Signer</code></li><li><code>Verifier</code></li><li><code>PublicKey</code></li><li><code>Signature</code></li></ul>
+<p>The second appears in:</p>
+<ul><li><code>Digest</code></li><li><code>Digestible</code></li><li><code>Committable</code></li></ul>
+<p>The third concern, context, is enforced more strongly in the transcript layer, but you can already see it here through namespaces and domain separation.</p>
+<p>This separation is not academic. It prevents one of the oldest mistakes in systems cryptography: treating a signature as if it were self-explanatory.</p>
+<p>A signature does not mean &quot;this byte string is true.&quot; It means something much narrower:</p>
+<blockquote><p>this signer endorsed this subject in this namespace under this protocol interpretation.</p></blockquote>
+<p>Take away the namespace and the meaning may change. Take away the committed structure of the subject and the meaning may change. Take away the signer and you no longer know whose action you are depending on.</p>
+<h3 id="3-1-identities-are-more-than-verification-keys">3.1 Identities Are More Than Verification Keys</h3>
+<p>At first glance, a public key looks like a purely technical object: the thing you need in order to verify a signature. In a distributed system it does more work than that. It is often the name by which the rest of the protocol knows a participant.</p>
+<p>That is why identity matters even when the system later adopts committee-level signing or threshold mechanisms. Nodes still need something stable to dial, order, authenticate, block, or blame.</p>
+<p>The code reflects that in the certificate and DKG layers. <code>Scheme::me()</code> lets a signing scheme know whether it owns one participant position. <code>participants()</code> keeps the ordered public identity set around. <code>Provider::scoped()</code> and <code>Provider::all()</code> decide whether a scheme is tied to a specific round or can verify across rounds because the public identity is stable.</p>
+<h3 id="3-2-commitments-are-facts-with-boundaries">3.2 Commitments Are Facts With Boundaries</h3>
+<p>A digest is also easy to underestimate. We casually say &quot;hash the data,&quot; as if the point were compression. But the real value is not that the digest is short. The value is that it turns a structured object into a stable fact.</p>
+<p>That is why the crate distinguishes <code>Digestible</code> from <code>Committable</code>.</p>
+<ul><li><code>Digestible</code> says an object has one unique digest.</li><li><code>Committable</code> says an object can provide the commitment a larger protocol needs, even when that commitment is not just &quot;hash these raw bytes.&quot;</li></ul>
+<p>The warning on <code>Committable</code> is not ornamental. It states that two objects with the same digest must not map to different commitments. That keeps digest equality aligned with higher-level protocol meaning.</p>
+<h3 id="3-3-identity-keys-and-signing-keys-can-differ">3.3 Identity Keys and Signing Keys Can Differ</h3>
+<p>One of the most useful choices in the crate is that identity keys do not have to be the same as signing keys.</p>
+<p>If you are used to small examples, that can seem unnecessarily flexible. Why not let one key do everything?</p>
+<p>Because real systems usually want two different properties:</p>
+<ul><li>a stable identity that says who a participant is inside the protocol,</li><li>and a signing mechanism optimized for the evidence the protocol wants to export.</li></ul>
+<p>Those are sometimes the same thing. Sometimes they are not. A committee may want one long-lived public identity for coordination while using a separate certificate scheme to prove quorum support. Once threshold systems and resharing enter the story, forcing those roles to collapse would only hide the real design.</p>
+<h3 id="3-4-scheme-matrix-pick-the-product-not-the-brand-name">3.4 Scheme Matrix: Pick the Product, Not the Brand Name</h3>
+<p>At this point it helps to stop thinking in terms of &quot;supported curves&quot; and start thinking in terms of evidence products. The crate ships several schemes, but they are not interchangeable. Each one answers a slightly different trust question.</p>
+<p>| Module | Evidence product | Attributable? | Batch-friendly? | Recoverable signer? | Operational shape | | --- | --- | --- | --- | --- | --- | | <code>ed25519</code> | Single-signer signatures and attributable certificates | Yes | Yes | No | Same key material can name and sign; good default when simple signer-specific evidence matters | | <code>secp256r1::standard</code> | Single-signer signatures and attributable certificates | Yes | No | No | HSM-friendly, deterministic signing, eager per-signature verification | | <code>secp256r1::recoverable</code> | Single-signer signatures that carry enough information to recover the public key | Yes | No | Yes | Useful when the signature itself should identify the signer without shipping a separate key field | | <code>bls12381::certificate::multisig</code> | Aggregated but still attributable committee certificates | Yes | Yes | No | Keeps a signer bitmap and aggregated proof; supports separate identity and signing keys | | <code>bls12381::certificate::threshold</code> | Constant-size threshold certificates | No | Yes | No | Needs DKG and resharing; proves quorum power existed, not which members supplied it |</p>
+<p>Two observations matter more than the table itself.</p>
+<p>First, the matrix is not ranking schemes from weak to strong. It is separating evidence semantics from implementation details. Threshold certificates are not &quot;the advanced version&quot; of attributable certificates. They are a different product with different export semantics.</p>
+<p>Second, the matrix explains why the crate allows identity keys and signing keys to diverge. Ed25519 can collapse them comfortably. BLS multisig often should not. Threshold signing cannot, because the public committee identity survives even while the private shares behind it are refreshed.</p>
+<p>The code path for batchable schemes makes that distinction visible again in <code>Scheme::verify_certificates_bisect</code>: when batch verification fails, the code splits the range and keeps bisecting until it isolates the bad certificate(s). That is a concrete example of evidence semantics shaping implementation.</p>
+<h3 id="3-5-recoverable-signatures-when-the-signature-carries-the-signer-hint">3.5 Recoverable Signatures: When the Signature Carries the Signer Hint</h3>
+<p>Most signatures require the verifier to already know which public key to check. Recoverable signatures change the packaging. In <code>secp256r1::recoverable</code>, the signature carries a recovery identifier alongside the ECDSA material, so the verifier can reconstruct the public key from three things:</p>
+<ul><li>the namespace,</li><li>the message,</li><li>and the signature itself.</li></ul>
+<p>That does not create new trust. It repackages existing trust so the signer can be inferred rather than supplied out of band.</p>
+<p>The code makes one subtle choice worth noticing: signatures are normalized into their low-<code>s</code> form, and the recovery identifier is adjusted accordingly. That is not cosmetic tidiness. It ensures the recovered identity corresponds to one canonical signature representation rather than several equivalent encodings.</p>
+<p>So the right mental model is:</p>
+<ul><li>ordinary signature: &quot;verify this against the key I gave you,&quot;</li><li>recoverable signature: &quot;recover the key that must have produced this,&quot;</li><li>certificate: &quot;reason about one signer or many signers as a protocol-level set.&quot;</li></ul>
+<h3 id="3-6-secret-handling-what-the-wrapper-protects-and-what-it-cannot">3.6 Secret Handling: What the Wrapper Protects, and What It Cannot</h3>
+<p>The crate also includes a <code>Secret&lt;T&gt;</code> wrapper. This is not a new cryptographic primitive. It is custody discipline for private material already in memory.</p>
+<p><code>Secret&lt;T&gt;</code> does four concrete things:</p>
+<ul><li>redacts <code>Debug</code> and <code>Display</code>,</li><li>zeroizes the wrapped storage on drop,</li><li>requires explicit <code>expose()</code> or <code>expose_unwrap()</code> to touch the inner value,</li><li>and compares in constant time when the inner type supports constant-time equality.</li></ul>
+<p>That is already valuable. A lot of leaks are not dramatic key extractions. They are log lines, panic output, careless equality checks, or stale bytes left behind after a value is dropped.</p>
+<p>But the wrapper is deliberately modest about its guarantee. It is built for flat value types, not pointer-rich containers. If you wrap a <code>Vec&lt;u8&gt;</code> or a <code>String</code>, zeroizing the outer structure does not automatically scrub the heap buffer it pointed to. If you derive temporaries from the secret inside <code>expose()</code>, those temporaries may live on the stack unless you wrap them in their own zeroizing container.</p>
+<p>So the right lecture note here is:</p>
+<blockquote><p><code>Secret&lt;T&gt;</code> improves secret custody inside the crate, but it does not relieve the caller from thinking about copies, indirection, and derived temporaries.</p></blockquote>
+<hr>
+<h2 id="4-transcript-discipline-meaning-before-math">4. Transcript Discipline: Meaning Before Math</h2>
+<p>If there is one place where the crate quietly saves the rest of the system from footguns, it is the transcript abstraction.</p>
+<p>Why is a transcript needed at all? Because &quot;just hash the fields together&quot; is not a method. It is an invitation to ambiguity.</p>
+<p>If you build commitments ad hoc, bad things happen:</p>
+<ul><li>field boundaries blur,</li><li>different protocol stages accidentally accept the same bytes,</li><li>randomness is derived from context that was never fully bound,</li><li>valid evidence from one place gets replayed in another place where it should not mean the same thing.</li></ul>
+<p>The transcript fixes this by forcing the protocol to answer a basic question before any cryptographic operation succeeds:</p>
+<blockquote><p>what exactly has been committed so far, and in what structure?</p></blockquote>
+<p>That is why the transcript belongs in the evidence layer. It is not merely a convenient hashing wrapper. It is the mechanism that turns context into a first-class invariant.</p>
+<p>Schematically, the discipline looks like this:</p>
+<pre><code class="language-rust">// Conceptually: first bind meaning, then derive evidence from it.
+let mut transcript = Transcript::new(b&quot;stream-handshake&quot;);
+transcript.commit(dialer_public_key.as_ref());
+transcript.commit(listener_public_key.as_ref());
+transcript.append(b&quot;syn&quot;);
+transcript.commit(syn_bytes);
+
+let summary = transcript.summarize();
+let proof = signer.sign(b&quot;&quot;, summary.as_ref());</code></pre>
+<p>The point of the snippet is not the exact API shape. The point is the order of thought. First decide what conversation this is. Then decide what part of the conversation is complete. Only then derive a digest, signature, or key.</p>
+<h3 id="4-1-commit-versus-append">4.1 <code>commit</code> Versus <code>append</code></h3>
+<p>The <code>commit</code> and <code>append</code> split is a small detail with large consequences.</p>
+<ul><li><code>append</code> says, &quot;I am still building this unit.&quot;</li><li><code>commit</code> says, &quot;This unit is finished and now part of the permanent story.&quot;</li></ul>
+<p>That distinction rules out a class of accidental equivalences where different construction sequences collapse into the same hash state. In other words, the transcript does not just record content. It records the boundaries that make content interpretable.</p>
+<p>The code in <code>Transcript::commit</code> and <code>Transcript::append</code> makes that explicit: <code>append</code> accumulates bytes, while <code>commit</code> flushes the length-tagged boundary into the hasher. Even an empty commit matters because the structure itself is part of the proof.</p>
+<h3 id="4-2-fork-summarize-and-resume">4.2 <code>fork</code>, <code>summarize</code>, and <code>resume</code></h3>
+<p>Real protocols branch. They derive one value for traffic keys, another for confirmation, another for later replayable evidence, and sometimes a compact summary for storage or transport.</p>
+<p>The transcript API treats that branching as something explicit:</p>
+<ul><li><code>fork</code> creates a new branch that shares history but not future meaning,</li><li><code>summarize</code> turns the current state into a stable commitment,</li><li><code>resume</code> lets later work continue from that committed point.</li></ul>
+<p>This matters because reuse is dangerous when it is implicit and powerful when it is deliberate. The transcript gives the system a disciplined way to reuse history without pretending two different conversations are the same one.</p>
+<p>The source code makes this hard to miss: <code>Transcript::fork</code> seeds a new transcript from the current summary, <code>resume</code> restarts from a prior summary but with a different start tag, and <code>noise</code> derives an opaque RNG from that same history. Same ingredients, different meanings.</p>
+<h3 id="4-3-derived-randomness-is-still-evidence-bound">4.3 Derived Randomness Is Still Evidence-Bound</h3>
+<p>The transcript also supports deriving randomness from committed history. That is an easy point to miss. We often talk as though randomness floats in from the sky and everything else follows from it. In protocol design, the opposite is often safer: let randomness emerge from context that has already been nailed down.</p>
+<p>So the transcript is really teaching one lesson over and over:</p>
+<blockquote><p>meaning must be assembled before mathematics can safely speak for the protocol.</p></blockquote>
+<hr>
+<h2 id="5-committee-evidence-agreement-blame-and-compression">5. Committee Evidence: Agreement, Blame, and Compression</h2>
+<p>A single signature tells you one actor took one action. Many distributed protocols need a stronger fact:</p>
+<blockquote><p>enough of the committee endorsed the same subject that the rest of the system may now move.</p></blockquote>
+<p>That is the job of the certificate layer.</p>
+<p>The crate begins with attestations: per-participant endorsements over the same subject. Those attestations can then be checked individually, batch verified, assembled into a certificate, and later shown as evidence that some threshold of support existed.</p>
+<p>At this point the lecture becomes more interesting, because committee agreement can mean two importantly different things.</p>
+<h3 id="5-1-what-the-certificate-module-actually-models">5.1 What the Certificate Module Actually Models</h3>
+<p><code>cryptography/src/certificate.rs</code> fixes what counts as committee evidence before curve-specific code gets to optimize anything.</p>
+<p>It models four stages:</p>
+<ol><li>attestation</li><li>one participant index plus one scheme-specific signature or share</li></ol>
+<ol><li>verification</li><li>scheme logic checks which attestations are valid and which signer indices are invalid</li></ol>
+<ol><li>assembly</li><li>enough verified attestations are transformed into a certificate product</li></ol>
+<ol><li>recovered verification</li><li>a later verifier checks the exported certificate against the subject and the committee context</li></ol>
+<p>The module also defines <code>Signers</code>, a bitmap over participant indices. That bitmap is the compact public statement of who participated. <code>Signers::from</code> asserts that signer indices are unique, and <code>Read for Signers</code> uses the participant count as an upper bound during decoding. That is a concrete example of the chapter&#x27;s main theme: structure is part of security.</p>
+<p>The abstraction is preventing the system from blurring together &quot;I saw some signatures&quot; and &quot;I now possess reusable committee evidence.&quot;</p>
+<h3 id="5-2-attributable-evidence">5.2 Attributable Evidence</h3>
+<p>Attributable schemes preserve signer identity in the exported evidence because some systems need the certificate to support later blame, auditing, or slashing.</p>
+<p>That means a recovered certificate can support questions like:</p>
+<ul><li>who signed?</li><li>how many signed?</li><li>did one participant sign two conflicting subjects?</li><li>can I show a third party exactly which participants were responsible?</li></ul>
+<p>This is evidence with blame attached. It is valuable whenever fault attribution is part of the protocol&#x27;s safety story.</p>
+<p>In Commonware, the attributable family includes:</p>
+<ul><li>Ed25519 certificates, which carry per-signer signatures ordered by signer index,</li><li>Secp256r1 certificates, which do the same but prefer eager individual verification over batching,</li><li>and BLS multisignatures, which compress the signatures themselves while still retaining a signer bitmap.</li></ul>
+<p>That last case is easy to misunderstand, so it is worth stating carefully. BLS multisig is not threshold signing. It aggregates signatures, but it still remembers which indices participated. That is why it lives on the attributable side of the line.</p>
+<h3 id="5-3-threshold-evidence">5.3 Threshold Evidence</h3>
+<p>Threshold schemes answer a different question:</p>
+<blockquote><p>can the committee produce one compact proof that the threshold was met?</p></blockquote>
+<p>This is evidence with compression attached.</p>
+<p>Once enough valid shares exist, the system can produce a small, strong proof of collective agreement. That is wonderful for transport, storage, and external consumption. But it changes what the evidence can say.</p>
+<p>The crucial tradeoff is not subtle and the crate is refreshingly explicit about it: threshold signatures are non-attributable. They prove that enough of the committee could have acted together. They do not give a third party the same signer-by-signer blame story that attributable certificates can.</p>
+<p>The threshold module makes this concrete in two ways.</p>
+<p>First, individual attestations are only partial signatures indexed by participant. They are useful inside the live protocol because the current committee can authenticate the transport peer that sent them and can validate the share against the public polynomial.</p>
+<p>Second, the exported certificate throws those individual shares away and keeps only the recovered threshold signature. By the time the proof leaves the committee boundary, it no longer tells an outsider which partials were used.</p>
+<p>That is why the crate says the evidence is non-attributable, not merely less convenient to attribute.</p>
+<h3 id="5-4-threshold-versus-attributable-two-different-kinds-of-proof">5.4 Threshold Versus Attributable: Two Different Kinds of Proof</h3>
+<p>The fastest way to keep the distinction straight is to compare what each proof supports after it leaves the local protocol.</p>
+<p>| Question a verifier wants to ask later | Attributable certificate | Threshold certificate | | --- | --- | --- | | Did quorum support this subject? | Yes | Yes | | Which participants signed? | Yes | No | | Can I prove signer-specific equivocation to a third party? | Yes | No | | Can current committee members still use partials locally for liveness or blame? | Yes | Yes, locally | | Does certificate size stay constant as the committee grows? | No, though aggregation can help | Yes |</p>
+<p>The subtle row is the fourth one. Threshold partials can still matter locally. If a peer connection is authenticated, a participant can know which neighbor sent which partial share. That can drive local blocking or progress decisions. What it does not give you is safe external fault evidence. Once enough partials exist, other parties can often synthesize equivalent-looking evidence.</p>
+<p>That local-versus-exported distinction is one of the most important ideas in the whole cryptography crate.</p>
+<h3 id="5-5-the-trust-question-changes-with-the-product">5.5 The Trust Question Changes With the Product</h3>
+<p>This is where the foundry metaphor earns its keep. The raw material in both cases may look similar: a subject and many participants. But the finished product serves a different trust question.</p>
+<ul><li>Attributable certificate: &quot;Which participants endorsed this, and can I prove that outside the local protocol?&quot;</li><li>Threshold certificate: &quot;Did enough committee power exist to endorse this, in a compact form other systems can consume?&quot;</li></ul>
+<p>Same committee. Different evidence. Different downstream uses.</p>
+<p>The source makes that difference operational too: <code>verify_attestations</code> splits verified from invalid signer indices, <code>assemble</code> collapses a valid set into one certificate, and <code>verify_certificates_bisect</code> keeps batch verification honest by bisecting failures instead of trusting a big batch blindly.</p>
+<hr>
+<h2 id="6-authenticated-key-exchange-turning-evidence-into-a-channel">6. Authenticated Key Exchange: Turning Evidence Into a Channel</h2>
+<p>The handshake module answers the question of how evidence becomes a live, ongoing secure conversation.</p>
+<p>It is tempting to describe a handshake as &quot;the part where two peers agree on a shared secret.&quot; That is true in the same way that describing a court hearing as &quot;the part where paperwork changes hands&quot; is true. It misses the purpose.</p>
+<p>The purpose of the handshake is to transform prior evidence about identity and context into a channel that can keep making trustworthy progress.</p>
+<p>That requires four things:</p>
+<ol><li>both sides must enter the same transcript,</li><li>both sides must authenticate who they think the peer is,</li><li>both sides must derive the same secret material from that shared history,</li><li>the resulting traffic must fail loudly under replay or reordering.</li></ol>
+<h3 id="6-1-why-three-messages">6.1 Why Three Messages?</h3>
+<p>The handshake uses three messages: <code>Syn</code>, <code>SynAck</code>, and <code>Ack</code>.</p>
+<p>That shape is not ornamental. It is the minimum conversation needed for each side to stop guessing and start proving.</p>
+<p>Very roughly:</p>
+<ol><li>the dialer says, &quot;here is my ephemeral contribution and my claim about this conversation,&quot;</li><li>the listener answers, &quot;I saw that claim, here is my own contribution, and here is evidence that I derived the same conversation state,&quot;</li><li>the dialer closes the loop with its own confirmation.</li></ol>
+<p>Only then does the system treat the channel as ready.</p>
+<p>The code shows this directly. <code>Context::new</code> forks the transcript under the handshake namespace. <code>dial_start</code> commits the current time and the dialer&#x27;s ephemeral key before producing <code>Syn</code>. <code>SynAck</code> carries the listener&#x27;s ephemeral key, a signature, and a confirmation summary. <code>Ack</code> closes the loop with the listener&#x27;s confirmation.</p>
+<h3 id="6-2-directionality-is-part-of-the-safety-story">6.2 Directionality Is Part of the Safety Story</h3>
+<p>After the handshake succeeds, the channel gets directional ciphers.</p>
+<p>That may sound like a plain engineering choice, but it is really another form of evidence discipline. Send and receive are not interchangeable stories. They must not share one nonce space, because that would let two different histories pretend to be the same one.</p>
+<p>So the channel carries two linked guarantees:</p>
+<ul><li>confidentiality and authenticity for traffic,</li><li>and a directional notion of sequence, so out-of-order reuse becomes decryption failure instead of silent confusion.</li></ul>
+<p>This is a recurring Commonware pattern: when something dangerous can be made structurally impossible, prefer that over hoping every caller remembers the rule.</p>
+<h3 id="6-3-time-is-also-evidence">6.3 Time Is Also Evidence</h3>
+<p>The handshake checks timestamps as well.</p>
+<p>That may look like mundane plumbing until you remember the chapter&#x27;s main theme. A replay is not just an old packet. It is stale evidence reintroduced in the wrong moment and asking to be trusted again.</p>
+<p>A timestamp window turns time into part of the trust claim. Too old, and the evidence is stale. Too far in the future, and the peer is speaking from outside the protocol&#x27;s intended clock horizon. Either way, the right answer is not to reinterpret the proof generously. The right answer is to reject it.</p>
+<hr>
+<h2 id="7-shared-keys-over-time-continuity-without-central-custody">7. Shared Keys Over Time: Continuity Without Central Custody</h2>
+<p>This is where the crate stops being merely about authenticated action and starts dealing with institutional continuity.</p>
+<p>Distributed Key Generation, or DKG, is often summarized as &quot;many parties generate one key together.&quot; Correct, but still too shallow.</p>
+<p>The deeper systems statement is this:</p>
+<blockquote><p>a committee creates one public identity that everyone can rely on, while no single participant ever holds the whole secret behind it.</p></blockquote>
+<p>That is the key idea. The outside world gets one stable public fact. The inside of the committee gets distributed custody.</p>
+<h3 id="7-1-what-dkg-produces">7.1 What DKG Produces</h3>
+<p>The finished product of DKG is not just secret shares. It is a package of trust:</p>
+<ul><li>a public key the world can verify against,</li><li>a public polynomial that commits to the shared key and its evaluations,</li><li>private shares spread across participants,</li><li>commitments and logs that let participants check whether the sharing process stayed coherent,</li><li>and a round-scoped description of who the dealers and players were when this output was formed.</li></ul>
+<p>Again the foundry picture helps. Raw material goes in: a committee, some randomness, a protocol, and a synchrony assumption. What comes out is a public identity with no single owner.</p>
+<p>The source mirrors that story in the types. <code>Info</code> binds the round, dealers, players, previous output, and mode. <code>Output</code> packages the public sharing data. <code>Dealer</code> and <code>Player</code> are state machines, not one-shot helpers. <code>SignedDealerLog</code> and <code>observe</code> let an external auditor reconstruct the public result.</p>
+<h3 id="7-2-why-resharing-is-the-real-operational-story">7.2 Why Resharing Is the Real Operational Story</h3>
+<p>If DKG were only about birthing a key once, it would be interesting but narrow. Resharing is what turns it into systems infrastructure.</p>
+<p>Resharing answers the practical question:</p>
+<blockquote><p>can the public identity remain stable while the private holders rotate, recover, or change membership?</p></blockquote>
+<p>In a long-lived protocol, that question is unavoidable. Machines fail. Members leave. New members join. Security policy changes. A committee that cannot refresh its private structure without changing its public identity forces the whole surrounding system to restart trust from scratch.</p>
+<p>Resharing avoids that reset. It preserves continuity at the public surface while refreshing risk underneath.</p>
+<h3 id="7-3-why-the-dkg-source-is-long">7.3 Why the DKG Source Is Long</h3>
+<p><code>bls12381/dkg.rs</code> is long because it is doing something operationally delicate, not because the authors forgot how to factor code.</p>
+<p>The protocol has to account for:</p>
+<ul><li>dealers who may be honest or dishonest,</li><li>players who may acknowledge or fail to acknowledge,</li><li>reveals used to recover progress when direct agreement fails,</li><li>synchrony assumptions that cannot be wished away,</li><li>and the difference between what participants can verify locally and what an outsider can later prove.</li></ul>
+<p>That is why this part of the crate should be read slowly. The difficulty is not ornamental complexity. The difficulty is the real cost of preserving continuity without handing one machine the secret crown jewels.</p>
+<p>The comments in the file are worth reading as part of the design. They explain why <code>Player::resume</code> exists, why missing dealings surface as <code>MissingPlayerDealing</code>, and why the protocol distinguishes honest progress from operator mistakes during recovery.</p>
+<h3 id="7-4-tle-delayed-evidence-release-not-just-another-encryption-primitive">7.4 TLE: Delayed Evidence Release, Not Just Another Encryption Primitive</h3>
+<p>The <code>bls12381/tle.rs</code> module is easy to overlook because it does not look like the certificate path. It matters for the same reason, though: it turns future committee evidence into a release condition.</p>
+<p>Timelock encryption here means:</p>
+<blockquote><p>encrypt a message now so that it becomes decryptable only once a valid signature over some target becomes available later.</p></blockquote>
+<p>The target might be a round number, epoch, timestamp, or some other public event the protocol expects the committee to sign in the future. The decryption key is not an independent secret handed around off to the side. It is derived from the signature over that target.</p>
+<p>The code makes the shape of that construction concrete:</p>
+<ul><li><code>encrypt</code> samples <code>sigma</code>,</li><li>derives <code>r = H3(sigma || message)</code>,</li><li>computes <code>U = r * G</code>,</li><li>masks <code>sigma</code> with the pairing output,</li><li>and masks the message with <code>H4(sigma)</code>.</li></ul>
+<p><code>decrypt</code> reverses the process only if the signature matches the target. That means TLE is really a release gate that reuses BLS12-381 structure, hardened ciphertext handling, and threshold signing so no single actor owns the release capability alone.</p>
+<hr>
+<h2 id="8-pressure-limits-and-reading-order">8. Pressure, Limits, and Reading Order</h2>
+<p>The chapter&#x27;s unifying idea is simple: cryptography matters here when it turns an action into evidence that survives later scrutiny.</p>
+<p>That also tells you where the guarantees stop.</p>
+<ul><li>The crate can reject misbound evidence, but it cannot repair a bad protocol design.</li><li><code>Secret&lt;T&gt;</code> helps with custody, but it does not magically scrub every copy or every pointer-rich container.</li><li>Threshold partials remain useful inside the committee boundary, but they do not export the same blame story as attributable certificates.</li><li>DKG preserves public continuity, but it still depends on the protocol assumptions spelled out in the source comments.</li><li>Handshakes bind context and prove liveness, but they still need honest clock bounds and matching identities.</li></ul>
+<p>If you want the sharpest reading of the crate, keep asking the same question while you read every file:</p>
+<blockquote><p>At this point, what fact does the system know, what is it still unsure about, and what evidence makes it safe to proceed?</p></blockquote>
+<p>That question, more than any one curve or scheme, is the real subject of <code>commonware-cryptography</code>.</p>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../consensus/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-consensus</span>
+          <span class="foot-sub">consensus</span>
+        </a>
+        <div class="foot-center">
+          cryptography<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../stream/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-stream</span>
+          <span class="foot-sub">stream</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-background-cryptography-as-checkable-evidence">1. Background: Cryptography as Checkable Evidence</a></li><li class="toc-item"><a class="toc-link" href="#2-what-problem-does-this-solve">2. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#3-the-basic-contract-who-what-and-in-what-context">3. The Basic Contract: Who, What, and In What Context?</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-identities-are-more-than-verification-keys">3.1 Identities Are More Than Verification Keys</a></li><li><a class="toc-link" href="#3-2-commitments-are-facts-with-boundaries">3.2 Commitments Are Facts With Boundaries</a></li><li><a class="toc-link" href="#3-3-identity-keys-and-signing-keys-can-differ">3.3 Identity Keys and Signing Keys Can Differ</a></li><li><a class="toc-link" href="#3-4-scheme-matrix-pick-the-product-not-the-brand-name">3.4 Scheme Matrix: Pick the Product, Not the Brand Name</a></li><li><a class="toc-link" href="#3-5-recoverable-signatures-when-the-signature-carries-the-signer-hint">3.5 Recoverable Signatures: When the Signature Carries the Signer Hint</a></li><li><a class="toc-link" href="#3-6-secret-handling-what-the-wrapper-protects-and-what-it-cannot">3.6 Secret Handling: What the Wrapper Protects, and What It Cannot</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-transcript-discipline-meaning-before-math">4. Transcript Discipline: Meaning Before Math</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-commit-versus-append">4.1 commit Versus append</a></li><li><a class="toc-link" href="#4-2-fork-summarize-and-resume">4.2 fork, summarize, and resume</a></li><li><a class="toc-link" href="#4-3-derived-randomness-is-still-evidence-bound">4.3 Derived Randomness Is Still Evidence-Bound</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-committee-evidence-agreement-blame-and-compression">5. Committee Evidence: Agreement, Blame, and Compression</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-what-the-certificate-module-actually-models">5.1 What the Certificate Module Actually Models</a></li><li><a class="toc-link" href="#5-2-attributable-evidence">5.2 Attributable Evidence</a></li><li><a class="toc-link" href="#5-3-threshold-evidence">5.3 Threshold Evidence</a></li><li><a class="toc-link" href="#5-4-threshold-versus-attributable-two-different-kinds-of-proof">5.4 Threshold Versus Attributable: Two Different Kinds of Proof</a></li><li><a class="toc-link" href="#5-5-the-trust-question-changes-with-the-product">5.5 The Trust Question Changes With the Product</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-authenticated-key-exchange-turning-evidence-into-a-channel">6. Authenticated Key Exchange: Turning Evidence Into a Channel</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-why-three-messages">6.1 Why Three Messages?</a></li><li><a class="toc-link" href="#6-2-directionality-is-part-of-the-safety-story">6.2 Directionality Is Part of the Safety Story</a></li><li><a class="toc-link" href="#6-3-time-is-also-evidence">6.3 Time Is Also Evidence</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-shared-keys-over-time-continuity-without-central-custody">7. Shared Keys Over Time: Continuity Without Central Custody</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-what-dkg-produces">7.1 What DKG Produces</a></li><li><a class="toc-link" href="#7-2-why-resharing-is-the-real-operational-story">7.2 Why Resharing Is the Real Operational Story</a></li><li><a class="toc-link" href="#7-3-why-the-dkg-source-is-long">7.3 Why the DKG Source Is Long</a></li><li><a class="toc-link" href="#7-4-tle-delayed-evidence-release-not-just-another-encryption-primitive">7.4 TLE: Delayed Evidence Release, Not Just Another Encryption Primitive</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-pressure-limits-and-reading-order">8. Pressure, Limits, and Reading Order</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

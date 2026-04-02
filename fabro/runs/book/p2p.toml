@@ -1,0 +1,31 @@
+version = 1
+graph = "../../workflows/module-chapter/workflow.fabro"
+goal = "Create a graduate-level, navigable interactive-book chapter for commonware-p2p with embedded visualization specifications."
+
+[llm]
+provider = "anthropic"
+model = "MiniMax-M2.7-highspeed"
+
+[sandbox]
+provider = "local"
+
+[sandbox.env]
+ANTHROPIC_BASE_URL = "https://api.minimax.io/anthropic"
+ANTHROPIC_AUTH_TOKEN = "${env.MINIMAX_API_KEY}"
+API_TIMEOUT_MS = "3000000"
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+ANTHROPIC_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_SMALL_FAST_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_DEFAULT_SONNET_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_DEFAULT_OPUS_MODEL = "MiniMax-M2.7-highspeed"
+ANTHROPIC_DEFAULT_HAIKU_MODEL = "MiniMax-M2.7-highspeed"
+
+[vars]
+module_slug = "p2p"
+module_display_name = "commonware-p2p"
+crate_path = "p2p"
+readme_path = "p2p/README.md"
+source_glob = "p2p/src/**"
+chapter_dir = "docs/commonware-book/p2p"
+supplemental_context = ""
+module_focus = "- Focus especially on discovery vs lookup vs authenticated transport, actor topology, simulated vs authenticated network layers, relay and mailbox semantics, and the operational shape of peer connectivity."

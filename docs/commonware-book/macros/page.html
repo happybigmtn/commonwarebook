@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-macros — commonware-book</title>
+  <meta name="description" content="Macros matter when the same control shape keeps reappearing and humans start copying it by hand. A function can reuse behavior, but it cannot change syntax. A macro can. That makes macros useful anywh">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / macros
+      </span>
+      <span class="chapter-title">commonware-macros</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../conformance/page.html">← prev</a>
+        <a class="next" href="../utils/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · macros · Complete · 11 min read</div>
+    <h1 class="ch-title">commonware-macros</h1>
+    <p class="ch-deck">Syntax for the Repeated Parts of Protocol Code</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Macros matter when the same control shape keeps reappearing and humans start copying it by hand. A function can reuse behavior, but it cannot change syntax. A macro can. That makes macros useful anywhere the important thing is not just what code does, but how the code is spelled.
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 id="opening-apparatus">Opening Apparatus</h2>
+<p><strong>Promise.</strong> This chapter shows how <code>commonware-macros</code> turns a few repeated protocol shapes into shared syntax so the rest of the workspace can speak one control-flow, stability, and test language.</p>
+<p><strong>Crux.</strong> A macro in Commonware is not primarily a convenience feature. It is a way to keep repeated protocol grammar from drifting across crates.</p>
+<p><strong>Primary invariant.</strong> When a pattern is standardized here, the call site should expose the important protocol decision more clearly than the hand-written version it replaces.</p>
+<p><strong>Naive failure.</strong> The easy mistake is to say, &quot;it is only a little boilerplate, I will just write it inline.&quot; Do that enough times and the workspace starts speaking in dialects: one actor loop treats shutdown differently, one test harness names groups differently, one stability gate excludes a different set of items than another.</p>
+<p><strong>Reading map.</strong></p>
+<ul><li>Start with <code>macros/src/lib.rs</code> for the vocabulary the rest of the workspace is meant to speak.</li><li>Then read <code>macros/impl/src/lib.rs</code> for the grammar and the exclusion rules that make the macros safe to use.</li><li><code>macros/impl/src/nextest.rs</code> shows how grouped tests become a build-time naming contract instead of a string convention.</li><li><code>macros/tests/select.rs</code> and <code>macros/tests/stability.rs</code> show the edges the macros must preserve.</li></ul>
+<p><strong>Assumption ledger.</strong></p>
+<ul><li>The reader is comfortable with proc macros and async control flow.</li><li>The chapter is about preserving recurring shapes, not about macro cleverness.</li><li>Shared syntax is only useful if it makes the protocol easier to read.</li></ul></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part III. Shared Machinery</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">13 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">11 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-utils</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background">Background</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-select-makes-priority-visible">3.1 select! Makes Priority Visible</a></li><li><a class="toc-link" href="#3-2-select-loop-turns-one-choice-into-an-actor-lifecycle">3.2 select_loop! Turns One Choice Into an Actor Lifecycle</a></li><li><a class="toc-link" href="#3-3-the-stability-macros-encode-an-exclusion-ladder">3.3 The Stability Macros Encode an Exclusion Ladder</a></li><li><a class="toc-link" href="#3-4-stability-scope-shows-that-compile-time-control-flow-can-also-be-local">3.4 stability_scope! Shows That Compile-Time Control Flow Can Also Be Local</a></li><li><a class="toc-link" href="#3-5-the-test-macros-standardize-harness-semantics">3.5 The Test Macros Standardize Harness Semantics</a></li><li><a class="toc-link" href="#3-6-test-group-treats-nextest-names-as-build-time-policy">3.6 test_group Treats Nextest Names as Build-Time Policy</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-control-flow-syntax-starts-as-a-small-local-claim">4.1 Control-Flow Syntax Starts as a Small Local Claim</a></li><li><a class="toc-link" href="#4-2-the-proc-macro-expands-that-claim-into-explicit-runtime-machinery">4.2 The Proc Macro Expands That Claim Into Explicit Runtime Machinery</a></li><li><a class="toc-link" href="#4-3-the-tests-then-nail-down-the-semantic-edges">4.3 The Tests Then Nail Down the Semantic Edges</a></li><li><a class="toc-link" href="#4-4-the-test-harness-macros-repeat-the-same-pattern">4.4 The Test Harness Macros Repeat the Same Pattern</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-biased-selection-can-starve-later-branches">6.1 Biased Selection Can Starve Later Branches</a></li><li><a class="toc-link" href="#6-2-select-loop-does-not-make-the-body-correct">6.2 select_loop! Does Not Make the Body Correct</a></li><li><a class="toc-link" href="#6-3-stability-macros-enforce-visibility-not-semantic-stability">6.3 Stability Macros Enforce Visibility, Not Semantic Stability</a></li><li><a class="toc-link" href="#6-4-a-clean-harness-still-needs-a-good-test">6.4 A Clean Harness Still Needs a Good Test</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="background">Background</h2>
+<p>Macros matter when the same control shape keeps reappearing and humans start copying it by hand. A function can reuse behavior, but it cannot change syntax. A macro can. That makes macros useful anywhere the important thing is not just what code does, but how the code is spelled.</p>
+<p>The vocabulary here is simple:</p>
+<ul><li><strong>Token trees</strong> are the raw shapes a macro receives.</li><li><strong>Expansion</strong> is the rewritten Rust the compiler actually checks.</li><li><strong>Hygiene</strong> is the rule that keeps names and scopes from colliding by accident.</li><li><strong>Control-flow macros</strong> keep branch order and loop exits visible.</li><li><strong>Attribute macros</strong> attach policy to items without repeating the policy at every call site.</li></ul>
+<p>The naive alternative is copy and paste. That works until the repeated shape drifts. One loop remembers to prioritize shutdown. Another forgets. One test harness names groups one way. Another names them differently. At that point the workspace still compiles, but the shared meaning has started to splinter.</p>
+<p>There is also a second naive alternative: hide the pattern in a helper function. That is better than copy and paste when the repeated part is behavior. It is not enough when the repeated part is syntax. A helper function cannot make <code>else</code> sit beside a refutable pattern, cannot turn branch order into an explicit policy, and cannot make a stability gate look like a local item annotation.</p>
+<p>The tradeoff is indirection. Macros can make a protocol easier to read once the pattern is familiar, but they can also make debugging harder if the expansion is too clever. That is why the right macro is small, explicit, and narrowly focused. It should preserve a recurring shape, not invent a new language.</p>
+<p>In this chapter, the main background idea is that syntax itself can be a form of coordination. If several crates need the same policy, compile-time rewriting can keep that policy uniform without forcing every caller to spell out the same ceremony.</p>
+<hr>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>Protocol code keeps saying the same things:</p>
+<ul><li>wait for whichever future is ready first,</li><li>keep looping until shutdown wins,</li><li>hide this item at higher stability levels,</li><li>run this async test like a normal test,</li><li>capture traces the same way everywhere,</li><li>rename this test so nextest can filter it predictably.</li></ul>
+<p>Those are not random conveniences. They are repeated protocol moves. If every crate hand-writes them, the workspace starts speaking in dialects. One actor loop handles shutdown one way, another handles it a little differently, and the reader has to relearn the same control flow in every file.</p>
+<p><code>commonware-macros</code> exists to stop that drift. It turns the repeated parts into shared syntax so the call site can say the protocol directly instead of spelling the surrounding ceremony every time.</p>
+<p>That is why this crate belongs in the book. It is the grammar of recurring protocol habits.</p>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>Think of the crate as a tiny compiler front end.</p>
+<p>Each macro starts with syntax that humans already want to write, parses that syntax into a structured shape, and then emits ordinary Rust with one carefully chosen policy baked in. The important distinction is that the macro is not &quot;doing work&quot; so much as lowering a small protocol grammar into explicit code.</p>
+<p>That lowering happens in three distinct ways:</p>
+<ul><li><code>select!</code> is a thin reexport around <code>tokio::select!</code> in biased mode.</li><li><code>select_loop!</code> parses a mini language, then expands it into a loop with a persistent shutdown future and ordinary select branches.</li><li>the stability and test macros attach compile-time policy to items, then make the generated item shape match the policy exactly.</li></ul>
+<p>Once you read the crate this way, the interesting question stops being &quot;what macro should I call?&quot; and becomes &quot;what expansion shape does the protocol need?&quot;</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-select-makes-priority-visible">3.1 <code>select!</code> Makes Priority Visible</h3>
+<p>Protocols spend a lot of time waiting on many things at once. A message arrives, a timer fires, a connection closes, a cancellation signal comes in. The real question is not &quot;how do I poll futures?&quot; It is &quot;which event should win if two are ready?&quot;</p>
+<p><code>select!</code> answers that question by generating a biased <code>tokio::select!</code> block. The source order of the branches is therefore part of the protocol. An earlier branch is not merely earlier in the file. It is earlier in the scheduling policy.</p>
+<p>That matters because priority is often a semantic choice. If shutdown should win before work drains, or if a control channel should be checked before a bulk-data branch, the source order needs to say so directly. The macro keeps that choice visible instead of hiding it in a helper function or a nested <code>match</code>.</p>
+<h3 id="3-2-select-loop-turns-one-choice-into-an-actor-lifecycle">3.2 <code>select_loop!</code> Turns One Choice Into an Actor Lifecycle</h3>
+<p>The richer macro is <code>select_loop!</code>.</p>
+<p>Its parser is intentionally narrow. <code>SelectLoopInput</code> expects a context expression, an optional <code>on_start</code>, a required <code>on_stopped</code>, a sequence of branches, and an optional <code>on_end</code>. Each branch is parsed as <code>pattern = future [else expr] =&gt; body</code>, with <code>Pat::parse_single</code> ensuring the pattern is already in a form the compiler understands.</p>
+<p>That grammar exists so the expansion can be honest. The emitted code is not a magical runtime. It is a <code>let mut shutdown = context.stopped();</code> binding, a plain <code>loop</code>, a biased select, and a couple of lifecycle hooks placed at exact points in that loop.</p>
+<p>Two implementation details are worth calling out.</p>
+<p>First, refutable patterns must carry an <code>else</code> clause. The macro checks that at parse time with a tiny irrefutability test, so <code>Some(msg) = rx.recv()</code> without an <code>else</code> is rejected immediately instead of becoming a confusing runtime branch.</p>
+<p>Second, <code>expr_to_tokens</code> inlines block contents instead of wrapping them in an extra block every time. That preserves lexical scope for <code>on_start</code>, the select arms, and <code>on_end</code>. A variable introduced in <code>on_start</code> is supposed to be visible in the rest of the iteration, and the expansion keeps that promise.</p>
+<p>The resulting shape is roughly:</p>
+<pre><code class="language-text">let mut shutdown = context.stopped();
+loop {
+    on_start
+    select! {
+        _ = &amp;mut shutdown =&gt; { on_stopped; break; }
+        branches...
+    }
+    on_end
+}</code></pre>
+<p>That is a lifecycle, not just a convenience wrapper.</p>
+<h3 id="3-3-the-stability-macros-encode-an-exclusion-ladder">3.3 The Stability Macros Encode an Exclusion Ladder</h3>
+<p>The stability family looks simple from the outside:</p>
+<ul><li><code>#[stability(LEVEL)]</code></li><li><code>stability_mod!(LEVEL, pub mod name)</code></li><li><code>stability_scope!(LEVEL { ... })</code></li></ul>
+<p>The interesting part is how the proc macro lowers the level into cfg guards. <code>StabilityLevel</code> accepts either the integer levels <code>0..4</code> or the named levels <code>ALPHA</code> through <code>EPSILON</code>. <code>exclusion_cfg_names(level)</code> then constructs every higher stability cfg plus <code>commonware_stability_RESERVED</code>.</p>
+<p>That reserved cfg is the key systems detail. It gives CI a way to hide every annotated public item at once and then inspect rustdoc output for stragglers. Any public item that still appears under the reserved cfg is an unmarked item, which is exactly the sort of omission the stability checks are meant to catch.</p>
+<p><code>stability_scope!</code> makes the same rule local to a block of items. If the caller provides <code>cfg(feature = &quot;std&quot;)</code>, the macro emits <code>#[cfg(all(feature = &quot;std&quot;, not(any(...))))]</code> on every item. The macro is therefore not &quot;just&quot; adding attributes. It is making one visibility policy apply to a whole scope without letting the items drift apart.</p>
+<h3 id="3-4-stability-scope-shows-that-compile-time-control-flow-can-also-be-local">3.4 <code>stability_scope!</code> Shows That Compile-Time Control Flow Can Also Be Local</h3>
+<p><code>stability_scope!</code> deserves separate attention because it teaches the same idea as <code>select_loop!</code>, but at compile time.</p>
+<p>A module can say, in one place, &quot;these items are all the same stability level, and they also all share the same <code>cfg</code> predicate.&quot; The macro then rewrites each item with the same exclusion guard. That makes the scope itself the unit of policy instead of each item becoming a tiny snowflake of <code>#[cfg]</code> logic.</p>
+<p>The tests in <code>macros/tests/stability.rs</code> are valuable because they show that the grouped form is not a different meaning. It is the same exclusion ladder applied to a block instead of repeated per item.</p>
+<h3 id="3-5-the-test-macros-standardize-harness-semantics">3.5 The Test Macros Standardize Harness Semantics</h3>
+<p>The test macros are best understood as harness shims.</p>
+<p><code>test_async</code> strips the <code>async</code> from the function signature, keeps the original item shape, and wraps the body in <code>futures::executor::block_on</code>. The point is not just convenience. It keeps async tests in the same class as ordinary tests, which matters when a suite needs to mix both styles.</p>
+<p><code>test_traced</code> validates the requested log level, builds a subscriber with <code>FmtSpan::CLOSE</code>, and runs the test under that dispatcher. <code>test_collect_traces</code> goes one step further: it creates a <code>TraceStorage</code>, builds both a formatting layer and a collecting layer, and uses <code>crate_name(&quot;commonware-runtime&quot;)</code> to find the right path to the runtime crate even if the workspace renamed it.</p>
+<p><code>test_group</code> is the smallest macro with the sharpest policy. It sanitizes the group name, checks it against <code>.config/nextest.toml</code> when that file exists, and then rewrites the function name so the group is part of the binary-level test identity. That makes nextest filters a build-time contract instead of a string convention.</p>
+<h3 id="3-6-test-group-treats-nextest-names-as-build-time-policy">3.6 <code>test_group</code> Treats Nextest Names as Build-Time Policy</h3>
+<p>The smallest-seeming macro may be the one that matters most.</p>
+<p><code>test_group(&quot;...&quot;)</code> turns test naming into a build-time contract. Group names are normalized, validated against <code>.config/nextest.toml</code>, and rejected early if they are unknown. Only when the config file is absent entirely does the macro fall back quietly.</p>
+<p>That is the Commonware pattern in miniature: keep policy close to the call site, but make the policy visible to the compiler.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<p>The easiest way to understand the crate is to follow one repeated pattern from call site to expansion to tests.</p>
+<h3 id="4-1-control-flow-syntax-starts-as-a-small-local-claim">4.1 Control-Flow Syntax Starts as a Small Local Claim</h3>
+<p>A protocol actor says:</p>
+<pre><code class="language-text">wait on these futures,
+prefer shutdown,
+prefer higher-priority branches,
+loop until a refutable pattern or shutdown says stop.</code></pre>
+<p>At the call site that becomes <code>select!</code> or <code>select_loop!</code>, which keeps the policy visible in source order and branch structure.</p>
+<h3 id="4-2-the-proc-macro-expands-that-claim-into-explicit-runtime-machinery">4.2 The Proc Macro Expands That Claim Into Explicit Runtime Machinery</h3>
+<p>Inside <code>macros/impl/src/lib.rs</code>, the parser converts the branch syntax into structured inputs, then expands them into real <code>tokio::select!</code> code with the appropriate lifecycle around it.</p>
+<p>The result is not a hidden runtime. It is ordinary Rust generated from a shared grammar.</p>
+<h3 id="4-3-the-tests-then-nail-down-the-semantic-edges">4.3 The Tests Then Nail Down the Semantic Edges</h3>
+<p><code>macros/tests/select.rs</code> proves the details that matter:</p>
+<ul><li>priority is source-order biased,</li><li>lifecycle hooks run at the documented times,</li><li>shutdown wins when it should,</li><li>and refutable patterns plus <code>else</code> clauses behave like explicit actor-exit edges.</li></ul>
+<p><code>macros/tests/stability.rs</code> does the same thing for compile-time visibility:</p>
+<ul><li>level-gated items compile or disappear together,</li><li>scoped gating behaves like repeated per-item gating,</li><li>and cfg predicates compose with stability levels.</li></ul>
+<h3 id="4-4-the-test-harness-macros-repeat-the-same-pattern">4.4 The Test Harness Macros Repeat the Same Pattern</h3>
+<p>The call site says:</p>
+<ul><li>this test is async,</li><li>or this test wants tracing,</li><li>or this test wants trace storage,</li><li>or this test belongs to a nextest group.</li></ul>
+<p>The proc macro expands the harness shape, and the small unit tests confirm the edge behavior.</p>
+<p>That is the repeated lesson of the whole crate:</p>
+<blockquote><p>the macro should preserve a recurring protocol shape, and the tests should prove the preserved edges.</p></blockquote>
+<hr>
+<h2 id="5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</h2>
+<p>The first pressure is <strong>cancellation and shutdown</strong>. Protocol actors spend most of their lives waiting, so the shutdown path must be boring and uniform.</p>
+<p>The second pressure is <strong>boilerplate drift</strong>. Without macros, each crate invents its own small ritual for loops, tests, trace capture, and stability gates. Those rituals diverge.</p>
+<p>The third pressure is <strong>release discipline</strong>. Stability levels are part of the API story, so the visibility rule needs to be visible in the source and inspectable by CI.</p>
+<p>The fourth pressure is <strong>observability</strong>. Tests need consistent tracing and predictable names, or debugging becomes a scavenger hunt.</p>
+<p>The fifth pressure is <strong>cross-crate composability</strong>. Shared syntax keeps the workspace sounding like one system instead of many similar but slightly different ones.</p>
+<hr>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>This crate is powerful, but it is not magic.</p>
+<h3 id="6-1-biased-selection-can-starve-later-branches">6.1 Biased Selection Can Starve Later Branches</h3>
+<p><code>select!</code> is biased on purpose. That is useful when priority matters and dangerous when an earlier branch is almost always ready.</p>
+<h3 id="6-2-select-loop-does-not-make-the-body-correct">6.2 <code>select_loop!</code> Does Not Make the Body Correct</h3>
+<p>The macro standardizes the loop shape. It does not decide when the protocol should <code>break</code>, <code>continue</code>, or persist state.</p>
+<h3 id="6-3-stability-macros-enforce-visibility-not-semantic-stability">6.3 Stability Macros Enforce Visibility, Not Semantic Stability</h3>
+<p>The macros can make API fences consistent. They cannot prove that the behavior behind a visible item stayed compatible.</p>
+<h3 id="6-4-a-clean-harness-still-needs-a-good-test">6.4 A Clean Harness Still Needs a Good Test</h3>
+<p><code>test_traced</code> and <code>test_collect_traces</code> standardize observability. They do not make a weak assertion strong.</p>
+<p>The limit is therefore the same in every family: the syntax can protect the pattern, but not the truth of the protocol using that pattern.</p>
+<hr>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>Start with <code>macros/src/lib.rs</code> to see the public surface. Then read <code>macros/impl/src/lib.rs</code> for the grammar that preserves control-flow and stability rules, <code>macros/impl/src/nextest.rs</code> for the naming contract, and the tests for the cases where the abstraction must stay honest.</p>
+<hr>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>biased selection</strong>: source-order priority among simultaneously ready branches.</li><li><strong>refutable pattern</strong>: a pattern that may fail to match and therefore needs an <code>else</code> path.</li><li><strong>stability exclusion ladder</strong>: the cfg sequence that hides lower-stability items at higher stability levels.</li><li><strong>reserved stability cfg</strong>: the synthetic <code>commonware_stability_RESERVED</code> level used to exclude all annotated items during CI visibility checks.</li><li><strong>nextest group</strong>: a validated suffix that keeps nextest filtering predictable.</li><li><strong>TraceStorage</strong>: the runtime trace collector handed into <code>test_collect_traces</code>.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>macros/src/lib.rs</code></li><li><code>macros/impl/src/lib.rs</code></li><li><code>macros/impl/src/nextest.rs</code></li><li><code>macros/tests/select.rs</code></li><li><code>macros/tests/stability.rs</code></li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../conformance/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-conformance</span>
+          <span class="foot-sub">conformance</span>
+        </a>
+        <div class="foot-center">
+          macros<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../utils/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-utils</span>
+          <span class="foot-sub">utils</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background">Background</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-select-makes-priority-visible">3.1 select! Makes Priority Visible</a></li><li><a class="toc-link" href="#3-2-select-loop-turns-one-choice-into-an-actor-lifecycle">3.2 select_loop! Turns One Choice Into an Actor Lifecycle</a></li><li><a class="toc-link" href="#3-3-the-stability-macros-encode-an-exclusion-ladder">3.3 The Stability Macros Encode an Exclusion Ladder</a></li><li><a class="toc-link" href="#3-4-stability-scope-shows-that-compile-time-control-flow-can-also-be-local">3.4 stability_scope! Shows That Compile-Time Control Flow Can Also Be Local</a></li><li><a class="toc-link" href="#3-5-the-test-macros-standardize-harness-semantics">3.5 The Test Macros Standardize Harness Semantics</a></li><li><a class="toc-link" href="#3-6-test-group-treats-nextest-names-as-build-time-policy">3.6 test_group Treats Nextest Names as Build-Time Policy</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-control-flow-syntax-starts-as-a-small-local-claim">4.1 Control-Flow Syntax Starts as a Small Local Claim</a></li><li><a class="toc-link" href="#4-2-the-proc-macro-expands-that-claim-into-explicit-runtime-machinery">4.2 The Proc Macro Expands That Claim Into Explicit Runtime Machinery</a></li><li><a class="toc-link" href="#4-3-the-tests-then-nail-down-the-semantic-edges">4.3 The Tests Then Nail Down the Semantic Edges</a></li><li><a class="toc-link" href="#4-4-the-test-harness-macros-repeat-the-same-pattern">4.4 The Test Harness Macros Repeat the Same Pattern</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-biased-selection-can-starve-later-branches">6.1 Biased Selection Can Starve Later Branches</a></li><li><a class="toc-link" href="#6-2-select-loop-does-not-make-the-body-correct">6.2 select_loop! Does Not Make the Body Correct</a></li><li><a class="toc-link" href="#6-3-stability-macros-enforce-visibility-not-semantic-stability">6.3 Stability Macros Enforce Visibility, Not Semantic Stability</a></li><li><a class="toc-link" href="#6-4-a-clean-harness-still-needs-a-good-test">6.4 A Clean Harness Still Needs a Good Test</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

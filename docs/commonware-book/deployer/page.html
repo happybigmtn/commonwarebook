@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-deployer — commonware-book</title>
+  <meta name="description" content="Deployment is really a compiler problem in disguise. The input is not a person clicking through a console. The input is intent: which binaries to run, in what regions, with what network boundaries, an">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / deployer
+      </span>
+      <span class="chapter-title">commonware-deployer</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../collector/page.html">← prev</a>
+        <a class="next" href="../bridge/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · deployer · Complete · 9 min read</div>
+    <h1 class="ch-title">commonware-deployer</h1>
+    <p class="ch-deck">Operational Compilation for Repeatable Cloud Topology</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Deployment is really a compiler problem in disguise. The input is not a person clicking through a console. The input is intent: which binaries to run, in what regions, with what network boundaries, and with what monitoring. The output is a concrete system made of cloud resources, startup scripts, cached artifacts, and records that make later operations safe.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part III. Shared Machinery</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">18 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">9 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-bridge</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background">Background</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#one-tag-names-one-build">One tag names one build</a></li><li><a class="toc-link" href="#one-region-anchors-the-control-plane">One region anchors the control plane</a></li><li><a class="toc-link" href="#topology-carries-trust-boundaries">Topology carries trust boundaries</a></li><li><a class="toc-link" href="#artifacts-are-content-addressed">Artifacts are content-addressed</a></li><li><a class="toc-link" href="#operational-commands-are-part-of-the-output">Operational commands are part of the output</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How The System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-parse-and-validate">4.1 Parse and validate</a></li><li><a class="toc-link" href="#4-2-write-the-record-early">4.2 Write the record early</a></li><li><a class="toc-link" href="#4-3-choose-architecture-and-toolchain">4.3 Choose architecture and toolchain</a></li><li><a class="toc-link" href="#4-4-lower-the-config-into-aws-topology">4.4 Lower the config into AWS topology</a></li><li><a class="toc-link" href="#4-5-launch-the-runtime">4.5 Launch the runtime</a></li><li><a class="toc-link" href="#4-6-emit-the-generated-files">4.6 Emit the generated files</a></li><li><a class="toc-link" href="#4-7-seal-the-build">4.7 Seal the build</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="background">Background</h2>
+<p>Deployment is really a compiler problem in disguise. The input is not a person clicking through a console. The input is intent: which binaries to run, in what regions, with what network boundaries, and with what monitoring. The output is a concrete system made of cloud resources, startup scripts, cached artifacts, and records that make later operations safe.</p>
+<p>The broad vocabulary is worth making explicit:</p>
+<ul><li><strong>Topology</strong> is the graph of machines, networks, and trust boundaries.</li><li><strong>Control plane</strong> is the part that manages the system.</li><li><strong>Data plane</strong> is the part that does the work.</li><li><strong>Immutable artifact</strong> means a binary or config blob identified by content, not by a mutable local path.</li><li><strong>Drift</strong> is the gap between the intended system and the actual system over time.</li><li><strong>Observability</strong> is the ability to see what the system is doing after it is launched.</li></ul>
+<p>The naive way to deploy software is with ad hoc shell commands and console clicks. That may work once, but it does not scale to repeated launches, recoveries, or clean teardowns. The next naive step is to wrap the same manual steps in a script. That is better, but scripts still tend to accumulate hidden state and unspoken assumptions about what already exists.</p>
+<p>The real tradeoff is between flexibility and repeatability. A more explicit deployment pipeline asks for more structure up front: names, regions, recorded metadata, and content-addressed artifacts. In return, it gives you something much more valuable than convenience. It gives you a deployment that can be reconstructed, inspected, updated, and destroyed without guessing which parts were created the last time.</p>
+<p>That is why the chapter should be read as operational compilation rather than machine provisioning. The goal is not to launch &quot;some instances.&quot; The goal is to lower one description of a system into the actual relationships that make that system operate.</p>
+<hr>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>On a laptop, deployment looks simpler than it is because the laptop has already collapsed the hard parts. It gives you one machine, one network, one user, one clock, and one place to inspect. AWS does the opposite. It makes the hard parts visible.</p>
+<p>The same binary now depends on region availability, instance architecture, subnet layout, private reachability, operator ingress, telemetry placement, and a cleanup path that can still find what was created after the fact. If you do that by hand, you do not have a deployment system. You have a memory exercise with cloud APIs.</p>
+<p><code>commonware-deployer</code> exists to make that work repeatable. It takes a declarative config and lowers it into a cloud topology plus the operational commands that keep that topology useful. The crate owns the parts that are usually improvised:</p>
+<ul><li>topology creation,</li><li>artifact distribution,</li><li>telemetry wiring,</li><li>update and cleanup mechanics,</li><li>and the local record that makes later commands safe.</li></ul>
+<p>That is the real problem here. Not &quot;how do I launch an EC2 instance?&quot; The deeper question is:</p>
+<blockquote><p>How do I compile a config into a deployment I can stand up again, update, observe, and destroy without guessing?</p></blockquote>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>Read the crate like a lecture on operational compilation.</p>
+<p>The YAML config is the source language. The crate parses it, checks that it is coherent, lowers it into regions, networks, security groups, artifacts, and monitoring endpoints, and then emits the commands that operate on that emitted system. The compiler analogy matters because the input is intent, not a human runbook, and the output is a repeatable topology rather than a pile of one-off instances.</p>
+<p>Two stored pieces of state keep the contract grounded: S3 caches deployment artifacts, and <code>~/.commonware_deployer/{tag}</code> records enough information to make later commands safe. The monitoring stack is part of the runtime, not an afterthought, because the deployment is only useful if it can be observed and managed after creation.</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<p>The public vocabulary in <code>deployer/src/aws/mod.rs</code> exists to keep the emitted topology honest. <code>Config</code> carries deployment intent, <code>MonitoringConfig</code> defines the observability plane, <code>InstanceConfig</code> describes each binary host, <code>PortConfig</code> describes ingress, <code>Metadata</code> records what was created, and <code>Architecture</code> keeps AMI selection and tool downloads aligned with the instance type.</p>
+<p>The real invariants are simpler to state:</p>
+<h3 id="one-tag-names-one-build">One tag names one build</h3>
+<p>Every deployment is keyed by a <code>tag</code>, and that tag threads through the local metadata directory, the S3 artifact namespace, and the AWS resource tags that let <code>destroy</code> find the right objects later.</p>
+<h3 id="one-region-anchors-the-control-plane">One region anchors the control plane</h3>
+<p>Monitoring lives in <code>us-east-1</code>. That gives the deployment one place to gather logs, metrics, traces, and profiles from every binary region, and it makes the monitoring VPC the control plane rather than another replica.</p>
+<h3 id="topology-carries-trust-boundaries">Topology carries trust boundaries</h3>
+<p>The crate keeps the monitoring security group separate from the binary security groups so operator access and telemetry traffic remain distinct. The deployment is not just running. It is shaped.</p>
+<h3 id="artifacts-are-content-addressed">Artifacts are content-addressed</h3>
+<p>The crate hashes binaries and config files, stores each unique object once in S3, and hands instances pre-signed URLs for the exact content they need. That turns deployment into a small build system with an artifact cache.</p>
+<h3 id="operational-commands-are-part-of-the-output">Operational commands are part of the output</h3>
+<p><code>create</code>, <code>update</code>, <code>destroy</code>, <code>profile</code>, <code>authorize</code>, <code>list</code>, and <code>clean</code> all operate on the same recorded state. That is why the command set belongs in the chapter: the topology is only useful if it can be observed, updated, and removed after the initial build.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How The System Moves</h2>
+<p>The main pipeline is <code>aws create</code>, and it reads like a sequence of compiler passes.</p>
+<h3 id="4-1-parse-and-validate">4.1 Parse and validate</h3>
+<p><code>create</code> loads the YAML config, checks for duplicate instance names, rejects an instance named <code>monitoring</code>, and verifies that every required region is enabled. It also checks that the deployment directory does not already exist.</p>
+<p>That is the front end doing its job. The crate refuses to build an invalid program.</p>
+<h3 id="4-2-write-the-record-early">4.2 Write the record early</h3>
+<p>The crate then generates an SSH key pair and writes deployment metadata before it touches remote resources. That order is deliberate. If the rest of the pipeline fails, the local record is already there, which means <code>destroy --tag</code> can still find the deployment and clean it up.</p>
+<p>This is the deployment equivalent of writing an object file before linking.</p>
+<h3 id="4-3-choose-architecture-and-toolchain">4.3 Choose architecture and toolchain</h3>
+<p>The crate detects the architecture for each instance type, then chooses the right AMIs and tool downloads. That keeps ARM64 and x86_64 deployments on the same code path without pretending they are interchangeable.</p>
+<p>It also prepares the shared tools used by the monitoring stack: Prometheus, Grafana, Loki, Pyroscope, Tempo, Node Exporter, and the small set of system packages those tools need on Ubuntu 24.04.</p>
+<h3 id="4-4-lower-the-config-into-aws-topology">4.4 Lower the config into AWS topology</h3>
+<p>The resource graph is built region by region:</p>
+<ul><li>a VPC per region,</li><li>one subnet per available zone that can support the requested instance types,</li><li>an internet gateway and route table,</li><li>security groups for monitoring and binary nodes,</li><li>and VPC peering between the monitoring region and each binary region.</li></ul>
+<p>That is the emitted topology. The deployment is no longer a file. It is a graph of networks and trust boundaries.</p>
+<h3 id="4-5-launch-the-runtime">4.5 Launch the runtime</h3>
+<p>After the topology exists, the crate launches the monitoring instance and the binary instances. It waits for them to become reachable, then installs and starts the services over SSH.</p>
+<p>The monitoring node gets the full observability stack. The binary nodes get the binary itself, Promtail, Node Exporter, and optional Pyroscope agent plumbing. The crate then adds the monitoring IP to the binary security groups so Prometheus can scrape metrics without opening the cluster to everyone.</p>
+<h3 id="4-6-emit-the-generated-files">4.6 Emit the generated files</h3>
+<p>The crate generates the deployment-specific files that glue the system together:</p>
+<ul><li><code>hosts.yaml</code> for the private and public mapping,</li><li>Prometheus scrape config,</li><li>per-instance Promtail config,</li><li>per-instance Pyroscope agent scripts,</li><li>Grafana datasources and dashboard plumbing,</li><li>and the systemd service content needed to boot the services consistently.</li></ul>
+<p>The files are not the end goal. They are the emitted instructions that let the remote machines converge on the intended shape.</p>
+<h3 id="4-7-seal-the-build">4.7 Seal the build</h3>
+<p>Finally, the crate writes a <code>created</code> marker in the deployment directory. That marker is the line between &quot;attempted&quot; and &quot;operational.&quot;</p>
+<p>The rest of the command set depends on that line:</p>
+<ul><li><code>update</code> refuses to run if the deployment was never completed,</li><li><code>destroy</code> refuses to run twice,</li><li><code>profile</code> requires a live deployment and a known host,</li><li>and <code>list</code> uses the stored metadata to show what is still active.</li></ul>
+<hr>
+<h2 id="5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</h2>
+<p>The first pressure is fan-out. One deployment may span many regions and many instances. The crate uses concurrency where it is safe: creating resources, uploading artifacts, and configuring hosts happen in parallel when they do not depend on each other. The <code>--concurrency</code> flag exists because SSH and remote setup have practical limits, not because the topology is conceptually sequential.</p>
+<p>The second pressure is deduplication. The same binary or config can appear on multiple instances. The S3 layer hashes content and uploads unique values once. That saves bandwidth, reduces cache churn, and makes updates cheaper.</p>
+<p>The third pressure is eventual consistency and retries. The deployer talks to AWS, S3, SSH, and SCP. All of those can fail in ways that are temporary. The helper layer retries downloads and SSH actions, polls for service state, and gives the deployment time to settle before it moves on.</p>
+<p>The fourth pressure is repeatability. The local metadata directory keeps enough state to make later commands deterministic. The deployment is not rediscovered by guesswork. It is read from the record the compiler wrote earlier.</p>
+<p>The fifth pressure is observability. The deployment is not considered finished until it includes a telemetry pipeline. Metrics, logs, traces, and profiles are part of the outcome. That is why the crate treats Prometheus, Loki, Tempo, Pyroscope, and Grafana as core runtime pieces rather than optional extras.</p>
+<hr>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p><code>commonware-deployer</code> does not remove operational risk. It reduces the places where humans have to improvise.</p>
+<p>It still depends on:</p>
+<ul><li>AWS credentials with the right permissions,</li><li>enabled regions,</li><li>reachable Ubuntu AMIs,</li><li>a public IP that can be authorized into the security groups,</li><li>SSH and SCP access to the instances,</li><li>and local binaries that are suitable for deployment or symbolication.</li></ul>
+<p>It also has hard limits:</p>
+<ul><li>it is AWS-specific,</li><li>it is EC2/VPC-specific,</li><li>the monitoring region is fixed,</li><li>the shared S3 cache is account-wide by design,</li><li>and the crate is not a background reconciler that constantly repairs drift.</li></ul>
+<p>That last point matters. The deployer is not an always-on controller. It is an explicit operator tool. If the topology changes outside the tool, the tool does not pretend nothing happened.</p>
+<p>The destroy path is similarly honest. It tries to clean up in dependency order and uses persisted metadata when the original config is unavailable, but it is still bounded by AWS state and by the resources that actually exist.</p>
+<p>So the right mental model is not magic infrastructure. It is a compiler with careful teardown and enough memory to keep its own promises.</p>
+<hr>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>Start with <code>deployer/src/main.rs</code> to see the operator contract, then read <code>deployer/src/aws/mod.rs</code> for the deployment vocabulary and <code>deployer/src/aws/create.rs</code> for the lowering pipeline. After that, read <code>deployer/src/aws/s3.rs</code>, <code>deployer/src/aws/ec2.rs</code>, and <code>deployer/src/aws/services.rs</code> as the back end that turns intent into cached artifacts, resources, and runtime services. Finish with the operational commands so the create/update/destroy cycle stays tied to the recorded state rather than to memory.</p>
+<hr>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>Deployment tag</strong>: the unique name that ties together local state, S3 artifacts, and AWS resource tags.</li><li><strong>Pre-signed URL</strong>: a temporary link that lets a remote instance download an object from S3 without sharing credentials.</li><li><strong>VPC peering</strong>: the private connection between the monitoring VPC and each binary VPC.</li><li><strong>Monitoring plane</strong>: the long-lived instance that runs Prometheus, Loki, Tempo, Pyroscope, and Grafana.</li><li><strong>Artifact cache</strong>: the shared S3 bucket that stores reusable tools and deployment-specific generated files.</li><li><strong>Metadata marker files</strong>: <code>created</code> and <code>destroyed</code>, which record the lifecycle state of a deployment.</li></ul>
+<p>The deeper lesson of the crate is simple. A deployment is not a machine. It is a set of relationships that must be emitted, observed, and later unwound in a predictable order. <code>commonware-deployer</code> is the code that keeps those relationships honest.</p>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../collector/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-collector</span>
+          <span class="foot-sub">collector</span>
+        </a>
+        <div class="foot-center">
+          deployer<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../bridge/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-bridge</span>
+          <span class="foot-sub">bridge</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background">Background</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#one-tag-names-one-build">One tag names one build</a></li><li><a class="toc-link" href="#one-region-anchors-the-control-plane">One region anchors the control plane</a></li><li><a class="toc-link" href="#topology-carries-trust-boundaries">Topology carries trust boundaries</a></li><li><a class="toc-link" href="#artifacts-are-content-addressed">Artifacts are content-addressed</a></li><li><a class="toc-link" href="#operational-commands-are-part-of-the-output">Operational commands are part of the output</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How The System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-parse-and-validate">4.1 Parse and validate</a></li><li><a class="toc-link" href="#4-2-write-the-record-early">4.2 Write the record early</a></li><li><a class="toc-link" href="#4-3-choose-architecture-and-toolchain">4.3 Choose architecture and toolchain</a></li><li><a class="toc-link" href="#4-4-lower-the-config-into-aws-topology">4.4 Lower the config into AWS topology</a></li><li><a class="toc-link" href="#4-5-launch-the-runtime">4.5 Launch the runtime</a></li><li><a class="toc-link" href="#4-6-emit-the-generated-files">4.6 Emit the generated files</a></li><li><a class="toc-link" href="#4-7-seal-the-build">4.7 Seal the build</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

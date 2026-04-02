@@ -1,0 +1,815 @@
+{
+  "module": "commonware-consensus",
+  "visualizations": [
+    {
+      "id": "simplex-three-phase-fsm",
+      "title": "Simplex Three-Phase Voting FSM",
+      "learning_goal": "Understand how a consensus round transitions through Propose → Notarize → Nullify → Finalize and what conditions drive each transition.",
+      "why_it_matters": "The phase gating is the core protocol insight. Students frequently confuse 'quorum reached' with 'all votes collected' — the quorum threshold line makes the N3f1 >2/3 requirement concrete and visible.",
+      "source_files": [
+        "consensus/src/simplex/types.rs",
+        "consensus/src/simplex/actors/voter/actor.rs",
+        "consensus/src/simplex/types.rs:Subject"
+      ],
+      "default_state": "View=1, Epoch=0, Leader=Validator_0, Phase=Propose, N=4, f=1 (one Byzantine validator). No votes recorded.",
+      "controls": [
+        {
+          "id": "scenario",
+          "type": "stepper",
+          "label": "Scenario",
+          "values": ["normal_path", "leader_failure", "competing_proposals"]
+        },
+        {
+          "id": "n_validators",
+          "type": "stepper",
+          "label": "Total Validators (N)",
+          "values": ["3", "4", "7", "10", "13"]
+        },
+        {
+          "id": "speed",
+          "type": "slider",
+          "label": "Animation Speed",
+          "values": ["0.5x", "1x", "2x", "4x"]
+        },
+        {
+          "id": "byzantine_count",
+          "type": "stepper",
+          "label": "Byzantine Validators (f)",
+          "values": ["0", "1", "2", "3"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "scene_propose",
+          "caption": "Leader broadcasts a proposal for the current view. The proposal carries round (Epoch, View), leader identity, and parent (previous View, parent digest). Validators receive it and check parent continuity.",
+          "system_events": ["leader_proposes(payload_digest, round, parent)"],
+          "visual_elements": [
+            "Leader node (highlighted)",
+            "Proposal message traveling to all validators",
+            "Round label: (epoch=0, view=1)",
+            "Parent field shown on proposal"
+          ]
+        },
+        {
+          "id": "scene_notarize_accumulate",
+          "caption": "Each honest validator runs Automaton::verify. If valid, they sign and broadcast a Notarize vote. Votes accumulate in VoteTracker. The quorum threshold line (>2N/3) is visible throughout.",
+          "system_events": [
+            "validator_0 votes Notarize",
+            "validator_1 votes Notarize",
+            "validator_2 votes Notarize"
+          ],
+          "visual_elements": [
+            "Validator nodes with individual vote bars",
+            "Notarize vote arrows flowing to certificate assembly",
+            "Horizontal quorum threshold line (red dashed): N3f1::quorum(N)",
+            "Vote count label: '3/4 notarizes — quorum reached'",
+            "AttributableMap state: each validator's notarize slot filled or empty"
+          ]
+        },
+        {
+          "id": "scene_notarize_certificate",
+          "caption": "When >2N/3 Notarize votes are collected, the notarization certificate forms. The certificate is gossiped. Then CertifiableAutomaton::certify is invoked — this is the deferred verification hook. In the normal path, certify returns true.",
+          "system_events": [
+            "NotarizeCertificate formed: hash of [subject, signatures]",
+            "certify(round, payload_digest) → true",
+            "Finalize votes start being sent"
+          ],
+          "visual_elements": [
+            "Certificate icon assembling from signatures",
+            "Certificate being multicasted (broadcast to all)",
+            "certify() call shown as a side-channel to Automaton",
+            "Phase label transitions: Notarize → Finalize"
+          ]
+        },
+        {
+          "id": "scene_finalize_accumulate",
+          "caption": "Validators who received the notarization certificate and passed certification sign Finalize votes. Finalize votes accumulate. Once >2N/3 finalize votes are collected, the finalization certificate is formed and the block is committed at this height.",
+          "system_events": [
+            "validator_0 votes Finalize",
+            "validator_1 votes Finalize",
+            "validator_2 votes Finalize",
+            "FinalizeCertificate formed"
+          ],
+          "visual_elements": [
+            "Finalize vote bars accumulating",
+            "Quorum threshold crossed animation",
+            "Finalization certificate icon",
+            "Block committed indicator with height",
+            "Phase label: Finalize → (next round)"
+          ]
+        },
+        {
+          "id": "scene_leader_failure",
+          "caption": "Leader fails to propose, or proposes an invalid block. After leader_timeout, validators send Nullify votes. When >2N/3 nullify, the view is skipped and the next leader takes over.",
+          "system_events": [
+            "leader_timeout fires",
+            "validator_0 sends Nullify",
+            "validator_1 sends Nullify",
+            "validator_2 sends Nullify",
+            "NullifyCertificate formed",
+            "view advances to 2"
+          ],
+          "visual_elements": [
+            "Timeout clock icon appearing at each validator",
+            "Nullify vote arrows (different color from Notarize)",
+            "Quorum threshold line for nullify votes",
+            "View counter: 1 → 2",
+            "New leader highlighted"
+          ]
+        },
+        {
+          "id": "scene_competting_proposals",
+          "caption": "Two competing proposals arrive at the same view. One gathers a quorum of notarizes; the other times out. View change mechanism selects the next leader, who proposes on top of the notarized chain.",
+          "system_events": [
+            "proposal_A broadcast",
+            "proposal_B broadcast",
+            "proposal_A gains notarizes from validator_0, validator_1, validator_2",
+            "proposal_B times out (no quorum)",
+            "nullify votes for proposal_B",
+            "view changes to 2, new leader proposes on top of A's chain"
+          ],
+          "visual_elements": [
+            "Two proposal paths diverging from leader",
+            "Quorum reached on path A (green highlight)",
+            "Timeout on path B (red X)",
+            "Chain fork visualization",
+            "Arrow showing view change: leader_B proposes on A's chain"
+          ]
+        }
+      ],
+      "checks": [
+        "Notarize vote requires Automaton::verify to return true",
+        "Finalize vote requires prior Notarize certificate (no orphaned finalization)",
+        "Quorum threshold = N3f1::quorum(N) = ceil(N - N/3)",
+        "Each validator can cast at most one vote per phase (AttributableMap enforces this)",
+        "After finalization, next round begins with the finalized block as parent"
+      ]
+    },
+    {
+      "id": "leader-election-comparer",
+      "title": "Leader Election: RoundRobin vs Random",
+      "learning_goal": "Compare deterministic round-robin rotation with VRF-based random leader selection, and understand why Random falls back to round-robin for view 1.",
+      "why_it_matters": "Leader election is subtle: Random's VRF depends on a prior certificate for seed derivation, which doesn't exist at view 1. The fallback is intentional and necessary — without it, there would be no deterministic leader for the first view.",
+      "source_files": [
+        "consensus/src/simplex/elector.rs",
+        "consensus/src/simplex/scheme/bls12381_threshold.rs (VRF seed)"
+      ],
+      "default_state": "N=7 validators, epoch=0, view=1. No certificates yet. Random elector falls back to round-robin for this view.",
+      "controls": [
+        {
+          "id": "elector_type",
+          "type": "toggle",
+          "label": "Elector Type",
+          "values": ["RoundRobin", "Random"]
+        },
+        {
+          "id": "n_validators",
+          "type": "stepper",
+          "label": "Total Validators (N)",
+          "values": ["3", "4", "7", "10", "13"]
+        },
+        {
+          "id": "shuffle_seed",
+          "type": "stepper",
+          "label": "RoundRobin Shuffle Seed",
+          "values": ["none", "0", "1", "42"]
+        },
+        {
+          "id": "advance_views",
+          "type": "stepper",
+          "label": "Jump to View",
+          "values": ["1", "5", "10", "25", "50"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "scene_rr_view_1",
+          "caption": "RoundRobin elects leader as (epoch + view) % N. At view 1 with 7 validators, leader index = (0 + 1) % 7 = 1. No certificate dependency — rotation is fully deterministic.",
+          "system_events": ["elect(view=1, certificate=None) → participant_1"],
+          "visual_elements": [
+            "Validator ring showing all 7 participants",
+            "Highlighted leader node at index 1",
+            "Formula displayed: leader = (epoch + view) % N = (0 + 1) % 7 = 1",
+            "No certificate input arrow (certificate=None)"
+          ]
+        },
+        {
+          "id": "scene_random_view_1_fallback",
+          "caption": "Random elector at view 1 has no certificate to seed the VRF, so it falls back to round-robin. The fallback is intentional — VRF output is pseudorandom but requires a seed; no prior certificate means no seed.",
+          "system_events": ["elect(view=1, certificate=None) → round_robin_fallback → participant_1"],
+          "visual_elements": [
+            "VRF box showing 'NO CERTIFICATE — FALLBACK'",
+            "Arrow pointing to round-robin formula",
+            "Same leader index 1 as RoundRobin for comparison"
+          ]
+        },
+        {
+          "id": "scene_random_certificate_feeds_vrf",
+          "caption": "For view 2, Random uses the Finalize certificate from view 1 as the VRF seed. The BLS threshold signature over the finalized block becomes the input to the VRF. The VRF output is a pseudorandom index derived via modulo arithmetic.",
+          "system_events": [
+            "Finalize certificate from view 1 available",
+            "elect(view=2, certificate=<cert_view1>) → vrf(seed=cert_view1) % N → participant_4"
+          ],
+          "visual_elements": [
+            "Certificate from view 1 flowing into VRF box as seed",
+            "VRF computation visualization",
+            "Output modulo N producing leader index",
+            "Leader index potentially different from round-robin",
+            "Side-by-side comparison: RoundRobin → 2, Random → 4"
+          ]
+        },
+        {
+          "id": "scene_50_round_comparison",
+          "caption": "After 50 rounds, RoundRobin shows a perfectly regular rotation pattern. Random shows an unpredictable sequence with no detectable pattern. The two sequences diverge significantly after the first few views.",
+          "system_events": ["elect() called for views 1..50 with appropriate certificates"],
+          "visual_elements": [
+            "Two vertical leader sequence columns (RoundRobin | Random)",
+            "Each row = one view",
+            "Color-coded participant indices (0–6)",
+            "Divergence point marked where Random deviates from RoundRobin",
+            "Pattern regularity indicator: RoundRobin shows periodic peaks, Random shows white noise"
+          ]
+        }
+      ],
+      "checks": [
+        "elect() is deterministic: same round + same certificate → same leader index",
+        "View 1 with certificate=None always falls back to round-robin for Random",
+        "Random elector requires a certificate for views > 1",
+        "RoundRobin leader = (epoch + view) % num_participants (or shuffled permutation)"
+      ]
+    },
+    {
+      "id": "votetracker-live",
+      "title": "VoteTracker: Quorum Accumulation in Real Time",
+      "learning_goal": "Watch notarize, nullify, and finalize votes accumulate per validator and observe exactly when the N3f1 quorum threshold is crossed.",
+      "why_it_matters": "Students often think 'quorum reached' means 'all votes collected.' The N3f1 threshold (ceiling of N - N/3) is strictly less than N, meaning finalization requires only a supermajority, not unanimity. Visualizing this distinction is foundational to understanding Byzantine consensus.",
+      "source_files": [
+        "consensus/src/simplex/types.rs:VoteTracker",
+        "consensus/src/simplex/types.rs:AttributableMap"
+      ],
+      "default_state": "N=7, f=1. Quorum threshold = N3f1::quorum(7) = 5. No votes cast yet. Scheme = ed25519 (attributable).",
+      "controls": [
+        {
+          "id": "n_validators",
+          "type": "stepper",
+          "label": "N",
+          "values": ["3", "4", "7", "10", "13"]
+        },
+        {
+          "id": "scheme",
+          "type": "toggle",
+          "label": "Signing Scheme",
+          "values": ["ed25519 (attributable)", "bls12381_threshold (non-attributable)"]
+        },
+        {
+          "id": "phase",
+          "type": "stepper",
+          "label": "Show Phase",
+          "values": ["Notarize", "Nullify", "Finalize"]
+        },
+        {
+          "id": "simulate_byzantine",
+          "type": "toggle",
+          "label": "Show Byzantine Behavior",
+          "values": ["off", "on"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "scene_empty_votetracker",
+          "caption": "VoteTracker starts empty. Each validator has one slot per phase. AttributableMap<Notarize> is keyed by validator index. Slots are empty.",
+          "system_events": [],
+          "visual_elements": [
+            "Grid: rows = validators (0–6), columns = phases",
+            "Notarize column highlighted",
+            "All slots show empty state (dashed circle)",
+            "Quorum threshold line at right: 'need 5 of 7'"
+          ]
+        },
+        {
+          "id": "scene_votes_arriving",
+          "caption": "Votes arrive sequentially. Each insert into AttributableMap either succeeds (slot filled) or returns false (duplicate vote rejected). The bar chart shows vote count approaching quorum.",
+          "system_events": [
+            "validator_0 notarize arrives → insert success",
+            "validator_1 notarize arrives → insert success",
+            "validator_3 notarize arrives → insert success",
+            "validator_0 notarize arrives again → insert fails (duplicate)"
+          ],
+          "visual_elements": [
+            "Validator 0 bar fills to 1",
+            "Validator 1 bar fills to 1",
+            "Validator 3 bar fills to 1",
+            "Accumulation count: '3/7 notarizes'",
+            "Quorum line: '5 needed' (dashed red)",
+            "Duplicate vote shown as red flash on validator_0 with 'duplicate rejected' tooltip"
+          ]
+        },
+        {
+          "id": "scene_quorum_crossed",
+          "caption": "At 5 notarizes (quorum), the threshold is crossed. The system emits a notarization certificate. The bar chart highlights the crossing moment. Remaining validators' bars stay gray — they don't need to vote.",
+          "system_events": [
+            "validator_4 notarize arrives → insert success",
+            "Count reaches 5 → quorum threshold crossed",
+            "NotarizeCertificate emitted"
+          ],
+          "visual_elements": [
+            "Bar chart with threshold line crossed (green)",
+            "Certificate assembly animation",
+            "Count label: '5/7 notarizes — QUORUM'",
+            "Validators 5 and 6 shown as non-contributing (grayed out)"
+          ]
+        },
+        {
+          "id": "scene_threshold_scheme_difference",
+          "caption": "Switch to bls12381_threshold. Now each validator's individual signature is not shown — only the aggregate threshold signature appears once quorum is reached. This is non-attribution: no observer can tell which specific validators signed.",
+          "system_events": [
+            "Scheme switched to bls12381_threshold",
+            "Votes still accumulate internally but display is aggregate only"
+          ],
+          "visual_elements": [
+            "Per-validator bars replaced with single aggregate bar",
+            "Caption: 'Non-attributable: individual signatures not shown'",
+            "Tooltip: 'Any 5 partial signatures can forge any other validator's signature'",
+            "Certificate shows only one combined signature, not per-signer pairs"
+          ]
+        }
+      ],
+      "checks": [
+        "N3f1::quorum(N) = ceiling(N - N/3). For N=7, quorum=5. For N=4, quorum=3.",
+        "AttributableMap insert returns false on duplicate — one vote per phase per validator",
+        "Attributable schemes (ed25519) show per-signer signatures in certificate",
+        "Non-attributable schemes (bls12381_threshold) show only recovered threshold signature",
+        "Quorum reached does NOT mean all N validators voted — only >2N/3"
+      ]
+    },
+    {
+      "id": "ordered-broadcast-chains",
+      "title": "Ordered Broadcast: Sequencer Chains and Validator Quorums",
+      "learning_goal": "Understand how sequencers produce chained nodes where each node certifies the previous, making equivocation detectable and attributable.",
+      "why_it_matters": "The chaining mechanism is the key design choice: each chunk includes a certificate over the previous chunk, so an honest sequencer's misbehavior (equivocating at the same height) produces detectable conflicting signatures from the same validator.",
+      "source_files": [
+        "consensus/src/ordered_broadcast/types.rs:Node",
+        "consensus/src/ordered_broadcast/types.rs:Chunk",
+        "consensus/src/ordered_broadcast/types.rs:Parent",
+        "consensus/src/ordered_broadcast/engine.rs",
+        "consensus/src/aggregation/types.rs:TipAck"
+      ],
+      "default_state": "Sequencer=Validator_0, N=4 validators, epoch=0. Chain height=0 (genesis node with parent=None).",
+      "controls": [
+        {
+          "id": "n_validators",
+          "type": "stepper",
+          "label": "N",
+          "values": ["3", "4", "7", "10"]
+        },
+        {
+          "id": "action",
+          "type": "stepper",
+          "label": "Action",
+          "values": ["broadcast_normal", "equivocate", "epoch_change", "simulate_crash"]
+        },
+        {
+          "id": "show_tipack",
+          "type": "toggle",
+          "label": "Show TipAck Details",
+          "values": ["off", "on"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "scene_genesis_chain",
+          "caption": "Genesis node at height=0 has parent=None. The sequencer broadcasts it; validators sign and form a quorum certificate. This certificate is stored and referenced as the parent for height=1.",
+          "system_events": [
+            "sequencer broadcasts Node(height=0, chunk=chunk_0, parent=None)",
+            "validators sign chunk_0",
+            "Certificate assembled from 3/4 signatures",
+            "Certificate stored as parent for next node"
+          ],
+          "visual_elements": [
+            "Node box at height 0: 'chunk_0, parent=None'",
+            "Validator signatures flowing to certificate assembly",
+            "Certificate box (diamond shape) labeled 'cert_0'",
+            "Arrow: cert_0 → used as parent for height 1"
+          ]
+        },
+        {
+          "id": "scene_chain_extension",
+          "caption": "Height=1 node: chunk_1 + parent=cert_0. Validators verify chunk_1 is valid, verify parent cert_0 exists, then sign. The chain is now length 2. Gossip propagates cert_1.",
+          "system_events": [
+            "sequencer broadcasts Node(height=1, chunk=chunk_1, parent=cert_0)",
+            "validators verify chunk_1",
+            "validators verify parent cert_0",
+            "sign and assemble cert_1"
+          ],
+          "visual_elements": [
+            "Two node boxes chained vertically",
+            "Arrow from node 1 to cert_0 (its parent)",
+            "Validator verify checkmarks on both chunk and parent",
+            "Certificate cert_1 appearing below node 1"
+          ]
+        },
+        {
+          "id": "scene_tipack",
+          "caption": "TipAck combines a validator's acknowledgment with their current tip height. When gossiping, a validator shares both their vote and how far their chain has advanced. This allows other validators to detect gaps and request backfill.",
+          "system_events": [
+            "validator_1 sends TipAck(ack=cert_2, tip_height=5)",
+            "validator_2 sends TipAck(ack=cert_2, tip_height=3)"
+          ],
+          "visual_elements": [
+            "Two TipAck packets showing ack + tip_height",
+            "Gap detection: validator_2's tip=3 means they are missing heights 4 and 5",
+            "Backfill request arrow from validator_1 to validator_2",
+            "Tooltip: 'tip_ack carries both the vote and the validator's current chain tip'"
+          ]
+        },
+        {
+          "id": "scene_equivocation",
+          "caption": "The sequencer broadcasts two different chunks at height=2 with the same parent (cert_1). This is equivocation. Honest validators sign both — producing two different signatures from the same validator on the same height with different payloads. This is detectable as ChunkMismatch error.",
+          "system_events": [
+            "sequencer broadcasts Node_A(height=2, chunk=chunk_A, parent=cert_1)",
+            "sequencer broadcasts Node_B(height=2, chunk=chunk_B, parent=cert_1)",
+            "validator_0 signs Node_A",
+            "validator_0 signs Node_B",
+            "ChunkMismatch detected: same validator, same height, different chunks"
+          ],
+          "visual_elements": [
+            "Fork visualization: two node boxes at height 2 with diverging chunk data",
+            "Same cert_1 parent pointing to both",
+            "validator_0 signature splitting and appearing on both branches",
+            "Error indicator: 'ChunkMismatch — equivocation detected'",
+            "Red highlight on validator_0 as the conflicting signer"
+          ]
+        },
+        {
+          "id": "scene_epoch_transition",
+          "caption": "Epoch change: the validator set changes. The quorum for subsequent certificates uses the new N. The chain from the previous epoch continues, but the signature threshold is recalculated for the new validator set.",
+          "system_events": [
+            "Epoch advances: 0 → 1",
+            "Validator set changes (2 validators leave, 1 joins)",
+            "New quorum threshold recalculated: N=3 → quorum=3"
+          ],
+          "visual_elements": [
+            "Epoch boundary line separating epoch 0 and 1",
+            "Old validator set (grayed) vs new validator set (active)",
+            "Quorum threshold updated",
+            "Chain continues through the boundary"
+          ]
+        }
+      ],
+      "checks": [
+        "Each node's parent is a Certificate over the previous node — creates immutable chain",
+        "Equivocation at same height with same parent produces ChunkMismatch error",
+        "TipAck carries both the validator's acknowledgment and their current tip height for backfill",
+        "Certificate quorum = N3f1::quorum(N)",
+        "Epoch change resets the validator set and recalculates quorum threshold"
+      ]
+    },
+    {
+      "id": "marshal-block-ordering",
+      "title": "Marshal: From Broadcast to Application Delivery",
+      "learning_goal": "Trace how blocks flow from broadcast → simplex (notarization/finalization) → marshal actor → application, and understand where gaps trigger backfill.",
+      "why_it_matters": "Marshal is the bridge between consensus and the application layer. It is where ordered delivery guarantees are enforced, where gaps appear and trigger backfill, and where the floor/starting height determines which blocks the application receives.",
+      "source_files": [
+        "consensus/src/marshal/mod.rs",
+        "consensus/src/marshal/core.rs",
+        "consensus/src/marshal/standard.rs",
+        "consensus/src/marshal/coding.rs",
+        "consensus/src/marshal/resolver.rs"
+      ],
+      "default_state": "Standard mode, floor_height=0. Block stream at heights 1–8. No gaps yet. Simplex delivering notarizations and finalizations.",
+      "controls": [
+        {
+          "id": "mode",
+          "type": "toggle",
+          "label": "Marshal Mode",
+          "values": ["standard", "coding"]
+        },
+        {
+          "id": "floor_height",
+          "type": "stepper",
+          "label": "Floor / Starting Height",
+          "values": ["0", "3", "5", "10"]
+        },
+        {
+          "id": "scenario",
+          "type": "stepper",
+          "label": "Scenario",
+          "values": ["normal_flow", "gap_triggered", "backfill_resolved", "reorg"]
+        },
+        {
+          "id": "codec",
+          "type": "stepper",
+          "label": "Coding Mode",
+          "values": ["shard_reconstruction", "missing_shard_retry"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "scene_normal_pipeline",
+          "caption": "In normal operation: broadcast delivers uncertified blocks → simplex delivers notarization/finalization certificates → marshal coordinates the two streams and delivers finalized blocks in height order.",
+          "system_events": [
+            "broadcast delivers block_3 (uncertified)",
+            "simplex delivers notarization cert for view 3",
+            "simplex delivers finalization cert for view 3",
+            "marshal delivers block_3 to application"
+          ],
+          "visual_elements": [
+            "Three-lane pipeline diagram: broadcast lane | simplex lane | marshal lane",
+            "Block flowing through broadcast lane (dashed border)",
+            "Notarization/finalization certificates in simplex lane",
+            "Marshal actor assembling both streams",
+            "Block 3 output arrow to 'Application'",
+            "Height counter incrementing: 1, 2, 3"
+          ]
+        },
+        {
+          "id": "scene_gap_detected",
+          "caption": "Marshal receives a finalization certificate for height=5 but does not have the block at height=4. This is a gap. Marshal pauses finalization of height 5 and emits a backfill request.",
+          "system_events": [
+            "marshal receives FinalizationCert for height=5",
+            "marshal checks: block_4 is missing",
+            "gap detected: cannot deliver height 4",
+            "marshal pauses, emits BackfillRequest(height=4)"
+          ],
+          "visual_elements": [
+            "Pipeline diagram showing gap visualization",
+            "Block 5 certificate arriving but blocked (red pause icon)",
+            "Block 4 slot shown as empty/dashed box",
+            "BackfillRequest arrow pointing to resolver",
+            "Height 4 and 5 shown in red to indicate blocked state"
+          ]
+        },
+        {
+          "id": "scene_backfill_resolved",
+          "caption": "Resolver queries peers and receives block 4. Marshal verifies it matches the certified digest, then delivers blocks 4 and 5 in sequence. The pipeline resumes.",
+          "system_events": [
+            "resolver queries peers",
+            "peer returns block_4",
+            "marshal verifies digest matches certified value",
+            "marshal delivers block_4 to application",
+            "marshal delivers block_5 to application"
+          ],
+          "visual_elements": [
+            "BackfillResponse arrow from resolver to marshal",
+            "Verify checkmark on block 4",
+            "Resume flow: blocks 4 and 5 released in order",
+            "Height counter: 4 → 5 (both delivered)",
+            "Pipeline resumes green"
+          ]
+        },
+        {
+          "id": "scene_coding_mode",
+          "caption": "In coding mode, marshal receives erasure-coded shards from coding::shards::Engine. Shards arrive from different peers. Marshal reconstructs the full block before issuing the finalization delivery.",
+          "system_events": [
+            "broadcast delivers shard_3a from peer_0",
+            "broadcast delivers shard_3b from peer_1",
+            "broadcast delivers shard_3c from peer_2",
+            "coding::shards::Engine reconstructs block_3",
+            "marshal delivers reconstructed block_3"
+          ],
+          "visual_elements": [
+            "Three shard boxes arriving in parallel from different peers",
+            "Shards labeled: 'shard_3_k_of_n'",
+            "Reconstruction engine box combining shards",
+            "Full block emerging from reconstruction",
+            "Marshal then treats as normal block for delivery"
+          ]
+        },
+        {
+          "id": "scene_floor_height",
+          "caption": "When floor_height=5, marshal discards or ignores any block below height 5. This enables state sync from a snapshot rather than from genesis. Peers cannot backfill blocks below the floor.",
+          "system_events": [
+            "marshal configured with floor_height=5",
+            "blocks 1–4 arrive from broadcast",
+            "marshal ignores blocks below floor",
+            "application only receives blocks >= 5"
+          ],
+          "visual_elements": [
+            "Floor line drawn at height 5 in pipeline diagram",
+            "Blocks 1–4 shown crossing floor line but being dropped (X mark)",
+            "Blocks 5+ flowing normally",
+            "Caption: 'floor_height=5: blocks below this threshold are not stored or delivered'"
+          ]
+        }
+      ],
+      "checks": [
+        "Marshal delivers blocks in monotonically increasing height — no gaps reported to application",
+        "When a finalization cert arrives but the prior block is missing, backfill is triggered",
+        "Backfill requests go to resolver, which queries peers",
+        "In coding mode, full block reconstruction via shards::Engine must succeed before delivery",
+        "Blocks below floor_height are ignored and not backfilled"
+      ]
+    },
+    {
+      "id": "domain-separation-visualizer",
+      "title": "Domain Separation: Why _NOTARIZE ≠ _FINALIZE",
+      "learning_goal": "Understand how namespace suffixes prevent cross-protocol signature replay, and see exactly what bytes get signed under each subject.",
+      "why_it_matters": "Domain separation is a cryptographic discipline that prevents entire classes of attacks. A signature made under the notarize namespace cannot be replayed as a finalize signature — even if the underlying digest is identical. This makes cross-protocol attacks computationally infeasible.",
+      "source_files": [
+        "consensus/src/simplex/scheme/mod.rs",
+        "consensus/src/simplex/types.rs:Subject"
+      ],
+      "default_state": "Proposal digest = 0xdeadbeef..., N=4, scheme=ed25519. Three namespace suffixes shown: _NOTARIZE, _NULLIFY, _FINALIZE.",
+      "controls": [
+        {
+          "id": "proposal_digest",
+          "type": "stepper",
+          "label": "Proposal Digest (hex snippet)",
+          "values": ["0xdeadbeef", "0xc0ffeeee", "0x12345678"]
+        },
+        {
+          "id": "signer_count",
+          "type": "stepper",
+          "label": "Signers",
+          "values": ["1 (validator_0)", "3 of 4", "4 of 4"]
+        },
+        {
+          "id": "namespace_demo",
+          "type": "stepper",
+          "label": "Demonstrate",
+          "values": ["sign_under_notarize_verify_under_same", "sign_under_notarize_verify_under_finalize", "show_namespace_derivation"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "scene_namespace_derivation",
+          "caption": "Every vote subject uses a distinct namespace suffix. The Namespace trait prepends the base _COMMONWARE_CONSENSUS_SIMPLEX namespace and appends the subject suffix. The derived namespace is passed to the cryptographic primitive.",
+          "system_events": [
+            "Namespace::derive(base=_COMMONWARE_CONSENSUS_SIMPLEX, suffix=_NOTARIZE) → ns_notarize",
+            "Namespace::derive(base=_COMMONWARE_CONSENSUS_SIMPLEX, suffix=_FINALIZE) → ns_finalize"
+          ],
+          "visual_elements": [
+            "Three namespace boxes stacked vertically",
+            "Base: _COMMONWARE_CONSENSUS_SIMPLEX",
+            "Notarize box: appends _NOTARIZE",
+            "Finalize box: appends _FINALIZE",
+            "Nullify box: appends _NULLIFY",
+            "Byte representation shown for each: _COMMONWARE_CONSENSUS_SIMPLEX_NOTARIZE"
+          ]
+        },
+        {
+          "id": "scene_sign_and_verify_same",
+          "caption": "validator_0 signs the proposal digest under ns_notarize. Anyone verifying under ns_notarize with validator_0's public key gets a valid result.",
+          "system_events": [
+            "sign(digest=0xdeadbeef, namespace=ns_notarize, key=validator_0_sk) → sig_notarize",
+            "verify(sig_notarize, digest=0xdeadbeef, namespace=ns_notarize, key=validator_0_pk) → VALID"
+          ],
+          "visual_elements": [
+            "Digest box: 0xdeadbeef...",
+            "Signing operation: digest + namespace + secret_key → signature",
+            "Signature box (unique per signer and namespace)",
+            "Verify operation: signature + namespace + public_key → VALID (green checkmark)"
+          ]
+        },
+        {
+          "id": "scene_cross_namespace_replay",
+          "caption": "validator_0 signs under ns_notarize. An attacker tries to replay: they present sig_notarize to a verifier using ns_finalize. Verification fails — the namespace mismatch is detected.",
+          "system_events": [
+            "sign(digest=0xdeadbeef, namespace=ns_notarize, key=validator_0_sk) → sig_notarize",
+            "verify(sig_notarize, digest=0xdeadbeef, namespace=ns_finalize, key=validator_0_pk) → INVALID (namespace mismatch)"
+          ],
+          "visual_elements": [
+            "Signature being fed into a different namespace verifier",
+            "Red X on verification result",
+            "Error label: 'namespace mismatch: expected _FINALIZE, got _NOTARIZE'",
+            "Caption: 'The signature bytes are valid, but the namespace binding is wrong'"
+          ]
+        },
+        {
+          "id": "scene_nullify_namespace",
+          "caption": "Nullify votes carry only a Round identifier (not a digest). The namespace suffix still applies: the same Round signed under _NULLIFY cannot be used as a notarize or finalize signature.",
+          "system_events": [
+            "sign(round=(epoch=0,view=3), namespace=ns_nullify, key=validator_0_sk) → sig_nullify",
+            "This signature cannot be replayed under ns_notarize or ns_finalize even with the same round"
+          ],
+          "visual_elements": [
+            "Round identifier (0, 3) as the payload (no digest)",
+            "Three namespace verification boxes",
+            "sig_nullify fails ns_notarize verification (red X)",
+            "sig_nullify fails ns_finalize verification (red X)",
+            "sig_nullify passes ns_nullify verification (green check)"
+          ]
+        }
+      ],
+      "checks": [
+        "Namespace suffixes: _NOTARIZE, _NULLIFY, _FINALIZE are distinct byte sequences",
+        "sign(namespace=A, msg=M) ≠ sign(namespace=B, msg=M) for A ≠ B — different output",
+        "A signature created under namespace A cannot verify under namespace B",
+        "Nullify signs only Round (not a digest), still namespace-separated"
+      ]
+    },
+    {
+      "id": "parent-nullification-checker",
+      "title": "Parent Nullification: The Fork-Safety Gate",
+      "learning_goal": "Understand the parent nullification requirement: a validator cannot vote on a proposal whose parent view is behind their latest certified view, without first obtaining nullifications for the gap.",
+      "why_it_matters": "Without parent nullification enforcement, a malicious leader could publish a chain that skips an honest leader's block, and honest validators would unknowingly finalize it. This is the most subtle safety invariant in simplex.",
+      "source_files": [
+        "consensus/src/simplex/types.rs:Context",
+        "consensus/src/simplex/actors/voter/actor.rs",
+        "consensus/src/simplex/types.rs:Subject"
+      ],
+      "default_state": "Validator V's latest certified view = 4 (has notarization certificate for view 4). Proposal arrives for view 6 with parent=(view=4, digest=...). Gap: view 5 is missing a nullification.",
+      "controls": [
+        {
+          "id": "gap_size",
+          "type": "stepper",
+          "label": "Gap Size",
+          "values": ["0 (no gap)", "1 (view 5 missing)", "2 (views 5 and 6 missing)", "3+ (large gap)"]
+        },
+        {
+          "id": "proposal_parent_view",
+          "type": "stepper",
+          "label": "Proposal Parent View",
+          "values": ["3", "4", "5", "6"]
+        },
+        {
+          "id": "validator_latest_certified",
+          "type": "stepper",
+          "label": "Validator's Latest Certified View",
+          "values": ["3", "4", "5", "6", "7"]
+        },
+        {
+          "id": "show_attack",
+          "type": "toggle",
+          "label": "Show Fork-Safety Attack",
+          "values": ["off", "on"]
+        }
+      ],
+      "scenes": [
+        {
+          "id": "scene_gap_check_explained",
+          "caption": "The parent nullification check is: let V's latest certified view = L. Let proposal's parent view = P. If P < L, then V must hold nullifications (or notarizations) for ALL views in (P, L] before voting. This prevents skipping certified blocks.",
+          "system_events": [],
+          "visual_elements": [
+            "Two-column layout: 'Validator V state' | 'Incoming Proposal'",
+            "V's latest certified view = 4 (notarization cert shown)",
+            "Proposal parent view = 4",
+            "Check formula: P < L? → 4 < 4? NO → vote allowed",
+            "Gap range (P+1 to L) shown as empty boxes between"
+          ]
+        },
+        {
+          "id": "scene_gap_blocked",
+          "caption": "V's latest certified view = 4. Proposal at view 6 has parent view = 4. But view 5 nullification is missing. V cannot vote until they have view 5 nullification. The proposal is stored but not acted on.",
+          "system_events": [
+            "proposal received: round=(epoch=0,view=6), parent=(view=4, digest=...)",
+            "check: parent_view=4 < latest_certified_view=4? NO",
+            "check: gap views [5] need nullification — MISSING",
+            "voter stores proposal, waits for view 5 nullification"
+          ],
+          "visual_elements": [
+            "V's certified view marker at 4",
+            "Proposal arrow at view 6 pointing back to parent view 4",
+            "Gap indicator: view 5 shown as empty/missing",
+            "Voting blocked: red stop icon + 'waiting for view 5 nullification'",
+            "Proposal stored indicator"
+          ]
+        },
+        {
+          "id": "scene_gap_filled",
+          "caption": "View 5 nullification certificate arrives. Now V has all nullifications from P=4 to L=6 (view 5 nullify obtained). V can now vote on the view 6 proposal.",
+          "system_events": [
+            "view_5_nullification_certificate arrives",
+            "V updates latest known view to 5",
+            "recheck: P=4, L=5, no gap in (4, 5]",
+            "voter now sends Notarize vote for view 6 proposal"
+          ],
+          "visual_elements": [
+            "View 5 nullification cert appearing in V's state",
+            "Gap now closed (no empty boxes between parent and latest)",
+            "Recheck formula: P=4 < L=5? YES, but gap=[ ] (empty)",
+            "Voting unblocked: green checkmark + 'parent continuity satisfied'",
+            "Notarize vote arrow flowing out"
+          ]
+        },
+        {
+          "id": "scene_fork_attack_visualized",
+          "caption": "Attack scenario: Honest leader proposes block B at view 5. Validator V is slow and hasn't notarized it yet. Malicious leader at view 6 proposes a chain built on view 4 (skipping B). Without parent nullification enforcement, V would notarize the malicious chain — finalizing a chain that skips B. With enforcement, V requires view 5 nullification or notarization before voting.",
+          "system_events": [
+            "honest_leader broadcasts proposal for view 5, block B",
+            "V is slow: has not received notarization for view 5",
+            "malicious_leader broadcasts proposal for view 6, parent=view_4 (skips B)",
+            "V receives view 6 proposal",
+            "check: parent_view=4, latest_certified_view < 5? (V hasn't certified anything past 4)",
+            "without enforcement: V would notarize malicious chain",
+            "with enforcement: V requires view 5 nullification or notarization — not present — V blocks"
+          ],
+          "visual_elements": [
+            "Fork diagram: two chains diverging at view 4",
+            "Chain A (honest): view 4 → view 5 (B) → ... — shown in green",
+            "Chain B (malicious): view 4 → view 6 (skips B) — shown in red",
+            "V's state: stuck at view 4 certified",
+            "Malicious proposal blocked by 'parent continuity check FAILED'",
+            "Attack prevented label"
+          ]
+        }
+      ],
+      "checks": [
+        "Parent nullification check: if parent_view < latest_certified_view, all intermediate views must have nullification certificates",
+        "Without parent nullification enforcement, a malicious leader can cause honest validators to finalize a chain that skips valid blocks",
+        "The check happens in voter actor before any notarize vote is sent",
+        "Nullification certificates for skipped views are required, not notarization certificates (can skip via nullify)"
+      ]
+    }
+  ]
+}

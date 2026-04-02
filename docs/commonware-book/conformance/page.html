@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-conformance — commonware-book</title>
+  <meta name="description" content="Imagine a release that looks harmless.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / conformance
+      </span>
+      <span class="chapter-title">commonware-conformance</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../math/page.html">← prev</a>
+        <a class="next" href="../macros/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · conformance · Complete · 20 min read</div>
+    <h1 class="ch-title">commonware-conformance</h1>
+    <p class="ch-deck">Catching Silent Compatibility Drift</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Imagine a release that looks harmless.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part II. Evidence and State</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">12 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">20 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-macros</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#backgrounder-determinism-regression-tests-and-compatibility-promises">Backgrounder: Determinism, Regression Tests, and Compatibility Promises</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model-a-compatibility-ledger">2. Mental Model: A Compatibility Ledger</a></li><li class="toc-item"><a class="toc-link" href="#3-what-counts-as-behavior">3. What Counts As Behavior?</a></li><li class="toc-item"><a class="toc-link" href="#4-how-the-digest-is-actually-built">4. How The Digest Is Actually Built</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-replay-order-is-part-of-the-contract">4.1 The replay order is part of the contract</a></li><li><a class="toc-link" href="#4-2-the-length-prefix-is-not-a-small-detail">4.2 The length prefix is not a small detail</a></li><li><a class="toc-link" href="#4-3-the-crate-hashes-committed-values-directly-not-per-case-digests">4.3 The crate hashes committed values directly, not per-case digests</a></li><li><a class="toc-link" href="#4-4-the-final-ledger-value-is-lowercase-hex">4.4 The final ledger value is lowercase hex</a></li><li><a class="toc-link" href="#4-5-what-this-protects-precisely">4.5 What this protects, precisely</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-the-ledger-file-is-a-shared-resource">5. The Ledger File Is A Shared Resource</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-hash-first-lock-later">5.1 Hash first, lock later</a></li><li><a class="toc-link" href="#5-2-acquire-lock-is-about-process-safety-not-convenience">5.2 acquire_lock is about process safety, not convenience</a></li><li><a class="toc-link" href="#5-3-verification-mode-does-not-trust-unlocked-reads">5.3 Verification mode does not trust unlocked reads</a></li><li><a class="toc-link" href="#5-4-why-a-btreemap-is-the-right-ledger-shape">5.4 Why a BTreeMap is the right ledger shape</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-verification-and-regeneration-are-different-modes">6. Verification And Regeneration Are Different Modes</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-verification-mode-detect-drift-do-not-normalize-it-away">6.1 Verification mode: detect drift, do not normalize it away</a></li><li><a class="toc-link" href="#6-2-regeneration-mode-acknowledge-a-new-ledger-on-purpose">6.2 Regeneration mode: acknowledge a new ledger on purpose</a></li><li><a class="toc-link" href="#6-3-why-missing-entries-are-treated-differently-from-mismatches">6.3 Why missing entries are treated differently from mismatches</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-macro-expansion-is-part-of-the-safety-story">7. Macro Expansion Is Part Of The Safety Story</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-it-derives-a-stable-test-function-name">7.1 It derives a stable test function name</a></li><li><a class="toc-link" href="#7-2-it-fixes-the-ledger-key-to-module-ownership">7.2 It fixes the ledger key to module ownership</a></li><li><a class="toc-link" href="#7-3-it-roots-the-ledger-file-at-the-owning-crate">7.3 It roots the ledger file at the owning crate</a></li><li><a class="toc-link" href="#7-4-it-standardizes-the-test-runner-grouping">7.4 It standardizes the test runner grouping</a></li><li><a class="toc-link" href="#7-5-a-near-literal-expansion">7.5 A near-literal expansion</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-wrapper-style-versus-bespoke-conformance">8. Wrapper-Style Versus Bespoke Conformance</a><ul class="toc-sub"><li><a class="toc-link" href="#8-1-wrapper-style-codecconformance-t">8.1 Wrapper-style: CodecConformance&lt;T&gt;</a></li><li><a class="toc-link" href="#8-2-bespoke-domain-specific-commit-seed">8.2 Bespoke: domain-specific commit(seed)</a></li><li><a class="toc-link" href="#8-3-when-to-choose-which">8.3 When to choose which</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#9-real-consumer-case-studies">9. Real Consumer Case Studies</a><ul class="toc-sub"><li><a class="toc-link" href="#9-1-resolver-wire-types-wrapper-style-protocol-stability">9.1 Resolver wire types: wrapper-style protocol stability</a></li><li><a class="toc-link" href="#9-2-handshake-bespoke-transcript-level-stability">9.2 Handshake: bespoke transcript-level stability</a></li><li><a class="toc-link" href="#9-3-journal-storage-bespoke-file-layout-stability">9.3 Journal storage: bespoke file-layout stability</a></li><li><a class="toc-link" href="#9-4-mmr-root-stability-bespoke-algorithmic-stability">9.4 MMR root stability: bespoke algorithmic stability</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#10-the-workspace-really-uses-this">10. The Workspace Really Uses This</a></li><li class="toc-item"><a class="toc-link" href="#11-operational-ci-and-release-flow">11. Operational CI And Release Flow</a><ul class="toc-sub"><li><a class="toc-link" href="#11-1-adding-a-new-conformance-surface">11.1 Adding a new conformance surface</a></li><li><a class="toc-link" href="#11-2-verifying-a-normal-release">11.2 Verifying a normal release</a></li><li><a class="toc-link" href="#11-3-handling-an-intentional-compatibility-change">11.3 Handling an intentional compatibility change</a></li><li><a class="toc-link" href="#11-4-how-this-interacts-with-commonware-stability-levels">11.4 How this interacts with Commonware stability levels</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#12-failure-modes-and-limits">12. Failure Modes And Limits</a></li><li class="toc-item"><a class="toc-link" href="#13-how-to-read-the-source">13. How To Read The Source</a></li><li class="toc-item"><a class="toc-link" href="#14-glossary">14. Glossary</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>Imagine a release that looks harmless.</p>
+<p>The code still compiles. The unit tests still pass. Peers still exchange bytes. The storage layer still opens old files.</p>
+<p>And yet the release is wrong.</p>
+<p>Maybe a message variant now writes a different tag. Maybe a journal section now lands at a different offset. Maybe a handshake still completes, but the transcript, ciphertext framing, or derived state no longer matches the previous release. Nothing crashes. Nothing announces itself as broken. The system simply drifts away from the compatibility story it claimed to keep.</p>
+<p>That is the class of failure <code>commonware-conformance</code> exists to catch.</p>
+<p>The crate is not a correctness prover. It is a drift detector for deterministic behavior. It is meant for surfaces where &quot;can still decode&quot; or &quot;one fixture still passes&quot; is too weak:</p>
+<ul><li>wire formats,</li><li>storage layouts,</li><li>deterministic handshakes,</li><li>root computations,</li><li>and any other mechanism whose output must stay reproducible across releases.</li></ul>
+<p>The main enemy is silent compatibility drift.</p>
+<p>A single golden fixture is too small a witness. One example can survive while the real behavior envelope has already moved. <code>commonware-conformance</code> does something stricter: it replays a deterministic seed sweep, records the whole sweep as one digest, and checks that digest into the repository.</p>
+<p>That gives us the right headline for the whole chapter:</p>
+<blockquote><p>conformance protects behavior, not isolated bytes.</p></blockquote>
+<p>Or, more operationally:</p>
+<blockquote><p>it keeps a checked-in ledger of what a stable mechanism does, then asks whether the new release still tells the same story.</p></blockquote>
+<hr>
+<h2 id="backgrounder-determinism-regression-tests-and-compatibility-promises">Backgrounder: Determinism, Regression Tests, and Compatibility Promises</h2>
+<p>The broad problem here is not &quot;does the code work once?&quot; It is &quot;does the code keep doing the same thing after it changes?&quot; That is a different question.</p>
+<p>A unit test checks a particular behavior on a particular input. A conformance check asks whether the observable behavior of a deterministic surface is still the same across a whole replay. That replay matters because compatibility bugs often hide in the seams: a different tag byte, a reordered output, a changed offset, or a transcript that still looks plausible to a human.</p>
+<p>The classical shortcut is a golden file or one or two example fixtures. That can catch obvious breakage, but it is easy to fool. A change can preserve the exact examples while still moving the broader behavior envelope. The system then keeps passing the sample while drifting away from the real contract.</p>
+<p><code>commonware-conformance</code> treats that envelope as the thing worth protecting. Deterministic seeds give a reproducible input space. Replaying many cases turns compatibility into a measured sweep instead of a single anecdote. Hashing the whole sweep makes the result compact enough to check into the repository and hard enough to ignore during review.</p>
+<p>The tradeoff is simple:</p>
+<ul><li>broader sweeps catch more drift,</li><li>but they cost more test time,</li><li>and they make intentional behavior changes explicit instead of silent.</li></ul>
+<p>That is a good bargain for stable protocol surfaces. If a release changes how a wire format, transcript, or persistent structure behaves, the change should be visible and reviewable. Conformance makes that visibility the default.</p>
+<hr>
+<h2 id="2-mental-model-a-compatibility-ledger">2. Mental Model: A Compatibility Ledger</h2>
+<p>The best mental model is an accountant&#x27;s ledger for compatibility promises.</p>
+<p>Each tracked type or mechanism gets one ledger entry in a crate-local <code>conformance.toml</code> file. The entry does not store every generated sample. That would be too large and too fragile. Instead, it stores three things:</p>
+<ul><li>the fully qualified key for the tracked surface,</li><li>the size of the deterministic sweep, <code>n_cases</code>,</li><li>and the digest of replaying that sweep.</li></ul>
+<p>That changes the question from:</p>
+<blockquote><p>Did this one example still work?</p></blockquote>
+<p>to:</p>
+<blockquote><p>If we replay the exact deterministic walk we recorded last time, do we still observe the same behavior envelope?</p></blockquote>
+<p>This is why <code>conformance.toml</code> is not a cache and not a convenience file. It is the checked-in statement of record:</p>
+<ul><li>this surface is tracked,</li><li>this many cases define the tracked envelope,</li><li>and this digest is the current compatibility receipt.</li></ul>
+<p>CI then acts like an auditor. It recomputes the live digest from the code under test and asks whether the ledger still balances.</p>
+<p>That is stronger than example-based testing in two ways.</p>
+<p>First, it forces the repository to say what part of the surface is covered. <code>n_cases</code> is visible. Reviewers can see whether the envelope is broad or narrow.</p>
+<p>Second, it forces compatibility changes into review. A changed digest cannot hide inside a refactor. It becomes a visible diff, a failing test, or an explicit regeneration.</p>
+<hr>
+<h2 id="3-what-counts-as-behavior">3. What Counts As Behavior?</h2>
+<p>At the center is a deliberately small trait:</p>
+<pre><code class="language-rust">pub trait Conformance: Send + Sync {
+    fn commit(seed: u64) -&gt; impl Future&lt;Output = Vec&lt;u8&gt;&gt; + Send;
+}</code></pre>
+<p>That method answers the first lecture question:</p>
+<blockquote><p>For a given deterministic seed, what bytes does this mechanism commit to?</p></blockquote>
+<p>The crate does not require the bytes to come from one source. <code>commit(seed)</code> is allowed to mean different things in different domains:</p>
+<ul><li>encode one generated value,</li><li>run a complete protocol transcript and log the resulting messages,</li><li>build an on-disk structure and return its storage audit,</li><li>compute a deterministic root after a sequence of inserts.</li></ul>
+<p>That flexibility matters. The crate is not tied to one notion of stability. It only asks for a deterministic commitment that can be replayed.</p>
+<p>This is the first place where many readers underestimate the design. The point is not merely that <code>commit</code> returns bytes. The point is that <code>commit</code> defines what the project chooses to treat as the observable compatibility surface.</p>
+<p>If you commit only encoded bytes, you are protecting encoding. If you commit a protocol log, you are protecting transcript-level behavior. If you commit a storage audit, you are protecting file layout and persistence effects.</p>
+<p>The choice of <code>commit</code> is the choice of what story the ledger remembers.</p>
+<hr>
+<h2 id="4-how-the-digest-is-actually-built">4. How The Digest Is Actually Built</h2>
+<p>The digest is built as an ordered replay, not a bag of outputs.</p>
+<p><code>compute_conformance_hash</code> does not hash a set of outputs. It hashes one ordered replay:</p>
+<pre><code class="language-rust">pub async fn compute_conformance_hash&lt;C: Conformance&gt;(n_cases: usize) -&gt; String {
+    let mut hasher = Sha256::new();
+
+    for seed in 0..n_cases as u64 {
+        let committed = C::commit(seed).await;
+        hasher.update((committed.len() as u64).to_le_bytes());
+        hasher.update(&amp;committed);
+    }
+
+    hex_encode(&amp;hasher.finalize())
+}</code></pre>
+<p>Let us unpack exactly what this means.</p>
+<h3 id="4-1-the-replay-order-is-part-of-the-contract">4.1 The replay order is part of the contract</h3>
+<p>Seeds are replayed in ascending order: <code>0, 1, 2, ..., n_cases - 1</code>.</p>
+<p>So the digest is not &quot;the multiset of outputs.&quot; It is the ordered transcript of the sweep. Reordering cases changes the digest. Changing <code>n_cases</code> changes the digest. Changing even one byte for one seed changes the digest.</p>
+<p>That is important because many deterministic mechanisms are order-sensitive. If the ledger ignored order, it would be protecting a weaker claim than the code actually needs.</p>
+<h3 id="4-2-the-length-prefix-is-not-a-small-detail">4.2 The length prefix is not a small detail</h3>
+<p>Before hashing the committed bytes for a seed, the crate hashes the committed length as a <code>u64</code> in little-endian form.</p>
+<p>That prevents ambiguity between concatenated outputs.</p>
+<p>Without length-prefixing, these two replays would collapse into the same raw byte stream:</p>
+<ul><li>case A commits <code>[0x01]</code>, case B commits <code>[0x02, 0x03]</code></li><li>case A commits <code>[0x01, 0x02]</code>, case B commits <code>[0x03]</code></li></ul>
+<p>Both would concatenate to <code>[0x01, 0x02, 0x03]</code>.</p>
+<p>With length-prefixing, the digest sees the shape of the replay, not just the flattened bytes. This is a ledger of a sequence, not a bag of octets.</p>
+<h3 id="4-3-the-crate-hashes-committed-values-directly-not-per-case-digests">4.3 The crate hashes committed values directly, not per-case digests</h3>
+<p>There is no intermediate per-seed hash tree. The hasher absorbs one replay stream directly:</p>
+<ol><li>seed 0 length,</li><li>seed 0 bytes,</li><li>seed 1 length,</li><li>seed 1 bytes,</li><li>and so on.</li></ol>
+<p>That design is simple, deterministic, and easy to reason about in review. When the final SHA-256 digest changes, the cause is always some change in the replay stream itself.</p>
+<h3 id="4-4-the-final-ledger-value-is-lowercase-hex">4.4 The final ledger value is lowercase hex</h3>
+<p>After finalization, the bytes are encoded with the crate&#x27;s own <code>hex_encode</code> helper into lowercase hexadecimal. That keeps the checked-in ledger readable and makes diffs reviewable.</p>
+<h3 id="4-5-what-this-protects-precisely">4.5 What this protects, precisely</h3>
+<p>The digest protects the deterministic replay surface induced by:</p>
+<ul><li>the choice of <code>commit(seed)</code>,</li><li>the seed order,</li><li>the case count,</li><li>the length-prefixing rule,</li><li>and SHA-256 over the resulting stream.</li></ul>
+<p>That is the full compatibility contract. If any one of those rules changes, the ledger has changed, even if no human noticed by eye.</p>
+<hr>
+<h2 id="5-the-ledger-file-is-a-shared-resource">5. The Ledger File Is A Shared Resource</h2>
+<p>The subtle part of the design is not the hash. It is the file discipline.</p>
+<p>Conformance tests are meant to run in parallel across a large workspace. That means the repository needs two things at once:</p>
+<ul><li>expensive digest computation should not serialize unnecessarily,</li><li>shared <code>conformance.toml</code> access must still be race-free.</li></ul>
+<p>The crate solves this by separating computation from bookkeeping.</p>
+<h3 id="5-1-hash-first-lock-later">5.1 Hash first, lock later</h3>
+<p>Both verification mode and regeneration mode compute the digest before they touch the file lock.</p>
+<p>That is a serious design choice, not a micro-optimization.</p>
+<p>Digest computation is the expensive part. It may mean generating sixty-five thousand arbitrary values, replaying a protocol thousands of times, or building many storage layouts. Locking around that work would turn the whole workspace into a queue.</p>
+<p>Instead, the crate allows many tests to do the expensive replay in parallel, then serializes only the small critical section that reads and rewrites the TOML ledger.</p>
+<h3 id="5-2-acquire-lock-is-about-process-safety-not-convenience">5.2 <code>acquire_lock</code> is about process safety, not convenience</h3>
+<p>The lock helper opens the file with read/write/create enabled and <code>truncate(false)</code>, then acquires an exclusive OS-level lock:</p>
+<pre><code class="language-rust">fn acquire_lock(path: &amp;Path) -&gt; fs::File {
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .unwrap_or_else(|e| panic!(&quot;failed to open conformance file: {e}&quot;));
+
+    file.lock()
+        .unwrap_or_else(|e| panic!(&quot;failed to lock conformance file: {e}&quot;));
+
+    file
+}</code></pre>
+<p>Three details matter here:</p>
+<ol><li>The file is created if missing, so a first writer can bootstrap a ledger.</li><li>The file is not truncated on open, so a reader can inspect existing contents safely after taking the lock.</li><li>The lock is OS-level, so concurrent tests and concurrent processes cannot interleave ledger updates.</li></ol>
+<p>The comment in the source also notes that the lock is released when the process exits, even if the process is killed. That is exactly the sort of operational detail a compatibility ledger needs. A stale lock would turn the system into an availability problem.</p>
+<h3 id="5-3-verification-mode-does-not-trust-unlocked-reads">5.3 Verification mode does not trust unlocked reads</h3>
+<p>The public helpers <code>ConformanceFile::load</code> and <code>load_or_default</code> exist, but the hot verify/regenerate paths do not use them for the core bookkeeping. Once the lock is acquired, the code reads the current file contents through the locked handle, parses them, mutates the in-memory <code>BTreeMap</code>, then truncates, seeks back to the beginning, and writes the new pretty TOML.</p>
+<p>That is exactly right. If the code loaded the file first and locked later, two parallel tests could compute against the same stale ledger snapshot and race while writing. The crate avoids that by treating the locked file handle as the single source of truth for the mutation step.</p>
+<h3 id="5-4-why-a-btreemap-is-the-right-ledger-shape">5.4 Why a <code>BTreeMap</code> is the right ledger shape</h3>
+<p><code>ConformanceFile</code> stores entries in a <code>BTreeMap&lt;String, TypeEntry&gt;</code>.</p>
+<p>That buys two useful properties:</p>
+<ul><li>stable key ordering in the pretty TOML output,</li><li>one canonical entry per fully qualified type name.</li></ul>
+<p>Stable ordering matters in review. A ledger that rewrites entries in random order would generate noise and hide the real compatibility change.</p>
+<hr>
+<h2 id="6-verification-and-regeneration-are-different-modes">6. Verification And Regeneration Are Different Modes</h2>
+<p>This is the second area where the original chapter needed more operational detail.</p>
+<p><code>run_conformance_test</code> is not one path. It dispatches between two different behaviors at compile time:</p>
+<ul><li>normal verification mode,</li><li>regeneration mode under <code>--cfg generate_conformance_tests</code>.</li></ul>
+<p>Those modes serve different social purposes.</p>
+<h3 id="6-1-verification-mode-detect-drift-do-not-normalize-it-away">6.1 Verification mode: detect drift, do not normalize it away</h3>
+<p>In normal mode, <code>verify_and_update_conformance</code> computes the live digest, locks the file, and then handles three cases:</p>
+<p>| Ledger state | Code path | Why it matters | | --- | --- | --- | | Entry missing | insert and write | bootstraps a newly added test surface | | Entry present, hash differs | panic on mismatch | turns silent drift into a review event | | Entry present, <code>n_cases</code> differs | panic on mismatch | treats coverage drift as its own decision |</p>
+<p>Notice that hash mismatch and <code>n_cases</code> mismatch are checked separately. That is good design because they ask different review questions.</p>
+<ul><li>A hash mismatch means: did the behavior change?</li><li>An <code>n_cases</code> mismatch means: did we redefine the sampled envelope?</li></ul>
+<p>Those are not the same event.</p>
+<h3 id="6-2-regeneration-mode-acknowledge-a-new-ledger-on-purpose">6.2 Regeneration mode: acknowledge a new ledger on purpose</h3>
+<p>Under <code>generate_conformance_tests</code>, the crate takes a different stance. It still computes the digest first and locks only around file I/O, but after reading the ledger it simply updates or inserts the entry and writes the result back out.</p>
+<p>That is not a hidden escape hatch. It is the explicit acknowledgement path for intentional change.</p>
+<p>The project-level documentation names the intended command:</p>
+<pre><code class="language-bash">RUSTFLAGS=&quot;--cfg generate_conformance_tests&quot; cargo test</code></pre>
+<p>At the repository level, the book should also point readers to the higher-level workflow commands:</p>
+<pre><code class="language-bash">just test-conformance
+just regenerate-conformance</code></pre>
+<p>The important concept is not the exact command spelling. It is the review discipline:</p>
+<ul><li>verification mode says &quot;prove the release still matches the ledger,&quot;</li><li>regeneration mode says &quot;we are deliberately updating the ledger.&quot;</li></ul>
+<h3 id="6-3-why-missing-entries-are-treated-differently-from-mismatches">6.3 Why missing entries are treated differently from mismatches</h3>
+<p>The missing-entry path surprises some readers. Why not fail instead of writing a new entry?</p>
+<p>Because the crate has to support first admission into the ledger. When a new surface is brought under conformance control, there is no prior record yet. The first write is how the ledger begins.</p>
+<p>Once the entry exists, however, mismatch is no longer bootstrapping. It is drift. That is why mismatches panic.</p>
+<hr>
+<h2 id="7-macro-expansion-is-part-of-the-safety-story">7. Macro Expansion Is Part Of The Safety Story</h2>
+<p><code>conformance_tests!</code> is easy to misread as mere ergonomics. It is the layer that keeps ownership, naming, and file paths coherent across the workspace.</p>
+<p>The macro accepts entries of the form:</p>
+<pre><code class="language-rust">commonware_conformance::conformance_tests! {
+    CodecConformance&lt;Message&lt;u8&gt;&gt;,
+    Handshake =&gt; 4096,
+}</code></pre>
+<p>Each entry is either:</p>
+<ul><li><code>Type</code>, which uses <code>DEFAULT_CASES</code>,</li><li>or <code>Type =&gt; n_cases</code>, which overrides the sweep size.</li></ul>
+<p>For each entry, the macro does four important things.</p>
+<h3 id="7-1-it-derives-a-stable-test-function-name">7.1 It derives a stable test function name</h3>
+<p>The macro&#x27;s <code>type_to_ident</code> routine converts a Rust type into a snake_case suffix by:</p>
+<ul><li>splitting PascalCase boundaries,</li><li>replacing punctuation such as <code>&lt;</code>, <code>&gt;</code>, <code>,</code>, spaces, and <code>::</code> separators with underscores,</li><li>collapsing repeated separators.</li></ul>
+<p>That is why types like <code>CodecConformance&lt;BTreeMap&lt;u32, u32&gt;&gt;</code> become test names like <code>test_codec_conformance_b_tree_map_u32_u32</code>.</p>
+<p>This matters because test names show up in the test runner, logs, and failure output. The name is part of the operational ergonomics of the ledger.</p>
+<h3 id="7-2-it-fixes-the-ledger-key-to-module-ownership">7.2 It fixes the ledger key to module ownership</h3>
+<p>The generated test passes a type key built as:</p>
+<pre><code class="language-rust">concat!(module_path!(), &quot;::&quot;, #type_name_str)</code></pre>
+<p>That means the ledger entry is anchored to the module that declared the conformance test, not merely to the bare type name.</p>
+<p>For the resolver wire tests, that produces keys like:</p>
+<ul><li><code>commonware_resolver::p2p::wire::tests::conformance::CodecConformance&lt;Message&lt;u8&gt;&gt;</code></li><li><code>commonware_resolver::p2p::wire::tests::conformance::CodecConformance&lt;Payload&lt;u8&gt;&gt;</code></li></ul>
+<p>That module qualification is not cosmetic. It prevents collisions across the workspace and keeps the ledger aligned with code ownership.</p>
+<h3 id="7-3-it-roots-the-ledger-file-at-the-owning-crate">7.3 It roots the ledger file at the owning crate</h3>
+<p>The macro also hardcodes the path:</p>
+<pre><code class="language-rust">::std::path::Path::new(concat!(env!(&quot;CARGO_MANIFEST_DIR&quot;), &quot;/conformance.toml&quot;))</code></pre>
+<p>That means each test writes only to the <code>conformance.toml</code> of the crate that defined it.</p>
+<p>Again, this is not mere convenience. Without this rule, hand-written tests could accidentally update the wrong ledger file or scatter entries across arbitrary paths. The macro makes the ownership rule uniform.</p>
+<h3 id="7-4-it-standardizes-the-test-runner-grouping">7.4 It standardizes the test runner grouping</h3>
+<p>The macro attaches <code>#[::commonware_conformance::commonware_macros::test_group(&quot;conformance&quot;)]</code> and <code>#[test]</code>, then blocks on the async runner with <code>futures::executor::block_on(...)</code>.</p>
+<p>That means every generated conformance test participates in the same test-group machinery and has the same execution shape.</p>
+<h3 id="7-5-a-near-literal-expansion">7.5 A near-literal expansion</h3>
+<p>For a concrete feel, this resolver declaration:</p>
+<pre><code class="language-rust">commonware_conformance::conformance_tests! {
+    CodecConformance&lt;Message&lt;u8&gt;&gt;,
+}</code></pre>
+<p>expands to the moral equivalent of:</p>
+<pre><code class="language-rust">#[::commonware_conformance::commonware_macros::test_group(&quot;conformance&quot;)]
+#[test]
+fn test_codec_conformance_message_u8() {
+    ::commonware_conformance::futures::executor::block_on(
+        ::commonware_conformance::run_conformance_test::&lt;CodecConformance&lt;Message&lt;u8&gt;&gt;&gt;(
+            concat!(
+                module_path!(),
+                &quot;::&quot;,
+                &quot;CodecConformance&lt;Message&lt;u8&gt;&gt;&quot;
+            ),
+            ::commonware_conformance::DEFAULT_CASES,
+            ::std::path::Path::new(
+                concat!(env!(&quot;CARGO_MANIFEST_DIR&quot;), &quot;/conformance.toml&quot;)
+            ),
+        )
+    );
+}</code></pre>
+<p>That example shows why macro expansion belongs in a concept chapter. The macro is not ornamental syntax. It is how the system preserves ledger hygiene at scale.</p>
+<hr>
+<h2 id="8-wrapper-style-versus-bespoke-conformance">8. Wrapper-Style Versus Bespoke Conformance</h2>
+<p>The workspace uses two different patterns, and both matter.</p>
+<h3 id="8-1-wrapper-style-codecconformance-t">8.1 Wrapper-style: <code>CodecConformance&lt;T&gt;</code></h3>
+<p><code>codec/src/conformance.rs</code> is the admission gate for most wire-format surfaces.</p>
+<p>The wrapper combines three ideas:</p>
+<ol><li>deterministic seed input,</li><li><code>Arbitrary</code> value generation,</li><li><code>Encode</code> serialization.</li></ol>
+<p>Its <code>commit(seed)</code> path is:</p>
+<ul><li>seed a <code>ChaCha8Rng</code> from the <code>u64</code> seed,</li><li>fill a buffer,</li><li>use <code>arbitrary::Unstructured</code> to construct a deterministic <code>T</code>,</li><li>retry with larger buffers when generation runs out of data,</li><li>encode the resulting value to bytes.</li></ul>
+<p>This pattern is powerful because it turns &quot;any type with deterministic generation plus deterministic encoding&quot; into a conformance surface without hand-written glue.</p>
+<p>The wrapper is ideal when the compatibility claim is:</p>
+<blockquote><p>for this family of values, encoding must stay stable.</p></blockquote>
+<h3 id="8-2-bespoke-domain-specific-commit-seed">8.2 Bespoke: domain-specific <code>commit(seed)</code></h3>
+<p>Some mechanisms cannot be reduced to one encoded value. In those cases the workspace writes a custom <code>Conformance</code> implementation.</p>
+<p>That is the right move whenever the compatibility claim is broader than simple serialization:</p>
+<ul><li>a full protocol exchange,</li><li>an on-disk layout after writes and syncs,</li><li>a derived root after algorithmic updates.</li></ul>
+<h3 id="8-3-when-to-choose-which">8.3 When to choose which</h3>
+<p>| Pattern | Best for | Protected behavior | | --- | --- | --- | | <code>CodecConformance&lt;T&gt;</code> | wire formats and records | deterministic encoding of generated values | | bespoke <code>Conformance</code> | protocols, storage, roots | domain behavior in custom replay bytes |</p>
+<p>The key lesson is that <code>commonware-conformance</code> does not force one level of abstraction. It gives the workspace a common ledger while letting each domain decide what bytes best represent its stability promise.</p>
+<hr>
+<h2 id="9-real-consumer-case-studies">9. Real Consumer Case Studies</h2>
+<p>The best way to understand the crate is to look at what real callers choose to record.</p>
+<h3 id="9-1-resolver-wire-types-wrapper-style-protocol-stability">9.1 Resolver wire types: wrapper-style protocol stability</h3>
+<p>In <code>resolver/src/p2p/wire.rs</code>, the nested test module registers:</p>
+<pre><code class="language-rust">commonware_conformance::conformance_tests! {
+    CodecConformance&lt;Message&lt;u8&gt;&gt;,
+    CodecConformance&lt;Payload&lt;u8&gt;&gt;,
+}</code></pre>
+<p>This is wrapper-style conformance doing exactly what it should: keeping the ledger on encoding drift.</p>
+<p><code>Message&lt;Key&gt;</code> contains a <code>u64</code> message id plus a <code>Payload&lt;Key&gt;</code>. <code>Payload&lt;Key&gt;</code> is an enum with three variants:</p>
+<ul><li><code>Request(Key)</code> tagged with <code>0</code>,</li><li><code>Response(Bytes)</code> tagged with <code>1</code>,</li><li><code>Error</code> tagged with <code>2</code>.</li></ul>
+<p>Putting these types under <code>CodecConformance</code> means the ledger now watches for drift in:</p>
+<ul><li>field ordering,</li><li>tag assignment,</li><li>length encoding of response bytes,</li><li>and the behavior of the derived <code>Arbitrary</code> instances that populate the test surface.</li></ul>
+<p>This is exactly the class of surface where a few hand-written examples are too weak. The wrapper subjects a large generated family of messages to the same stability discipline.</p>
+<h3 id="9-2-handshake-bespoke-transcript-level-stability">9.2 Handshake: bespoke transcript-level stability</h3>
+<p><code>cryptography/src/handshake/conformance.rs</code> takes a different approach.</p>
+<p>Its <code>Handshake</code> implementation does not encode one type. It replays an entire two-party handshake:</p>
+<ul><li>generate dialer and listener keys,</li><li>run <code>dial_start</code>,</li><li>run <code>listen_start</code>,</li><li>run <code>dial_end</code>,</li><li>run <code>listen_end</code>,</li><li>send a random plaintext from dialer to listener,</li><li>record the ciphertext and the recovered plaintext,</li><li>then do the same in the other direction.</li></ul>
+<p>Each stage appends encoded artifacts to a log vector.</p>
+<p>That means the resulting ledger entry protects more than one wire type. It protects the protocol transcript as exercised by that deterministic replay:</p>
+<ul><li>greeting formats,</li><li>acknowledgement formats,</li><li>transcript wiring,</li><li>transport framing,</li><li>send/receive symmetry,</li><li>and the fact that ciphertext differs from plaintext while decryption still recovers the original message.</li></ul>
+<p>This is the right kind of bespoke conformance. The compatibility promise is not &quot;one type still encodes the same way.&quot; It is &quot;the handshake mechanism still behaves the same way.&quot;</p>
+<h3 id="9-3-journal-storage-bespoke-file-layout-stability">9.3 Journal storage: bespoke file-layout stability</h3>
+<p><code>storage/src/journal/conformance.rs</code> is even more instructive because it shows how conformance reaches past bytes on the wire and into storage layout.</p>
+<p>It defines bespoke <code>Conformance</code> implementations for several journal shapes:</p>
+<ul><li><code>ContiguousFixed</code>,</li><li><code>ContiguousVariable</code>,</li><li><code>SegmentedFixed</code>,</li><li><code>SegmentedGlob</code>,</li><li><code>SegmentedVariable</code>,</li><li><code>SegmentedOversized</code>.</li></ul>
+<p>Each implementation follows the same high-level pattern:</p>
+<ol><li>create a deterministic runtime runner seeded from the conformance seed,</li><li>initialize a journal with partition names derived from that seed,</li><li>generate deterministic data through the runtime context,</li><li>append data, often across multiple sections,</li><li><code>sync</code> the data,</li><li>drop the journal,</li><li>return <code>context.storage_audit().to_vec()</code>.</li></ol>
+<p>That last step is the conceptual heart of the case study.</p>
+<p>The ledger is not recording the input data itself. It is recording the audited storage outcome after the journal has executed its writes and syncs. So the ledger protects facts such as:</p>
+<ul><li>which blobs were created,</li><li>how sections were distributed,</li><li>how fixed versus variable records were laid out,</li><li>how oversized value/index partitions interacted,</li><li>and whether the persisted footprint still matches prior releases.</li></ul>
+<p>This is a strong example of concept-first conformance design. The storage layer does not ask, &quot;Did one record still encode?&quot; It asks whether the engine still produced the same durable layout story.</p>
+<h3 id="9-4-mmr-root-stability-bespoke-algorithmic-stability">9.4 MMR root stability: bespoke algorithmic stability</h3>
+<p><code>storage/src/merkle/mmr/conformance.rs</code> is the smallest bespoke example, and that makes it especially clear.</p>
+<p><code>MmrRootStability</code> builds an MMR using <code>seed</code> as the number of inserted elements, then returns the final root bytes.</p>
+<p>That means the ledger entry protects the algorithmic semantics of root computation across a range of tree sizes. It is not a storage layout and not a codec. It is the claim that:</p>
+<blockquote><p>after replaying this deterministic sequence of insertions, the derived root is still the same.</p></blockquote>
+<p>This is exactly what bespoke conformance is for: protecting a deterministic mechanism that matters even though its natural output is not &quot;a single encoded message.&quot;</p>
+<hr>
+<h2 id="10-the-workspace-really-uses-this">10. The Workspace Really Uses This</h2>
+<p>The repository answers the question directly: this crate is used across the workspace, not just in one corner of it.</p>
+<p>At the time of writing, the workspace contains <strong>10</strong> crate-local <code>conformance.toml</code> files with <strong>219</strong> tracked entries in total:</p>
+<p>| Crate | Ledger entries | | --- | ---: | | <code>codec</code> | 53 | | <code>cryptography</code> | 47 | | <code>consensus</code> | 42 | | <code>storage</code> | 41 | | <code>utils</code> | 15 | | <code>p2p</code> | 7 | | <code>math</code> | 5 | | <code>coding</code> | 4 | | <code>runtime</code> | 3 | | <code>resolver</code> | 2 |</p>
+<p>That distribution tells us something important.</p>
+<p>The ledger is not confined to one layer. It appears in:</p>
+<ul><li>foundational encoding crates,</li><li>cryptography and handshake machinery,</li><li>storage engines and proof structures,</li><li>consensus and networking layers,</li><li>support utilities.</li></ul>
+<p>In other words, the crate has become a cross-workspace compatibility discipline, not a local testing trick.</p>
+<hr>
+<h2 id="11-operational-ci-and-release-flow">11. Operational CI And Release Flow</h2>
+<p>Once you understand the code paths, the release discipline becomes clear.</p>
+<h3 id="11-1-adding-a-new-conformance-surface">11.1 Adding a new conformance surface</h3>
+<p>When an author introduces a new conformance test:</p>
+<ol><li>they define the surface, either via <code>CodecConformance&lt;T&gt;</code> or a bespoke <code>Conformance</code> implementation,</li><li>they register it with <code>conformance_tests!</code>,</li><li>they run the test locally,</li><li>if the ledger entry does not yet exist, the test bootstraps it into the crate&#x27;s <code>conformance.toml</code>,</li><li>the resulting ledger diff is committed and reviewed.</li></ol>
+<p>The important review artifact is not only the code. It is the combination of:</p>
+<ul><li>the new <code>commit(seed)</code> definition,</li><li>the chosen <code>n_cases</code>,</li><li>and the new ledger entry.</li></ul>
+<h3 id="11-2-verifying-a-normal-release">11.2 Verifying a normal release</h3>
+<p>On a routine change, the intended path is verification:</p>
+<pre><code class="language-bash">just test-conformance</code></pre>
+<p>or a targeted crate-level equivalent.</p>
+<p>CI recomputes the live digests and expects the checked-in ledger to match. If not, the release candidate is saying something different than the repository previously promised.</p>
+<h3 id="11-3-handling-an-intentional-compatibility-change">11.3 Handling an intentional compatibility change</h3>
+<p>If a change is deliberate, the team regenerates the ledger:</p>
+<pre><code class="language-bash">just regenerate-conformance</code></pre>
+<p>or, at the lower level:</p>
+<pre><code class="language-bash">RUSTFLAGS=&quot;--cfg generate_conformance_tests&quot; cargo test</code></pre>
+<p>That is the moment when a compatibility event becomes explicit in version control. The ledger diff is now part of the review discussion.</p>
+<h3 id="11-4-how-this-interacts-with-commonware-stability-levels">11.4 How this interacts with Commonware stability levels</h3>
+<p>The repository-level guidance matters here.</p>
+<ul><li>At <strong>ALPHA</strong>, breaking changes are permitted, but conformance still makes them visible.</li><li>At <strong>BETA</strong> and above, wire and storage compatibility carry stricter obligations. A ledger diff is no longer just a test update. It may imply a migration path, release notes, or a stronger review bar.</li></ul>
+<p>That is one reason the crate is valuable even when breakage is allowed. The ledger turns &quot;we changed something&quot; into a concrete, reviewable artifact.</p>
+<hr>
+<h2 id="12-failure-modes-and-limits">12. Failure Modes And Limits</h2>
+<p><code>commonware-conformance</code> is strong, but it is not magical.</p>
+<p>It does not prove semantic correctness. It proves that the recorded deterministic replay surface did or did not drift.</p>
+<p>That leaves several limits:</p>
+<ul><li>if the bug lives outside the sampled seed space, the ledger will not see it;</li><li>if <code>commit(seed)</code> is not actually deterministic across runs or platforms, the ledger becomes noise;</li><li>if the chosen commitment bytes omit an important aspect of behavior, the ledger cannot protect that omitted aspect;</li><li>if the behavior change is intentional, a human still has to decide whether it is an acceptable release event.</li></ul>
+<p>The main failure modes line up exactly with the ledger model:</p>
+<ul><li>a missing entry means the surface is not yet recorded,</li><li>a hash mismatch means the recorded behavior changed,</li><li>an <code>n_cases</code> mismatch means the recorded envelope changed.</li></ul>
+<p>That is why conformance belongs beside unit tests, integration tests, the deterministic runtime, and fuzzing. It is excellent at catching silent compatibility drift. It is not a replacement for every other kind of evidence.</p>
+<hr>
+<h2 id="13-how-to-read-the-source">13. How To Read The Source</h2>
+<p>Read the code in the order the lecture built the argument.</p>
+<ol><li>Start with <code>conformance/src/lib.rs</code>. This is the ledger engine: <code>Conformance</code>, digest construction, file locking, verification mode, regeneration mode, and panic messages.</li></ol>
+<ol><li>Then read <code>conformance/macros/src/lib.rs</code>. This is where the ledger becomes enforceable at scale. Watch how the macro standardizes function names, type keys, manifest-rooted file paths, and test grouping.</li></ol>
+<ol><li>Then read <code>codec/src/conformance.rs</code>. This is the wrapper admission gate for most real wire-format surfaces.</li></ol>
+<ol><li>Then compare bespoke callers. Use <code>cryptography/src/handshake/conformance.rs</code>, <code>storage/src/journal/conformance.rs</code>, and <code>storage/src/merkle/mmr/conformance.rs</code> to see how different domains choose different commitment bytes.</li></ol>
+<ol><li>Then inspect real ledger files. Read <code>resolver/conformance.toml</code>, <code>cryptography/conformance.toml</code>, and <code>storage/conformance.toml</code> to see what the checked-in receipts actually look like in practice.</li></ol>
+<p>If you read in that order, the crate stops looking like a helper and starts looking like what it really is: a repository-wide discipline for making compatibility claims auditable.</p>
+<hr>
+<h2 id="14-glossary">14. Glossary</h2>
+<ul><li><strong>silent compatibility drift</strong>: a stable surface changes meaning without an obvious runtime failure.</li><li><strong>compatibility ledger</strong>: the checked-in <code>conformance.toml</code> record of expected digests.</li><li><strong>behavior, not bytes</strong>: the principle that conformance protects a deterministic replay surface, not one example fixture.</li><li>**<code>commit(seed)</code>**: the deterministic function that turns one seed into the bytes recorded by the ledger.</li><li>**<code>n_cases</code>**: the size of the deterministic sweep that defines the sampled surface.</li><li><strong>verification mode</strong>: the default mode that compares live behavior against the checked-in ledger and panics on drift.</li><li><strong>regeneration mode</strong>: the explicit mode that rewrites the ledger for an intentional compatibility change.</li><li><strong>wrapper-style conformance</strong>: using <code>CodecConformance&lt;T&gt;</code> to protect the encoding of generated values.</li><li><strong>bespoke conformance</strong>: writing a domain-specific <code>Conformance</code> implementation to protect a higher-level mechanism such as a handshake, storage layout, or root computation.</li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../math/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-math</span>
+          <span class="foot-sub">math</span>
+        </a>
+        <div class="foot-center">
+          conformance<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../macros/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-macros</span>
+          <span class="foot-sub">macros</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#backgrounder-determinism-regression-tests-and-compatibility-promises">Backgrounder: Determinism, Regression Tests, and Compatibility Promises</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model-a-compatibility-ledger">2. Mental Model: A Compatibility Ledger</a></li><li class="toc-item"><a class="toc-link" href="#3-what-counts-as-behavior">3. What Counts As Behavior?</a></li><li class="toc-item"><a class="toc-link" href="#4-how-the-digest-is-actually-built">4. How The Digest Is Actually Built</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-replay-order-is-part-of-the-contract">4.1 The replay order is part of the contract</a></li><li><a class="toc-link" href="#4-2-the-length-prefix-is-not-a-small-detail">4.2 The length prefix is not a small detail</a></li><li><a class="toc-link" href="#4-3-the-crate-hashes-committed-values-directly-not-per-case-digests">4.3 The crate hashes committed values directly, not per-case digests</a></li><li><a class="toc-link" href="#4-4-the-final-ledger-value-is-lowercase-hex">4.4 The final ledger value is lowercase hex</a></li><li><a class="toc-link" href="#4-5-what-this-protects-precisely">4.5 What this protects, precisely</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-the-ledger-file-is-a-shared-resource">5. The Ledger File Is A Shared Resource</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-hash-first-lock-later">5.1 Hash first, lock later</a></li><li><a class="toc-link" href="#5-2-acquire-lock-is-about-process-safety-not-convenience">5.2 acquire_lock is about process safety, not convenience</a></li><li><a class="toc-link" href="#5-3-verification-mode-does-not-trust-unlocked-reads">5.3 Verification mode does not trust unlocked reads</a></li><li><a class="toc-link" href="#5-4-why-a-btreemap-is-the-right-ledger-shape">5.4 Why a BTreeMap is the right ledger shape</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-verification-and-regeneration-are-different-modes">6. Verification And Regeneration Are Different Modes</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-verification-mode-detect-drift-do-not-normalize-it-away">6.1 Verification mode: detect drift, do not normalize it away</a></li><li><a class="toc-link" href="#6-2-regeneration-mode-acknowledge-a-new-ledger-on-purpose">6.2 Regeneration mode: acknowledge a new ledger on purpose</a></li><li><a class="toc-link" href="#6-3-why-missing-entries-are-treated-differently-from-mismatches">6.3 Why missing entries are treated differently from mismatches</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-macro-expansion-is-part-of-the-safety-story">7. Macro Expansion Is Part Of The Safety Story</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-it-derives-a-stable-test-function-name">7.1 It derives a stable test function name</a></li><li><a class="toc-link" href="#7-2-it-fixes-the-ledger-key-to-module-ownership">7.2 It fixes the ledger key to module ownership</a></li><li><a class="toc-link" href="#7-3-it-roots-the-ledger-file-at-the-owning-crate">7.3 It roots the ledger file at the owning crate</a></li><li><a class="toc-link" href="#7-4-it-standardizes-the-test-runner-grouping">7.4 It standardizes the test runner grouping</a></li><li><a class="toc-link" href="#7-5-a-near-literal-expansion">7.5 A near-literal expansion</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-wrapper-style-versus-bespoke-conformance">8. Wrapper-Style Versus Bespoke Conformance</a><ul class="toc-sub"><li><a class="toc-link" href="#8-1-wrapper-style-codecconformance-t">8.1 Wrapper-style: CodecConformance&lt;T&gt;</a></li><li><a class="toc-link" href="#8-2-bespoke-domain-specific-commit-seed">8.2 Bespoke: domain-specific commit(seed)</a></li><li><a class="toc-link" href="#8-3-when-to-choose-which">8.3 When to choose which</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#9-real-consumer-case-studies">9. Real Consumer Case Studies</a><ul class="toc-sub"><li><a class="toc-link" href="#9-1-resolver-wire-types-wrapper-style-protocol-stability">9.1 Resolver wire types: wrapper-style protocol stability</a></li><li><a class="toc-link" href="#9-2-handshake-bespoke-transcript-level-stability">9.2 Handshake: bespoke transcript-level stability</a></li><li><a class="toc-link" href="#9-3-journal-storage-bespoke-file-layout-stability">9.3 Journal storage: bespoke file-layout stability</a></li><li><a class="toc-link" href="#9-4-mmr-root-stability-bespoke-algorithmic-stability">9.4 MMR root stability: bespoke algorithmic stability</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#10-the-workspace-really-uses-this">10. The Workspace Really Uses This</a></li><li class="toc-item"><a class="toc-link" href="#11-operational-ci-and-release-flow">11. Operational CI And Release Flow</a><ul class="toc-sub"><li><a class="toc-link" href="#11-1-adding-a-new-conformance-surface">11.1 Adding a new conformance surface</a></li><li><a class="toc-link" href="#11-2-verifying-a-normal-release">11.2 Verifying a normal release</a></li><li><a class="toc-link" href="#11-3-handling-an-intentional-compatibility-change">11.3 Handling an intentional compatibility change</a></li><li><a class="toc-link" href="#11-4-how-this-interacts-with-commonware-stability-levels">11.4 How this interacts with Commonware stability levels</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#12-failure-modes-and-limits">12. Failure Modes And Limits</a></li><li class="toc-item"><a class="toc-link" href="#13-how-to-read-the-source">13. How To Read The Source</a></li><li class="toc-item"><a class="toc-link" href="#14-glossary">14. Glossary</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

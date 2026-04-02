@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-codec — commonware-book</title>
+  <meta name="description" content="Before a value becomes protocol data, it has to leave the comfortable world of language-level types and enter the rough world of bytes. That transition is where many systems get into trouble.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / codec
+      </span>
+      <span class="chapter-title">commonware-codec</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../coding/page.html">← prev</a>
+        <a class="next" href="../math/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · codec · Complete · 20 min read</div>
+    <h1 class="ch-title">commonware-codec</h1>
+    <p class="ch-deck">A Customs Office for Stable Bytes</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Before a value becomes protocol data, it has to leave the comfortable world of language-level types and enter the rough world of bytes. That transition is where many systems get into trouble.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part II. Evidence and State</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">10 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">20 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-math</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#backgrounder-bytes-grammars-and-canonical-forms">Backgrounder: Bytes, Grammars, and Canonical Forms</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model-the-customs-office-and-the-contract">2. Mental Model: The Customs Office and the Contract</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#write-and-encodesize-define-the-outgoing-contract">Write and EncodeSize define the outgoing contract</a></li><li><a class="toc-link" href="#read-makes-decoding-a-policy-decision">Read makes decoding a policy decision</a></li><li><a class="toc-link" href="#rangecfg-is-policy-not-data">RangeCfg is policy, not data</a></li><li><a class="toc-link" href="#decode-seals-the-border">Decode seals the border</a></li><li><a class="toc-link" href="#fixedsize-marks-the-easy-cases">FixedSize marks the easy cases</a></li><li><a class="toc-link" href="#usize-is-variable-size-by-policy-not-by-accident">usize is variable-size by policy, not by accident</a></li><li><a class="toc-link" href="#varint-is-a-grammar-not-a-byte-trick">Varint is a grammar, not a byte trick</a></li><li><a class="toc-link" href="#canonical-collections-are-part-of-correctness">Canonical collections are part of correctness</a></li><li><a class="toc-link" href="#lazy-t-defers-work-without-changing-truth">Lazy&lt;T&gt; defers work without changing truth</a></li><li><a class="toc-link" href="#extension-traits-improve-ergonomics-not-semantics">Extension traits improve ergonomics, not semantics</a></li><li><a class="toc-link" href="#conformance-turns-the-contract-into-a-regression-boundary">Conformance turns the contract into a regression boundary</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-bytes-move-through-the-machine">4. How Bytes Move Through the Machine</a><ul class="toc-sub"><li><a class="toc-link" href="#primitives-fixed-width-values-establish-the-baseline">Primitives: fixed-width values establish the baseline</a></li><li><a class="toc-link" href="#rangecfg-in-motion-the-length-is-a-claim-not-an-order">RangeCfg in motion: the length is a claim, not an order</a></li><li><a class="toc-link" href="#varint-worked-example-accepted-and-rejected-spellings">Varint worked example: accepted and rejected spellings</a></li><li><a class="toc-link" href="#canonical-collections-accepted-bytes-versus-recoverable-bytes">Canonical collections: accepted bytes versus &quot;recoverable&quot; bytes</a></li><li><a class="toc-link" href="#lazy-t-worked-example-defer-the-parse-keep-the-contract">Lazy&lt;T&gt; worked example: defer the parse, keep the contract</a></li><li><a class="toc-link" href="#extensions-shorter-calls-to-the-same-policy">Extensions: shorter calls to the same policy</a></li><li><a class="toc-link" href="#conformance-linkage-why-canonicality-pays-off">Conformance linkage: why canonicality pays off</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-this-design-is-built-to-absorb">5. What Pressure This Design Is Built To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#pressure-1-hostile-length-prefixes">Pressure 1: hostile length prefixes</a></li><li><a class="toc-link" href="#pressure-2-ambiguous-compact-integers">Pressure 2: ambiguous compact integers</a></li><li><a class="toc-link" href="#pressure-3-truncated-or-padded-buffers">Pressure 3: truncated or padded buffers</a></li><li><a class="toc-link" href="#pressure-4-cross-platform-drift">Pressure 4: cross-platform drift</a></li><li><a class="toc-link" href="#pressure-5-non-canonical-collection-encodings">Pressure 5: non-canonical collection encodings</a></li><li><a class="toc-link" href="#pressure-6-deferred-work-without-deferred-rules">Pressure 6: deferred work without deferred rules</a></li><li><a class="toc-link" href="#pressure-7-stability-over-time">Pressure 7: stability over time</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="backgrounder-bytes-grammars-and-canonical-forms">Backgrounder: Bytes, Grammars, and Canonical Forms</h2>
+<p>Before a value becomes protocol data, it has to leave the comfortable world of language-level types and enter the rough world of bytes. That transition is where many systems get into trouble.</p>
+<p>At the representation level, one logical value can often be written in several ways. Endianness can flip the byte order. Variable-length encodings can spell the same number with different lengths. Collection encodings can ignore or keep ordering, padding, and trailing bytes. If the decoder is casual about any of those choices, two machines may disagree about what the same wire data means.</p>
+<p>The naive approach is to say, &quot;just serialize it&quot; and trust the library. That works only if all sides already agree on the exact spelling rules, the parser rejects ambiguity, and the input cannot make the decoder do unbounded work. In practice, those assumptions break quickly:</p>
+<ul><li>a permissive parser may accept multiple byte strings for one value,</li><li>a length prefix may be trusted too early,</li><li>a trailing blob may be ignored instead of rejected,</li><li>and an attacker can turn decoding into a memory or CPU drain.</li></ul>
+<p>That is why byte formats need to be thought of as grammars, not just blobs. Each format says what sequences are legal, how one value is delimited from the next, and which spelling is the canonical one. Canonical form matters because it lets the rest of the protocol use bytes as stable names rather than as fuzzy suggestions.</p>
+<p>There is also a tradeoff between flexibility and safety. A format that accepts many spellings is easy to evolve in the short term, but it becomes hard to compare, hash, sign, or store deterministically. A format that is too rigid may be less convenient, but it gives the rest of the system one consistent story.</p>
+<p><code>commonware-codec</code> stands on that stricter side of the line. It treats bytes as a public contract with exact spelling rules and exact bounds, because protocol code cannot afford to guess what the sender meant.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>When a protocol crosses a machine boundary, a value stops being a Rust type and becomes bytes. At that moment, &quot;it serialized&quot; is not a meaningful guarantee. The real questions are harsher:</p>
+<ul><li>Do these bytes mean exactly one value?</li><li>Will every machine encode that value the same way?</li><li>Can the decoder bound how much memory and work it will spend?</li><li>Will the boundary reject trailing junk instead of quietly ignoring it?</li></ul>
+<p><code>commonware-codec</code> exists to answer those questions with a contract.</p>
+<p>That contract has three parts.</p>
+<ol><li><strong>Stable bytes</strong>: a value must have a predictable wire form.</li><li><strong>Canonical representation</strong>: one logical value gets one accepted encoding.</li><li><strong>Bounded decoding</strong>: untrusted input does not get to choose unlimited work.</li></ol>
+<p>That is why the crate is built around <code>Write</code>, <code>EncodeSize</code>, <code>Read</code>, and <code>Decode</code>.</p>
+<ul><li><code>Write</code> says how a value becomes bytes.</li><li><code>EncodeSize</code> says exactly how many bytes that write will need.</li><li><code>Read</code> says how to reconstruct the value, with caller-supplied policy.</li><li><code>Decode</code> adds the last protocol rule: consume the whole buffer, or fail.</li></ul>
+<p>Many libraries can turn values into bytes. Fewer treat the wire format as a discipline. <code>commonware-codec</code> does. It assumes the sender may be careless, malicious, or simply running on a different machine. The crate&#x27;s job is to make those differences irrelevant at the byte boundary.</p>
+<p>That is the right way to read the rest of the chapter. This is not a tour of a serializer. It is a lecture about how to make bytes safe enough to carry meaning.</p>
+<hr>
+<h2 id="2-mental-model-the-customs-office-and-the-contract">2. Mental Model: The Customs Office and the Contract</h2>
+<p>The most useful mental model is a customs office.</p>
+<p>A package arrives at the border with paperwork attached. The paperwork says what the package is, how large it may be, and what shape the contents should have. The officer does not trust the label. The officer opens the box, counts what is inside, compares the contents against the declared limits, and refuses entry if anything is off.</p>
+<p>That is what <code>commonware-codec</code> does for protocol bytes.</p>
+<p>Keep that border picture in mind through the rest of the crate:</p>
+<ul><li><code>Write</code> is the packing procedure.</li><li><code>EncodeSize</code> is the declared shipment size.</li><li><code>Read</code> is the inspection process.</li><li><code>RangeCfg</code> is the import policy.</li><li><code>Decode</code> is the clearance stamp that says, &quot;nothing else was hidden in the box.&quot;</li></ul>
+<p>The contract behind that office is simple:</p>
+<ol><li>the sender must present a stable byte layout,</li><li>the wire format must not admit multiple spellings for the same value,</li><li>and the receiver must stay within a caller-chosen budget while decoding.</li></ol>
+<p>Once you adopt that model, the crate becomes easier to reason about. Every trait and concrete impl either defines the paperwork, checks it, or enforces the budget.</p>
+<p>That is also why later sections keep returning to the same theme. Stable bytes, canonical form, and bounded decoding are not three separate features. They are three faces of the same border policy.</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<p>With the customs office in view, the core traits divide cleanly by job.</p>
+<h3 id="write-and-encodesize-define-the-outgoing-contract"><code>Write</code> and <code>EncodeSize</code> define the outgoing contract</h3>
+<p><code>Write</code> knows how to put a value into a <code>BufMut</code>. <code>EncodeSize</code> knows how many bytes that operation must consume.</p>
+<p>Those traits are separate on purpose. Writing and counting are different obligations, and a codec becomes unreliable as soon as it treats them as a fuzzy estimate. <code>Encode</code> joins the two together and checks its own work after the write. That is how the outgoing path produces stable bytes instead of &quot;roughly the right layout.&quot;</p>
+<p>In the customs model, the package and the paperwork must match exactly.</p>
+<p>If they do not, <code>Encode</code> panics. That is not framed as recoverable input failure. It is a bug in the codec implementation.</p>
+<h3 id="read-makes-decoding-a-policy-decision"><code>Read</code> makes decoding a policy decision</h3>
+<p><code>Read</code> reconstructs a value from a <code>Buf</code>, but it also takes a <code>Cfg</code> parameter. That small design choice is what turns decoding into a controlled operation.</p>
+<p>The config lets the caller say, &quot;I will accept a vector up to this length,&quot; or &quot;this field may occupy only this range.&quot; Without that hook, the decoder would be forced to trust the sender&#x27;s declared shape. With it, the caller sets the budget, and the decoder enforces it.</p>
+<p>That is bounded decoding in one sentence: the receiver decides how much work a piece of untrusted input is allowed to cause.</p>
+<h3 id="rangecfg-is-policy-not-data"><code>RangeCfg</code> is policy, not data</h3>
+<p><code>RangeCfg</code> is the simplest expression of that idea. It is not a value carried on the wire. It is a value supplied by the reader.</p>
+<p>That distinction matters because it decides who is in charge.</p>
+<ul><li>The sender may declare a length.</li><li>The receiver decides whether that length is admissible.</li></ul>
+<p><code>RangeCfg</code> is deliberately small. It stores a start bound and an end bound and implements <code>RangeBounds&lt;T&gt;</code>, so callers can construct policy from ordinary Rust ranges: <code>0..=1024</code>, <code>1..</code>, <code>..=32</code>, <code>..</code>, or <code>RangeCfg::exact(7)</code>.</p>
+<p>The design gets stronger when you notice what is <em>not</em> there. <code>RangeCfg</code> does not know anything about <code>Vec</code>, <code>Bytes</code>, or <code>HashMap</code>. It is generic over <code>T</code>. That makes it portable policy rather than container-specific policy.</p>
+<p>The conversion impls in <code>config.rs</code> sharpen that point. A range over <code>NonZeroU32</code> can become a range over <code>u32</code> or <code>usize</code>. That means higher layers can express the most specific local invariant they know, and lower layers can still consume the policy in the integer type they need.</p>
+<p>So <code>RangeCfg</code> is not just a guardrail. It is where authority changes hands from the sender to the receiver.</p>
+<h3 id="decode-seals-the-border"><code>Decode</code> seals the border</h3>
+<p><code>Read</code> can successfully parse one value from the front of a buffer. Protocol boundaries usually need something stricter: they need proof that the buffer held exactly one value and nothing else.</p>
+<p><code>Decode</code> adds that rule. If bytes remain, decoding fails with <code>ExtraData</code>.</p>
+<p>This is the part that makes the customs-office model feel complete. It is not enough to inspect the declared item. The officer must also confirm that the box contains no hidden compartment.</p>
+<h3 id="fixedsize-marks-the-easy-cases"><code>FixedSize</code> marks the easy cases</h3>
+<p>Some values always occupy the same number of bytes. For those types, size is not a computation. It is part of the type&#x27;s identity.</p>
+<p>That matters because fixed-size values are the simplest proof that stable bytes are possible. A <code>u32</code>, <code>bool</code>, <code>Ipv4Addr</code>, or fixed-size array does not need a length prefix, and it does not need negotiation with the caller. The contract is short and exact.</p>
+<p>It also explains a later design choice: <code>Lazy&lt;T&gt;</code> can only implement <code>Read</code> when <code>T: FixedSize</code>. If the outer decoder does not know where <code>T</code> ends, it cannot defer parsing safely. A lazy boundary still needs a precise byte window.</p>
+<h3 id="usize-is-variable-size-by-policy-not-by-accident"><code>usize</code> is variable-size by policy, not by accident</h3>
+<p>Most primitive types in <code>types/primitives.rs</code> are fixed-width and big-endian. <code>usize</code> is the exception.</p>
+<p>It is varint-encoded because lengths and counts are often small, but it is also restricted to values that fit in <code>u32</code>. That is the portability rule that keeps the same logical length from acquiring different wire forms on 32-bit and 64-bit machines.</p>
+<p>So the <code>usize</code> story has three layers:</p>
+<ol><li>use a compact representation for small counts,</li><li>reject architecture-dependent magnitudes,</li><li>run the result through <code>RangeCfg</code> before trusting it.</li></ol>
+<p>That is a good example of the crate&#x27;s style. A convenience choice is accepted only after it has been fenced by stability and policy.</p>
+<h3 id="varint-is-a-grammar-not-a-byte-trick">Varint is a grammar, not a byte trick</h3>
+<p>Varint is easy to describe loosely and dangerous to implement loosely.</p>
+<p>In this crate, varint is treated as a language with syntax rules:</p>
+<ul><li>each byte contributes 7 data bits,</li><li>the top bit says whether another byte must follow,</li><li>the final byte must be the first byte whose continuation bit is clear,</li><li>and the encoding must stop as soon as the value is fully spelled.</li></ul>
+<p>That last rule is what turns compactness into canonicality.</p>
+<p>For example:</p>
+<ul><li><code>0</code> is accepted as <code>[0x00]</code>,</li><li><code>300</code> is accepted as <code>[0xAC, 0x02]</code>,</li><li>but overlong zero such as <code>[0x80, 0x00]</code> is rejected.</li></ul>
+<p>The incremental <code>Decoder&lt;U&gt;::feed</code> in <code>varint.rs</code> makes the grammar explicit. Once decoding has progressed beyond the first byte, a later all-zero byte is illegal because it proves the sender kept talking after the value was already finished. On the last possible byte, any set bits beyond the target width are illegal because they would overflow the type or imply an impossible extra continuation.</p>
+<p>That is why <code>InvalidVarint</code> means more than &quot;could not parse.&quot; It means the byte sequence violated the unique spelling rules for this integer width.</p>
+<p><code>SInt</code> adds ZigZag encoding on top of the same grammar. Negative numbers are not given a separate varint language. They are mapped into the unsigned one.</p>
+<h3 id="canonical-collections-are-part-of-correctness">Canonical collections are part of correctness</h3>
+<p>Stable bytes are not enough if the same logical value can appear on the wire in many different forms. Canonical representation closes that gap.</p>
+<p>The crate handles ordered and unordered collections differently.</p>
+<ul><li><code>BTreeMap</code> and <code>BTreeSet</code> already have a defined iteration order, so the wire form can follow it directly.</li><li><code>HashMap</code> and <code>HashSet</code> do not, so the writer sorts entries before emitting them.</li></ul>
+<p>The important part is the read path. <code>read_ordered_map</code> and <code>read_ordered_set</code> do not merely deserialize items and then sort them in memory. They require the incoming bytes to already be in ascending order and to be duplicate-free.</p>
+<p>So the decoder is not saying, &quot;I can recover a valid map from this mess.&quot; It is saying, &quot;I will only accept the one wire spelling this logical map is supposed to have.&quot;</p>
+<p>That difference is what makes the encoded bytes safe to hash, sign, compare, and pin in conformance fixtures.</p>
+<h3 id="lazy-t-defers-work-without-changing-truth"><code>Lazy&lt;T&gt;</code> defers work without changing truth</h3>
+<p><code>Lazy&lt;T&gt;</code> is the crate&#x27;s most instructive &quot;advanced&quot; type because it looks like an optimization and turns out to be a policy statement.</p>
+<p><code>Lazy&lt;T&gt;</code> stores either:</p>
+<ul><li>an already available <code>T</code>, or</li><li>pending bytes plus the <code>Cfg</code> needed to decode <code>T</code> later.</li></ul>
+<p>That means laziness here is not &quot;skip validation forever.&quot; It is &quot;capture the same future decode that would have happened now, but move the cost.&quot;</p>
+<p>Two details in <code>types/lazy.rs</code> are worth noticing.</p>
+<p>First, on <code>std</code>, the actual decode is protected by a <code>OnceLock&lt;Option&lt;T&gt;&gt;</code>. The first <code>get()</code> performs the work and caches either success or failure. Later calls do not decode again.</p>
+<p>Second, <code>Write</code> and <code>EncodeSize</code> prefer the pending raw bytes when they exist. That lets <code>Lazy&lt;T&gt;</code> round-trip the original accepted encoding without forcing a decode and re-encode cycle first.</p>
+<p><code>Lazy&lt;T&gt;</code> is also intentionally narrow. The <code>Read</code> impl exists only when <code>T: FixedSize</code>. A lazy reader can safely take exactly <code>T::SIZE</code> bytes from the buffer and hold them for later. Without a fixed width, the codec would need some other framing story before deferral would be sound.</p>
+<h3 id="extension-traits-improve-ergonomics-not-semantics">Extension traits improve ergonomics, not semantics</h3>
+<p><code>ReadExt</code>, <code>DecodeExt</code>, <code>ReadRangeExt</code>, and <code>DecodeRangeExt</code> do not weaken the contract. They only compress recurring call patterns.</p>
+<p>The config shapes in real implementations make the point concrete:</p>
+<ul><li>primitives usually use <code>Cfg = ()</code>,</li><li>a <code>Vec&lt;T&gt;</code> uses <code>(RangeCfg&lt;usize&gt;, T::Cfg)</code>,</li><li>a <code>HashMap&lt;K, V&gt;</code> uses <code>(RangeCfg&lt;usize&gt;, (K::Cfg, V::Cfg))</code>.</li></ul>
+<p>The extension traits exist so callers can keep using the real policy while writing shorter code.</p>
+<p><code>ReadExt</code> means &quot;this type needs no config.&quot; <code>DecodeExt</code> means &quot;this type&#x27;s config is unit-like and can be defaulted.&quot; <code>ReadRangeExt</code> and <code>DecodeRangeExt</code> mean &quot;this type starts with a length policy, and the rest of the config can be defaulted.&quot;</p>
+<p>They are shorthand for the same policy. The law does not change; the call site gets shorter.</p>
+<h3 id="conformance-turns-the-contract-into-a-regression-boundary">Conformance turns the contract into a regression boundary</h3>
+<p>The last core idea lives slightly outside the encode and decode path, but it is where the chapter&#x27;s promises become operational.</p>
+<p><code>codec/src/conformance.rs</code> defines <code>CodecConformance&lt;T&gt;</code>, a tiny wrapper that adapts any <code>T: Encode + Arbitrary</code> to the <code>commonware_conformance::Conformance</code> trait. Its <code>commit(seed)</code> implementation does two things:</p>
+<ol><li>generate a deterministic <code>T</code> from <code>arbitrary</code> using a seeded <code>ChaCha8Rng</code>,</li><li>encode that value and return the bytes.</li></ol>
+<p>The conformance crate hashes those committed bytes and compares the digest against the checked-in fixture.</p>
+<p>So conformance is not &quot;some tests exist.&quot; It is the place where stable bytes become a versioned promise. If canonical collection ordering, varint grammar, or primitive layout changes, the digest moves. The crate has to treat that as a real event.</p>
+<hr>
+<h2 id="4-how-bytes-move-through-the-machine">4. How Bytes Move Through the Machine</h2>
+<p>The encode path is intentionally dull in the best way. A predictable codec should feel procedural.</p>
+<ol><li>Ask the value for its encoded size.</li><li>Allocate exactly that many bytes.</li><li>Write the value into the buffer.</li><li>Assert that the observed count matches the declared count.</li></ol>
+<p>That is the outgoing half of the contract. The sender does not guess, append, and hope. It commits to an exact layout up front.</p>
+<p>The decode path mirrors that discipline.</p>
+<ol><li>Read the next fixed-width field or declared length.</li><li>Apply the caller&#x27;s config and bounds.</li><li>Reconstruct the value.</li><li>If the boundary asked for <code>Decode</code>, confirm that no bytes remain.</li></ol>
+<p>The sequence matters. First inspect the paperwork, then enforce the budget, then admit the value, then check that nothing else came with it.</p>
+<p>That abstract path becomes concrete in the type impls.</p>
+<h3 id="primitives-fixed-width-values-establish-the-baseline">Primitives: fixed-width values establish the baseline</h3>
+<p>In <code>types/primitives.rs</code>, fixed-width integers and floats use big-endian encoding. That makes the wire form independent of host architecture, which is the simplest possible example of stable bytes.</p>
+<p><code>bool</code> is also instructive. It is one byte wide, but the decoder accepts only <code>0</code> and <code>1</code>. That means fixed-width does not imply permissive. Even simple primitive layouts still get structural validation.</p>
+<p><code>Option&lt;T&gt;</code> shows the same style one layer up: a boolean tag first, then the payload only when the tag is true. The crate does not use out-of-band nullability or magic values. The wire form says what branch is present.</p>
+<h3 id="rangecfg-in-motion-the-length-is-a-claim-not-an-order"><code>RangeCfg</code> in motion: the length is a claim, not an order</h3>
+<p>Length-bearing values such as <code>Vec&lt;T&gt;</code>, <code>Bytes</code>, <code>HashMap&lt;K, V&gt;</code>, and <code>HashSet&lt;K&gt;</code> all share the same first move:</p>
+<ol><li>decode a <code>usize</code>,</li><li>check it against <code>RangeCfg</code>,</li><li>only then allocate or iterate.</li></ol>
+<p>That is why <code>usize::read_cfg</code> is so central. The length prefix does not directly control memory allocation. It first passes through a local policy gate.</p>
+<p>If the caller says &quot;this field may be at most 64 bytes,&quot; then a sender-declared length of 10,000 is not an expensive parse. It is <code>InvalidLength(10000)</code>.</p>
+<p>Seen this way, <code>RangeCfg</code> is the codec&#x27;s answer to a classic adversarial question: who gets to choose the work budget? In this crate, the answer is always the receiver.</p>
+<h3 id="varint-worked-example-accepted-and-rejected-spellings">Varint worked example: accepted and rejected spellings</h3>
+<p>The varint grammar becomes clearer with concrete cases.</p>
+<p>Accepted spellings:</p>
+<ul><li><code>0</code> -&gt; <code>[0x00]</code></li><li><code>1</code> -&gt; <code>[0x01]</code></li><li><code>127</code> -&gt; <code>[0x7F]</code></li><li><code>128</code> -&gt; <code>[0x80, 0x01]</code></li><li><code>300</code> -&gt; <code>[0xAC, 0x02]</code></li></ul>
+<p>Rejected spellings:</p>
+<ul><li><code>[0x80, 0x00]</code> for zero because the second byte proves the first byte should not have continued.</li><li>any spelling whose final byte sets bits outside the target width because the value would overflow the chosen integer type.</li><li>any spelling that continues past the last possible byte because the continuation bit itself becomes impossible at that point.</li></ul>
+<p>This is why the crate has both <code>UInt</code> and the incremental <code>Decoder&lt;U&gt;</code>. The wrappers give ordinary encode and decode. The decoder exposes the grammar one byte at a time for stream-oriented code without weakening the same rules.</p>
+<h3 id="canonical-collections-accepted-bytes-versus-recoverable-bytes">Canonical collections: accepted bytes versus &quot;recoverable&quot; bytes</h3>
+<p>Hash collections are where the distinction between &quot;recoverable&quot; and &quot;acceptable&quot; matters most.</p>
+<p>Suppose a <code>HashSet&lt;u32&gt;</code> logically contains <code>{1, 5}</code>.</p>
+<p>Accepted encoding:</p>
+<ul><li>length <code>2</code>,</li><li>item <code>1</code>,</li><li>item <code>5</code>.</li></ul>
+<p>Rejected encodings:</p>
+<ul><li>length <code>2</code>, item <code>5</code>, item <code>1</code> because items do not ascend.</li><li>length <code>2</code>, item <code>1</code>, item <code>1</code> because duplicate items are not canonical.</li></ul>
+<p>The same pattern holds for maps, with key order driving canonicality.</p>
+<p>The loops in <code>types/mod.rs</code> make the check mechanical. They keep the previous item in hand, read the next item, compare adjacency, and only then insert the previous item into the target collection. The reader validates the local ordering proof before committing each step.</p>
+<p>That is a small algorithmic detail, but it reveals the crate&#x27;s attitude. Canonical representation is not a cosmetic post-processing pass. It is an admission rule.</p>
+<h3 id="lazy-t-worked-example-defer-the-parse-keep-the-contract"><code>Lazy&lt;T&gt;</code> worked example: defer the parse, keep the contract</h3>
+<p>Imagine a fixed-size type <code>T</code> whose decode is expensive because it performs extra validation after reading its bytes.</p>
+<p>With <code>Lazy&lt;T&gt;</code>, the outer decoder can:</p>
+<ol><li>carve out exactly <code>T::SIZE</code> bytes from the buffer,</li><li>store those bytes and the <code>Cfg</code>,</li><li>continue parsing the rest of the enclosing message,</li><li>decode <code>T</code> only if some later code actually asks for it.</li></ol>
+<p>That is useful for large message trees where only a subset of fields are needed on every path.</p>
+<p>The important point is what does <em>not</em> change:</p>
+<ul><li>the bytes must still be structurally valid when <code>get()</code> runs,</li><li>the same config is still used,</li><li>and re-encoding can still emit the original stored bytes.</li></ul>
+<p>So <code>Lazy&lt;T&gt;</code> is not &quot;maybe decode later if convenient.&quot; It is &quot;freeze a future decode with all of its original rules intact.&quot;</p>
+<h3 id="extensions-shorter-calls-to-the-same-policy">Extensions: shorter calls to the same policy</h3>
+<p>The extension traits sit close to the API boundary because that is where config noise is most visible.</p>
+<p>Without them, callers often have to spell nested tuples just to say something simple. A bounded vector of <code>u8</code> wants <code>(RangeCfg&lt;usize&gt;, ())</code>. With <code>DecodeRangeExt</code>, the caller can instead say <code>Vec::&lt;u8&gt;::decode_range(buf, 0..=1024)</code>.</p>
+<p>That is not a new decoding mode. It is the same <code>Read::Cfg</code>, assembled for you.</p>
+<h3 id="conformance-linkage-why-canonicality-pays-off">Conformance linkage: why canonicality pays off</h3>
+<p>The conformance wrapper is where all of the chapter&#x27;s local rules line up.</p>
+<p>If <code>HashMap</code> encoding depended on hash iteration order, a deterministic seed would still generate the same logical map, but the committed bytes could drift. If varint accepted overlong spellings, two encoders could both be &quot;compatible&quot; while disagreeing on the bytes that conformance is supposed to pin down.</p>
+<p>Canonical collections and strict varint grammar are what make codec conformance worth having. They make <code>encode()</code> behave like a proof artifact rather than a mere transport convenience.</p>
+<hr>
+<h2 id="5-what-pressure-this-design-is-built-to-absorb">5. What Pressure This Design Is Built To Absorb</h2>
+<p>The answer is adversarial pressure.</p>
+<p>A codec at a protocol boundary gets pushed on at every seam. Attackers lie about lengths. Honest peers send truncated buffers. Different platforms disagree about native representation. Unordered containers try to drift into many byte spellings. Performance shortcuts tempt the decoder to trust the sender more than it should.</p>
+<p><code>commonware-codec</code> is shaped by those pressures.</p>
+<h3 id="pressure-1-hostile-length-prefixes">Pressure 1: hostile length prefixes</h3>
+<p>If the sender chooses the work budget, the receiver loses. That is why lengths flow through <code>RangeCfg</code> and why <code>usize</code> decoding is constrained. A length prefix is treated as a claim to verify, not a command to obey.</p>
+<h3 id="pressure-2-ambiguous-compact-integers">Pressure 2: ambiguous compact integers</h3>
+<p>Varint buys smaller length prefixes, but only if the grammar is tight. The crate rejects overlong and impossible spellings because ambiguity in &quot;small&quot; integers would infect every length-bearing type built on top of them.</p>
+<h3 id="pressure-3-truncated-or-padded-buffers">Pressure 3: truncated or padded buffers</h3>
+<p>If the buffer ends early, the crate returns <code>EndOfBuffer</code>. If extra bytes remain after <code>Decode</code>, it returns <code>ExtraData</code>.</p>
+<p>Those are two versions of the same principle: the border is exact at both ends. The value must be complete, and it must be alone.</p>
+<h3 id="pressure-4-cross-platform-drift">Pressure 4: cross-platform drift</h3>
+<p>Big-endian fixed-width encoding and the <code>u32</code> cap on <code>usize</code> keep a value from quietly changing its wire form when the architecture changes. Stable bytes have to mean stable across machines, not just stable on the machine that wrote them.</p>
+<h3 id="pressure-5-non-canonical-collection-encodings">Pressure 5: non-canonical collection encodings</h3>
+<p>If the same logical map can appear in several byte orders, higher layers cannot rely on the wire form. Canonical sorting on write and strict ordering checks on read remove that ambiguity.</p>
+<p>This is how the crate protects not just round-tripping, but byte-level identity.</p>
+<h3 id="pressure-6-deferred-work-without-deferred-rules">Pressure 6: deferred work without deferred rules</h3>
+<p><code>Lazy&lt;T&gt;</code> exists because some protocols need to postpone cost. But it postpones only cost. The bytes, the config, and the eventual decode obligations stay the same. That is what keeps laziness from turning into a hidden side channel for &quot;parse this field differently later.&quot;</p>
+<h3 id="pressure-7-stability-over-time">Pressure 7: stability over time</h3>
+<p>Conformance is the time dimension of the same problem. A codec can look strict today and still drift tomorrow. The conformance layer turns encoded bytes into a checked regression boundary so the project can notice when &quot;stable&quot; has changed.</p>
+<p>Once you see the crate as a response to those pressures, its strictness stops looking ornamental. It looks like engineering.</p>
+<hr>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>A strict customs office still has boundaries. This section matters because it separates what the crate guarantees from what it intentionally refuses to guess.</p>
+<p>If <code>EncodeSize</code> and <code>Write</code> disagree, <code>Encode</code> panics. That is not a recoverable decode error. It is a bug in the implementation.</p>
+<p>If a <code>usize</code> does not fit in <code>u32</code>, encoding panics as well. That is the price of portable wire stability. The crate would rather fail loudly than let the same logical value acquire architecture-dependent bytes.</p>
+<p>On the incoming side, the error vocabulary is the border report:</p>
+<p>| Error | What invariant failed | | --- | --- | | <code>EndOfBuffer</code> | Completeness: the declared structure ran past the available bytes. | | <code>ExtraData(n)</code> | Singularity: one value parsed, but <code>n</code> trailing bytes remained. | | <code>InvalidLength(len)</code> | Policy: a decoded length violated the caller&#x27;s <code>RangeCfg</code>. | | <code>InvalidVarint(width)</code> | Syntax or canonicality: the varint spelling was malformed, overlong, or impossible for that width. | | <code>InvalidUsize</code> | Portability: a decoded <code>u32</code> length could not be represented as <code>usize</code> on this target. | | <code>InvalidBool</code> | Domain of representation: a boolean byte was not <code>0</code> or <code>1</code>. | | <code>InvalidEnum(tag)</code> | Tag validity: the variant byte did not identify any allowed case. | | <code>Invalid(ctx, msg)</code> | Type-local structural rule: bytes had the right general shape but violated a stricter invariant such as ascending keys or non-zero values. | | <code>Wrapped(ctx, err)</code> | Delegated validation failed and was preserved with source context. |</p>
+<p>Two small helpers in <code>util.rs</code> keep the error surface crisp.</p>
+<ul><li><code>at_least</code> turns underfilled fixed-width reads into <code>EndOfBuffer</code>.</li><li><code>ensure_zeros</code> lets reserved padding bytes be checked rather than ignored.</li></ul>
+<p>Those errors tell you what went wrong structurally. They do not tell you whether the decoded value is semantically acceptable for the protocol above.</p>
+<p>That final point is important. The crate can verify paperwork. It can enforce stable bytes, canonical representation, and bounded decoding. It cannot decide whether a decoded public key belongs to the right peer, whether a message is timely, or whether a range makes business sense for the application. Those are questions for the next layer.</p>
+<p>So the line is clean:</p>
+<ul><li>below the line, the crate governs byte truth;</li><li>above the line, the application governs domain truth.</li></ul>
+<hr>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>The source is easiest to read in the same order as the contract.</p>
+<p>Start with <code>codec/src/codec.rs</code>. It names the grammar of the crate: <code>Write</code>, <code>Read</code>, <code>EncodeSize</code>, <code>Encode</code>, <code>Decode</code>, and the convenience wrapper traits built on top of them.</p>
+<p>Then read <code>codec/src/config.rs</code>. <code>RangeCfg</code> is the compact statement of bounded decoding, and it shows how caller policy enters the read path without being put on the wire.</p>
+<p>Then read <code>codec/src/varint.rs</code>. Focus on two things:</p>
+<ul><li><code>UInt</code> and <code>SInt</code> as the public wrappers,</li><li><code>Decoder&lt;U&gt;::feed</code> as the place where canonical varint syntax is enforced.</li></ul>
+<p>After that, move to <code>codec/src/types/primitives.rs</code>. This is where the baseline rules become tangible: big-endian numbers, <code>bool</code>, <code>Option</code>, unit, fixed-size arrays, and the special handling of <code>usize</code>.</p>
+<p>Once those foundations are clear, the rest of <code>codec/src/types/</code> reads naturally as applications of the same contract:</p>
+<ul><li><code>vec.rs</code> and <code>bytes.rs</code> show bounded, length-prefixed payloads,</li><li><code>btree_map.rs</code>, <code>btree_set.rs</code>, <code>hash_map.rs</code>, and <code>hash_set.rs</code> show canonical representation for collections,</li><li><code>range.rs</code> and <code>net.rs</code> show stable structured encodings for ordinary types,</li><li><code>tuple.rs</code> shows product types,</li><li>and <code>lazy.rs</code> shows deferred decoding without weaker guarantees.</li></ul>
+<p>If ordered collection decoding still feels magical, read <code>codec/src/types/mod.rs</code> alongside the map and set impls. The loops there are where duplicate rejection and ascending-order enforcement become mechanical.</p>
+<p>Keep <code>codec/src/extensions.rs</code> nearby as well. It shows how the public API makes common policy shapes shorter without inventing new semantics.</p>
+<p>Finally, read <code>codec/src/error.rs</code> and <code>codec/src/conformance.rs</code> together. One names the failure modes. The other turns the accepted wire image into something the project can pin and re-check across time.</p>
+<p>That reading order mirrors the lecture you just read: define the contract, study the policy object, inspect the compact-length language, then watch the same rules play out across concrete types and across releases.</p>
+<hr>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><code>EncodeSize</code>: the exact number of bytes a value must write.</li><li><code>FixedSize</code>: a marker for types whose encoded width never varies.</li><li><code>Read</code>: the inbound trait that reconstructs a value from bytes and config.</li><li><code>RangeCfg</code>: a caller-supplied policy object that bounds accepted values.</li><li><code>Decode</code>: <code>Read</code> plus the requirement that the buffer be fully consumed.</li><li><code>UInt</code> / <code>SInt</code>: wrappers that encode integers in varint form.</li><li><code>Canonical representation</code>: one logical value, one accepted wire spelling.</li><li><code>Lazy</code>: a wrapper that stores bytes now and decodes later under the same config.</li><li><code>Conformance</code>: the testing layer that pins encoded bytes across revisions.</li></ul>
+<p>For further reading, the most useful source paths are:</p>
+<ul><li><code>codec/src/codec.rs</code></li><li><code>codec/src/config.rs</code></li><li><code>codec/src/varint.rs</code></li><li><code>codec/src/types/primitives.rs</code></li><li><code>codec/src/types/mod.rs</code></li><li><code>codec/src/types/hash_map.rs</code></li><li><code>codec/src/types/hash_set.rs</code></li><li><code>codec/src/types/lazy.rs</code></li><li><code>codec/src/extensions.rs</code></li><li><code>codec/src/error.rs</code></li><li><code>codec/src/conformance.rs</code></li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../coding/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-coding</span>
+          <span class="foot-sub">coding</span>
+        </a>
+        <div class="foot-center">
+          codec<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../math/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-math</span>
+          <span class="foot-sub">math</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#backgrounder-bytes-grammars-and-canonical-forms">Backgrounder: Bytes, Grammars, and Canonical Forms</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model-the-customs-office-and-the-contract">2. Mental Model: The Customs Office and the Contract</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#write-and-encodesize-define-the-outgoing-contract">Write and EncodeSize define the outgoing contract</a></li><li><a class="toc-link" href="#read-makes-decoding-a-policy-decision">Read makes decoding a policy decision</a></li><li><a class="toc-link" href="#rangecfg-is-policy-not-data">RangeCfg is policy, not data</a></li><li><a class="toc-link" href="#decode-seals-the-border">Decode seals the border</a></li><li><a class="toc-link" href="#fixedsize-marks-the-easy-cases">FixedSize marks the easy cases</a></li><li><a class="toc-link" href="#usize-is-variable-size-by-policy-not-by-accident">usize is variable-size by policy, not by accident</a></li><li><a class="toc-link" href="#varint-is-a-grammar-not-a-byte-trick">Varint is a grammar, not a byte trick</a></li><li><a class="toc-link" href="#canonical-collections-are-part-of-correctness">Canonical collections are part of correctness</a></li><li><a class="toc-link" href="#lazy-t-defers-work-without-changing-truth">Lazy&lt;T&gt; defers work without changing truth</a></li><li><a class="toc-link" href="#extension-traits-improve-ergonomics-not-semantics">Extension traits improve ergonomics, not semantics</a></li><li><a class="toc-link" href="#conformance-turns-the-contract-into-a-regression-boundary">Conformance turns the contract into a regression boundary</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-bytes-move-through-the-machine">4. How Bytes Move Through the Machine</a><ul class="toc-sub"><li><a class="toc-link" href="#primitives-fixed-width-values-establish-the-baseline">Primitives: fixed-width values establish the baseline</a></li><li><a class="toc-link" href="#rangecfg-in-motion-the-length-is-a-claim-not-an-order">RangeCfg in motion: the length is a claim, not an order</a></li><li><a class="toc-link" href="#varint-worked-example-accepted-and-rejected-spellings">Varint worked example: accepted and rejected spellings</a></li><li><a class="toc-link" href="#canonical-collections-accepted-bytes-versus-recoverable-bytes">Canonical collections: accepted bytes versus &quot;recoverable&quot; bytes</a></li><li><a class="toc-link" href="#lazy-t-worked-example-defer-the-parse-keep-the-contract">Lazy&lt;T&gt; worked example: defer the parse, keep the contract</a></li><li><a class="toc-link" href="#extensions-shorter-calls-to-the-same-policy">Extensions: shorter calls to the same policy</a></li><li><a class="toc-link" href="#conformance-linkage-why-canonicality-pays-off">Conformance linkage: why canonicality pays off</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-this-design-is-built-to-absorb">5. What Pressure This Design Is Built To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#pressure-1-hostile-length-prefixes">Pressure 1: hostile length prefixes</a></li><li><a class="toc-link" href="#pressure-2-ambiguous-compact-integers">Pressure 2: ambiguous compact integers</a></li><li><a class="toc-link" href="#pressure-3-truncated-or-padded-buffers">Pressure 3: truncated or padded buffers</a></li><li><a class="toc-link" href="#pressure-4-cross-platform-drift">Pressure 4: cross-platform drift</a></li><li><a class="toc-link" href="#pressure-5-non-canonical-collection-encodings">Pressure 5: non-canonical collection encodings</a></li><li><a class="toc-link" href="#pressure-6-deferred-work-without-deferred-rules">Pressure 6: deferred work without deferred rules</a></li><li><a class="toc-link" href="#pressure-7-stability-over-time">Pressure 7: stability over time</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

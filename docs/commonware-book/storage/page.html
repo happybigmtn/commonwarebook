@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-storage — commonware-book</title>
+  <meta name="description" content="Storage looks like a simple question until a crash, a prune, or a skeptical reader enters the picture.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / storage
+      </span>
+      <span class="chapter-title">commonware-storage</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../stream/page.html">← prev</a>
+        <a class="next" href="../broadcast/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · storage · Complete · 24 min read</div>
+    <h1 class="ch-title">commonware-storage</h1>
+    <p class="ch-deck">Logs first, views second, proofs when the reader must be convinced</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Storage looks like a simple question until a crash, a prune, or a skeptical reader enters the picture.
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 id="opening-apparatus">Opening Apparatus</h2>
+<p><strong>Promise:</strong> This chapter shows how <code>commonware-storage</code> keeps a durable log first, derives useful views second, and adds proofs only when facts need to travel.</p>
+<p><strong>Crux:</strong> Storage in adversarial systems is not one job; durability, fast answers, and cryptographic evidence pull in different directions, so the design must keep those responsibilities separate.</p>
+<p><strong>Primary invariant:</strong> The log is the durable authority. Views may be rebuilt, compressed, or discarded, but every answer must still trace back to that history.</p>
+<p><strong>Naive failure:</strong> Treating the current snapshot as the truth makes recovery guessy, pruning dangerous, and proofs impossible to explain once history changes.</p>
+<p><strong>Reading map:</strong></p>
+<ul><li>Section 2 names the mental model: log, then view, then proof.</li><li>Section 3 walks the core primitives from <code>Persistable</code> to QMDB.</li><li>Section 4 follows the system through write, recovery, proof, and pruning.</li><li>Section 5 names the pressure each layer absorbs.</li><li>Section 6 names the failure modes and limits.</li><li>Section 7 shows how to read the source in order.</li><li>Section 8 closes with a glossary and further reading.</li></ul>
+<p><strong>Assumptions:</strong></p>
+<ul><li>You already know the basics of crash recovery.</li><li>You are comfortable reading append-only data structures.</li><li>You want the storage story in adversarial terms, not generic database terms.</li></ul></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part II. Evidence and State</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">6 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">24 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-broadcast</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background-why-storage-becomes-a-systems-problem">Background: Why Storage Becomes a Systems Problem</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-storage-starts-by-naming-the-crash-boundary">3.1 Storage starts by naming the crash boundary</a></li><li><a class="toc-link" href="#3-2-the-authenticated-journal-is-the-bridge-from-bytes-to-proofs">3.2 The authenticated journal is the bridge from bytes to proofs</a></li><li><a class="toc-link" href="#3-3-the-log-is-still-the-durable-truth">3.3 The log is still the durable truth</a></li><li><a class="toc-link" href="#3-4-a-view-is-the-working-answer-not-the-fundamental-truth">3.4 A view is the working answer, not the fundamental truth</a></li><li><a class="toc-link" href="#3-5-an-index-is-a-compressed-memory-of-where-truth-lives">3.5 An index is a compressed memory of where truth lives</a></li><li><a class="toc-link" href="#3-6-proof-bearing-state-starts-when-history-becomes-authenticated">3.6 Proof-bearing state starts when history becomes authenticated</a></li><li><a class="toc-link" href="#3-7-qmdb-is-where-the-three-layers-snap-together">3.7 QMDB is where the three layers snap together</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-write-path-record-derive-then-publish">4.1 Write path: record, derive, then publish</a></li><li><a class="toc-link" href="#4-2-recovery-path-replay-realign-rebuild">4.2 Recovery path: replay, realign, rebuild</a></li><li><a class="toc-link" href="#4-3-read-path-the-view-finds-the-candidate-the-log-settles-it">4.3 Read path: the view finds the candidate, the log settles it</a></li><li><a class="toc-link" href="#4-4-proof-path-the-same-search-plus-an-authenticated-ladder">4.4 Proof path: the same search, plus an authenticated ladder</a></li><li><a class="toc-link" href="#4-5-sync-path-target-the-ops-root-rebuild-the-rest-deterministically">4.5 Sync path: target the ops root, rebuild the rest deterministically</a></li><li><a class="toc-link" href="#4-6-pruning-only-works-if-the-promise-survives">4.6 Pruning only works if the promise survives</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#crash-pressure">Crash pressure</a></li><li><a class="toc-link" href="#memory-pressure">Memory pressure</a></li><li><a class="toc-link" href="#write-amplification-pressure">Write amplification pressure</a></li><li><a class="toc-link" href="#proof-expressiveness-pressure">Proof expressiveness pressure</a></li><li><a class="toc-link" href="#5-1-structure-cost-table">5.1 Structure cost table</a></li><li><a class="toc-link" href="#5-2-pruning-and-proof-tradeoff-table">5.2 Pruning and proof tradeoff table</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#the-log-can-be-damaged">The log can be damaged</a></li><li><a class="toc-link" href="#the-view-can-be-ambiguous">The view can be ambiguous</a></li><li><a class="toc-link" href="#the-proof-may-say-less-than-the-application-hopes">The proof may say less than the application hopes</a></li><li><a class="toc-link" href="#pruning-can-destroy-meaning-not-just-bytes">Pruning can destroy meaning, not just bytes</a></li><li><a class="toc-link" href="#speculation-can-drift-from-reality">Speculation can drift from reality</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a><ul class="toc-sub"><li><a class="toc-link" href="#glossary">Glossary</a></li><li><a class="toc-link" href="#further-reading">Further Reading</a></li></ul></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="background-why-storage-becomes-a-systems-problem">Background: Why Storage Becomes a Systems Problem</h2>
+<p>Storage looks like a simple question until a crash, a prune, or a skeptical reader enters the picture.</p>
+<p>The broad vocabulary is worth separating early:</p>
+<ul><li>a <strong>log</strong> preserves the sequence of events,</li><li>a <strong>snapshot</strong> captures one current view,</li><li>an <strong>index</strong> speeds up lookup for a subset of the history,</li><li>a <strong>proof</strong> lets someone else check that a returned fact really came from the right history,</li><li>a <strong>prune</strong> discards history that is no longer needed.</li></ul>
+<p>The naive approach is to treat the latest snapshot as the truth and ignore the path that produced it. That works only until recovery, compaction, or proof generation matters. Once that happens, you need to know what happened before the current answer existed.</p>
+<p>The main tradeoff is that the best structure for recovery is not usually the best structure for serving fast reads, and neither one is automatically good at producing evidence. Logs are durable and easy to replay. Views are fast and cheap to query. Proof-bearing structures are convincing to outsiders. Real storage systems have to keep those roles separate instead of pretending one representation can do all three.</p>
+<p>That separation is the point of this chapter. The Commonware design starts from the durable record of events, derives useful views from that record, and only then adds proof machinery where the reader needs to be convinced.</p>
+<hr>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>Storage sounds simple until a distributed system asks three questions at once.</p>
+<ol><li>What survives the crash?</li><li>What is the state now?</li><li>How do I prove that answer to someone who does not trust me?</li></ol>
+<p>Those questions overlap, but they are not the same. A local application can often stop after the first two. An adversarial system usually cannot. A node may need to restart from disk, rebuild a snapshot, serve current answers, and later justify those answers to a peer, a client, or another chain.</p>
+<p>That is the problem <code>commonware-storage</code> is built around. It does not present storage as one giant database with feature flags. It presents storage as a sequence of stronger promises:</p>
+<ul><li>remember the history durably,</li><li>derive a useful view from that history,</li><li>attach evidence to the facts that matter.</li></ul>
+<p>The crate matters because those promises pull in different directions. A log is good at surviving crashes. A lookup structure is good at answering quickly. A proof system is good at convincing skeptics. The interesting design question is how to get all three without pretending they are the same thing.</p>
+<p>The Commonware answer is to start from the only part you really trust after a crash: the record of what happened.</p>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>The chapter&#x27;s mental model is:</p>
+<blockquote><p>Start with a log, derive a view, then prove facts about that view.</p></blockquote>
+<p>If you keep that sentence in mind, the crate stops looking like a collection of unrelated modules.</p>
+<p>Consider a key <code>alice</code> whose value changes over time:</p>
+<ul><li>assign <code>alice = 5</code></li><li>delete <code>alice</code></li><li>assign <code>alice = 6</code></li></ul>
+<p>If you think like a conventional database user, the only thing that feels real is the last line. The earlier lines look like stale intermediate state.</p>
+<p>If you think like <code>commonware-storage</code>, the durable truth is the whole sequence. The current value is a view derived from that sequence. And a proof, when you need one, must somehow connect the answer you served back to an authenticated commitment over that history.</p>
+<p>That gives us a clean vocabulary for the rest of the chapter:</p>
+<ul><li><strong>Log</strong> means the durable record of operations or records.</li><li><strong>View</strong> means the structure that turns that record into useful answers.</li><li><strong>Proof</strong> means the evidence that ties an answer to a trusted root.</li></ul>
+<p>The modules fit onto that ladder naturally.</p>
+<ul><li><code>journal</code> is the plainest log.</li><li><code>archive</code>, <code>freezer</code>, and <code>index</code> are different ways to turn durable history into usable views.</li><li><code>merkle::mmr</code> turns append-only history into evidence.</li><li><code>qmdb</code> composes the three layers into proof-bearing state.</li></ul>
+<p>Every later section is a different resolution of the same claim: keep history durable, derive views from that history, and export proofs only when a reader needs them.</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-storage-starts-by-naming-the-crash-boundary">3.1 Storage starts by naming the crash boundary</h3>
+<p>The crate&#x27;s smallest public idea is also one of its most important ones: durability is explicit.</p>
+<p>In [<code>storage/src/lib.rs</code>](/home/r/coding/monorepo/storage/src/lib.rs), the <code>Persistable</code> trait says that a storage structure can <code>commit()</code>, <code>sync()</code>, and <code>destroy()</code>. That is not ornamental API design. It tells you what kind of crate this is.</p>
+<p>The important distinction is that <code>sync()</code> is stronger than <code>commit()</code>. The docs say <code>sync()</code> not only preserves the current state across a crash, but also guarantees that recovery work will not be needed on the next open. In other words, the crate refuses to smudge over the line between &quot;my bytes survived&quot; and &quot;my structure is immediately ready.&quot;</p>
+<p>That is the right opening move for a storage lecture. Before we ask how to serve queries or generate proofs, we ask the simpler question: where is the durable boundary, and what exactly do we get when we cross it?</p>
+<h3 id="3-2-the-authenticated-journal-is-the-bridge-from-bytes-to-proofs">3.2 The authenticated journal is the bridge from bytes to proofs</h3>
+<p>The plain journal explains why append-only history is a good crash boundary. The authenticated journal explains how that same history becomes evidence.</p>
+<p>[<code>storage/src/journal/authenticated.rs</code>](/home/r/coding/monorepo/storage/src/journal/authenticated.rs) keeps two append-only structures in lockstep:</p>
+<ul><li>a contiguous journal of items,</li><li>an MMR leaf for each item digest.</li></ul>
+<p>The file repeats the key invariant explicitly: item <code>i</code> in the journal corresponds to leaf <code>i</code> in the MMR. That is the bridge. Durable bytes and proof-bearing positions advance together.</p>
+<p>This is why the authenticated batch API matters. An <code>UnmerkleizedBatch</code> collects items and hashes them into speculative leaves. <code>merkleize()</code> computes the root that would result if the batch were published. <code>finalize()</code> turns the speculative state into an owned changeset. The design separates three moments that a weaker system would blur together:</p>
+<ul><li><strong>staging</strong> what to append,</li><li><strong>merkleizing</strong> to learn the implied root,</li><li><strong>applying</strong> to make journal and MMR advance together.</li></ul>
+<p>That separation is not decorative. It is what lets higher layers fork speculative states, inspect roots before publication, and reject stale work later.</p>
+<p>The other important idea in this file is alignment on recovery. The code does not assume the journal and MMR still agree after a crash. It realigns them and then <code>sync()</code>s the MMR so the next open does not need to repeat the work. The authenticated journal is therefore the first place the crate makes a subtle but foundational distinction:</p>
+<blockquote><p>&quot;durable enough to replay&quot; and &quot;already aligned to serve proofs&quot; are not the same state.</p></blockquote>
+<h3 id="3-3-the-log-is-still-the-durable-truth">3.3 The log is still the durable truth</h3>
+<p>The cleanest evidence for the chapter&#x27;s mental model is [<code>storage/src/journal/mod.rs</code>](/home/r/coding/monorepo/storage/src/journal/mod.rs). Its module docs describe an append-only log with fast replay, historical pruning, and item-oriented reads.</p>
+<p>Append-only storage is attractive because it makes failure legible. A partial append has a clear shape: history ends here, this checksum fails, this section is incomplete. An in-place mutation is harder to reason about because the old state and the new state overlap destructively.</p>
+<p>So the first Commonware move is to make history explicit. Once operations are laid down in order, recovery becomes replay instead of repair. A restart no longer asks, &quot;what did the mutable structure probably mean before the crash?&quot; It asks, &quot;what durable operations do I trust, and what view do they imply?&quot;</p>
+<p>That is why the chapter keeps insisting that the log comes first. In this crate, the log is not a backup of the database. The log is the durable truth from which the database view is rebuilt.</p>
+<h3 id="3-4-a-view-is-the-working-answer-not-the-fundamental-truth">3.4 A view is the working answer, not the fundamental truth</h3>
+<p>Once we have the log, we can ask the next question: how do we answer quickly without replaying the entire history on every lookup?</p>
+<p>This is where the crate&#x27;s middle layer appears. The point of that layer is not to introduce &quot;more storage engines.&quot; The point is to show several ways of building views over durable history.</p>
+<p>[<code>storage/src/archive/mod.rs</code>](/home/r/coding/monorepo/storage/src/archive/mod.rs) is the simplest example. It is a write-once store whose records are tied to both an index and a key. That tells you exactly what kind of view it is: one that assumes historical order matters and mutation does not.</p>
+<p>[<code>storage/src/freezer/mod.rs</code>](/home/r/coding/monorepo/storage/src/freezer/mod.rs) is more revealing because its docs explain the bargain in detail. It keeps lookup structures on disk, avoids compaction, and accepts that older data may take longer to fetch. That is not &quot;yet another key-value store.&quot; It is a deliberate answer to the question: how do we keep a durable view when memory is scarce and rewriting is expensive?</p>
+<p>The smaller sidecars make the same point from different angles.</p>
+<ul><li>[<code>storage/src/cache/mod.rs</code>](/home/r/coding/monorepo/storage/src/cache/mod.rs) is a narrow view optimized for index-based reads. It tracks offsets and lengths in memory so a caller that already knows an index can usually read the item in one disk operation.</li><li>[<code>storage/src/queue/mod.rs</code>](/home/r/coding/monorepo/storage/src/queue/mod.rs) turns durable history into delivery state. Its promise is not &quot;truth now&quot; but &quot;durable at-least-once replay until acknowledged and pruned.&quot;</li></ul>
+<p>These modules are conceptually helpful because they show that a view does not have to be a database index. A queue cursor, a gap finder, or a position map are all working answers layered on top of durable history.</p>
+<h3 id="3-5-an-index-is-a-compressed-memory-of-where-truth-lives">3.5 An index is a compressed memory of where truth lives</h3>
+<p>[<code>storage/src/index/mod.rs</code>](/home/r/coding/monorepo/storage/src/index/mod.rs) makes the trade-off even sharper. Its docs open by warning that translated keys can collide. That is a good sign. The crate does not hide the price of memory savings behind a friendly map-like interface.</p>
+<p>The important method is <code>get()</code>: it returns every value that maps to the same translated key. The ambiguity is the point. The index is a shortlist, not a verdict.</p>
+<p>The index is not pretending to be the truth. It is a compressed memory of where the truth probably lives. If compression introduces ambiguity, the ambiguity surfaces in the type. Callers must resolve collisions by checking the real key or the real operation in the underlying log.</p>
+<p>The translator layer in [<code>storage/src/translator.rs</code>](/home/r/coding/monorepo/storage/src/translator.rs) shows how disciplined this compromise is.</p>
+<ol><li><strong>Collisions are part of correctness.</strong> A translated-key hit is a compact lead, not yet a fact about the real key.</li><li><strong>Hasher choice matters.</strong> <code>UintIdentity</code> makes sense only because the translator has already shrunk keys into a form that should be cheap to place directly in a table.</li><li><strong>Collision hardening is explicit.</strong> <code>Hashed&lt;T&gt;</code> salts the full key before translation so an attacker cannot cheaply engineer predictable collision clusters.</li></ol>
+<p>The warning in <code>Hashed&lt;T&gt;</code> is especially important: it is not a stable encoding format. It is an in-memory collision-hardening layer. The chapter therefore has to keep three different notions separate:</p>
+<ul><li>stable log encoding on disk,</li><li>possibly unstable translated keys in memory,</li><li>cryptographic commitments over operation bytes.</li></ul>
+<p>Those layers can cooperate without being interchangeable.</p>
+<h3 id="3-6-proof-bearing-state-starts-when-history-becomes-authenticated">3.6 Proof-bearing state starts when history becomes authenticated</h3>
+<p>At this point we have a log and some ways to derive views from it. The final step is to make facts about that history portable.</p>
+<p>[<code>storage/src/merkle/mmr/mod.rs</code>](/home/r/coding/monorepo/storage/src/merkle/mmr/mod.rs) provides the key proof structure: the Merkle Mountain Range. Its docs define it as an append-only authenticated data structure whose node positions never change. That stable, append-only character is the reason it belongs here.</p>
+<p>An MMR matches the log story. New elements are appended. Old nodes are not rewritten. Inclusion proofs talk about a growing history rather than a mutable tree with arbitrary rewrites. The accompanying blog post <a href="/home/r/coding/monorepo/docs/blogs/mmr.html">mmr.html</a> makes the systems case plainly: append-only authentication avoids scattered rewrites and turns growing history into something that can be certified compactly.</p>
+<p>This is the right place to distinguish the two Merkle families in the crate.</p>
+<p>| Structure | What it commits to | Best at | Awkward at | | --- | --- | --- | --- | | <code>bmt</code> | a fixed batch of leaves | compact batch and range proofs | ongoing append-heavy history | | <code>mmr</code> | a growing append-only history | persistent logs and stable locations | arbitrary in-place mutation |</p>
+<p>[<code>storage/src/bmt/mod.rs</code>](/home/r/coding/monorepo/storage/src/bmt/mod.rs) is a stateless batch tree. It hashes leaves with positions, folds upward level by level, duplicates the final odd node when needed, and finalizes with <code>hash(leaf_count || tree_root)</code> so proofs cannot be replayed against another tree size. That is exactly what you want when a batch is a closed set.</p>
+<p>The MMR solves a different problem. Its great virtue is not &quot;Merkle tree, but fancier.&quot; Its great virtue is that appending new history does not force the system to pretend old positions moved.</p>
+<h3 id="3-7-qmdb-is-where-the-three-layers-snap-together">3.7 QMDB is where the three layers snap together</h3>
+<p>[<code>storage/src/qmdb/mod.rs</code>](/home/r/coding/monorepo/storage/src/qmdb/mod.rs) states the central idea outright: a database&#x27;s state is derived from an append-only log of state-changing operations.</p>
+<p>That sentence is the whole chapter restated in code.</p>
+<p>QMDB matters because it composes all three layers:</p>
+<ul><li>the durable log of operations,</li><li>the derived snapshot or active view,</li><li>the authenticated structure used to prove facts.</li></ul>
+<p>The batch lifecycle in the docs is part of that story. You stage mutations, merkleize them, inspect the resulting root, finalize the changeset, and only then apply it. That keeps speculation separate from commitment. The stale changeset error keeps the separation honest.</p>
+<p>The variants read best as a proof matrix rather than as an implementation menu.</p>
+<p>| Variant | State model | Main proof claim | Extra machinery it must carry | | --- | --- | --- | --- | | <code>keyless</code> | append-only values by location | &quot;this value was written here&quot; | authenticated journal only | | <code>immutable</code> | keyed inserts only | &quot;this key was set to this value&quot; | snapshot over insert-only log | | <code>any</code> | mutable keyed state | &quot;this key had this value at some point&quot; | snapshot plus update/delete semantics | | <code>current</code> | mutable keyed state with liveness | &quot;this value appeared and is still current&quot; | <code>any</code> plus bitmap and grafted MMR |</p>
+<p>The <a href="/home/r/coding/monorepo/docs/blogs/adb-any.html">adb-any.html</a> essay says the same thing in more narrative form: the database is not authenticated by hashing a mutable snapshot directly. It is authenticated by committing to the historical log of operations and deriving active state from that log.</p>
+<p><code>current</code> is especially instructive. Its module docs explain why proving a historical value is easier than proving a current one. A historical proof only needs to show that an operation was in the log. A current proof must also show that no later operation displaced it. The authenticated bitmap and grafted MMR exist to carry that extra burden.</p>
+<p>The crucial move is <em>grafting</em>. At a chosen height, the system replaces the raw ops-subtree digest with a digest that commits to both the ops subtree root and the bitmap chunk covering the same operations:</p>
+<pre><code class="language-text">grafted_leaf = hash(bitmap_chunk || ops_subtree_root)</code></pre>
+<p>unless the chunk is all zeros, in which case the ops subtree root is reused as an identity. That identity case matters because it lets pruned, all-inactive regions stay structurally compatible with the underlying ops MMR.</p>
+<p>That is the climax of the chapter&#x27;s mental model. The proof layer does not float above the storage layer. It changes which views are affordable and which facts remain provable.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<p>The best way to test the mental model is to follow the system through time.</p>
+<h3 id="4-1-write-path-record-derive-then-publish">4.1 Write path: record, derive, then publish</h3>
+<p>A write begins by recording some operation or record durably. In the simplest case, that is an append to a journal. In the authenticated cases, it is also an append to the structure that will later support proofs.</p>
+<p>Only after the durable record exists does the crate update the view that makes future answers cheap.</p>
+<p>That order matters. It means the fast path for queries is derived state, but the recovery path always knows where to start: the log.</p>
+<p>For QMDB, the write path is best understood as four separate jobs:</p>
+<ol><li>stage operations in a batch,</li><li>resolve them against the current snapshot while merkleizing,</li><li>apply the finalized changeset to the log and the active view,</li><li>choose <code>commit()</code> or <code>sync()</code> as the durability boundary.</li></ol>
+<p>The first two jobs can fork speculatively. The third cannot. That is why stale changesets are rejected rather than merged. The batch&#x27;s expected base state is part of correctness, not just concurrency hygiene.</p>
+<h3 id="4-2-recovery-path-replay-realign-rebuild">4.2 Recovery path: replay, realign, rebuild</h3>
+<p>This is where append-only design pays for itself.</p>
+<p>After a restart, the system rebuilds what it needs from the durable record:</p>
+<ul><li>journals replay operations,</li><li>authenticated journals realign the journal and MMR if <code>commit()</code> happened without a full <code>sync()</code>,</li><li>archives and freezers reopen their durable lookup structures,</li><li>QMDB rebuilds the snapshot from the operation log,</li><li>authenticated variants restore enough Merkle state to keep proofs valid.</li></ul>
+<p>The helper in <code>qmdb/mod.rs</code> is named <code>build_snapshot_from_log</code>, and the name is unusually direct for a reason: the snapshot is not the stored truth. It is rebuilt from the stored truth.</p>
+<p>In the keyed QMDB variants, replay is not just &quot;recompute the latest value.&quot; The replay callback reports both whether the current operation is active and which older location, if any, became inactive. <code>current</code> turns that callback into bitmap state.</p>
+<h3 id="4-3-read-path-the-view-finds-the-candidate-the-log-settles-it">4.3 Read path: the view finds the candidate, the log settles it</h3>
+<p>The read path is easy to summarize and important not to romanticize.</p>
+<p>The system does not usually walk the log first. It asks the view to narrow the search, then asks the log to settle any ambiguity the view cannot resolve.</p>
+<p>That is exactly how translated-key indices are supposed to behave. A translated-key hit is not yet a fact about the real key. It is a compact lead. The authoritative answer still comes from the stored operation bytes.</p>
+<p>This is why collision discipline belongs in the chapter&#x27;s core logic rather than in a performance appendix. The crate stays correct because collision resolution falls back to durable data, not because collisions are assumed rare.</p>
+<h3 id="4-4-proof-path-the-same-search-plus-an-authenticated-ladder">4.4 Proof path: the same search, plus an authenticated ladder</h3>
+<p>A proof-bearing query repeats the same sequence in compressed form.</p>
+<ol><li>Identify the operation or record in the durable history.</li><li>Use the derived view to find the relevant location efficiently.</li><li>Attach the Merkle path or supporting structure that ties that location to a trusted root.</li></ol>
+<p>In <code>mmr</code>, that supporting structure is an inclusion proof over append-only history. In <code>qmdb::any</code>, it is proof that some operation for a key exists in the authenticated log. In <code>qmdb::current</code>, it is proof of both the operation and its activity status under the same root.</p>
+<p>The important point is that the proof path does not replace the view path. It rides on top of it. Views help us find the right place in history. Proof structures help us convince somebody else that the place and the answer are authentic.</p>
+<p><code>current/proof.rs</code> makes the richer path concrete. A <code>RangeProof</code> carries:</p>
+<ul><li>the MMR proof material,</li><li>the ops root,</li><li>and, when needed, a digest of the partial trailing bitmap chunk.</li></ul>
+<p>That last field is the tell. The trailing chunk is often incomplete, so it is not yet represented by a full grafted leaf in the MMR. Rather than lie about that, the canonical root folds the partial chunk digest and <code>next_bit</code> into the final hash. The verifier reconstructs the grafted root, then recomputes the canonical root.</p>
+<h3 id="4-5-sync-path-target-the-ops-root-rebuild-the-rest-deterministically">4.5 Sync path: target the ops root, rebuild the rest deterministically</h3>
+<p>The sync story in [<code>storage/src/qmdb/current/sync/mod.rs</code>](/home/r/coding/monorepo/storage/src/qmdb/current/sync/mod.rs) is subtle and worth teaching directly.</p>
+<p>State sync does <strong>not</strong> target the canonical <code>current</code> root first. It targets the raw ops root. The engine downloads operation batches, verifies them against standard MMR range proofs, and only then rebuilds the bitmap and grafted MMR locally. The canonical root is computed afterward from three ingredients:</p>
+<ul><li>the ops root,</li><li>the grafted MMR root,</li><li>the partial chunk data, if the last chunk is incomplete.</li></ul>
+<p>This split is elegant because it keeps network sync on the simpler proof surface while letting current-state proofs remain richer. The sync engine only needs to trust that operations are authenticated by the ops MMR and that bitmap state is a deterministic function of replayed operations.</p>
+<p>The all-zero identity rule does real work here. For pruned zero chunks, grafted peaks are recoverable from the ops MMR because a zero chunk leaves the ops subtree root unchanged. That is the bridge between sync simplicity and current-proof richness.</p>
+<h3 id="4-6-pruning-only-works-if-the-promise-survives">4.6 Pruning only works if the promise survives</h3>
+<p>Pruning is where weak mental models fail.</p>
+<p>If you think storage is just bytes on disk, pruning means deleting old bytes. If you think in terms of log, view, and proof, pruning becomes a semantic question: after I remove this history, what can I still recover, and what can I still prove?</p>
+<p>That is why the crate&#x27;s pruning stories differ.</p>
+<ul><li>A journal can prune old sections once its replay contract still makes sense.</li><li>A write-once store can prune historical ranges only if its lookup story remains intact.</li><li>QMDB must preserve enough structure to rebuild the active view and authenticate the facts each variant promises.</li></ul>
+<p>For <code>current</code>, that means pruning is never just &quot;drop old bitmap chunks.&quot; The system first persists pinned digests for the grafted peaks covering the pruned region. Those pins become opaque siblings during future upward propagation. Without them, the db might still know the active set locally while no longer being able to reconnect that set to old authenticated history.</p>
+<p>The <code>adb-any</code> essay makes this concrete with the inactivity floor. Old operations become inactive, but that does not mean they were meaningless. They were part of the history from which current state was derived. The art of pruning is to drop what no longer matters without lying about what remains recoverable or provable.</p>
+<hr>
+<h2 id="5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</h2>
+<p>The storage crate is interesting because it absorbs several different kinds of pressure without pretending one mechanism solves them all.</p>
+<h3 id="crash-pressure">Crash pressure</h3>
+<p>The first pressure is obvious: crashes happen. Append-only logs, explicit sync boundaries, checksums, and replay-friendly formats all exist to make crash recovery boring.</p>
+<h3 id="memory-pressure">Memory pressure</h3>
+<p>The second pressure is memory. Large keys and large histories are expensive to index directly. That is why translators exist and why the index exposes collisions instead of concealing them.</p>
+<h3 id="write-amplification-pressure">Write amplification pressure</h3>
+<p>The third pressure is storage churn. <code>freezer</code> is the clearest answer here: keep the view durable, but avoid compaction loops and repeated rewrites of old values. The MMR story points the same way. Append-only authenticated structures are attractive because new writes stay localized.</p>
+<h3 id="proof-expressiveness-pressure">Proof expressiveness pressure</h3>
+<p>The last pressure is conceptual rather than operational: not every fact costs the same to prove.</p>
+<p>It is cheap to prove that some value appeared in history. It is harder to prove that the value is current. It is harder still to prove exclusion.</p>
+<p>The crate&#x27;s variant structure is really a pricing table for proof obligations. <code>qmdb::any</code> is smaller because it promises less. <code>qmdb::current</code> does more work because it must authenticate activity status. The crate is strongest when the reader sees those as different evidence products, not as a menu of random database flavors.</p>
+<p>Two compact tables make those pressures easier to compare.</p>
+<h3 id="5-1-structure-cost-table">5.1 Structure cost table</h3>
+<p>| Layer | Memory profile | Rewrite profile | Recovery cost | Proof value | | --- | --- | --- | --- | --- | | plain journal | low, mostly append state | append-only | replay retained history | none | | authenticated journal | low plus MMR metadata | append-only plus MMR tip work | replay and realign | inclusion in history | | translated index | compressed, collision-prone | cheap updates | rebuild from log if needed | none by itself | | cache | small explicit tracking map | append journal plus map update | replay tracked offsets | none | | freezer | disk-heavy, RAM-light | avoids compaction | reopen plus targeted reads | none | | QMDB <code>any</code> | snapshot plus ops MMR | append log, mutable snapshot | replay ops to rebuild state | historical keyed facts | | QMDB <code>current</code> | <code>any</code> plus bitmap and graft cache | dirty chunk updates and graft propagation | replay plus graft rebuild | current-state facts |</p>
+<h3 id="5-2-pruning-and-proof-tradeoff-table">5.2 Pruning and proof tradeoff table</h3>
+<p>| Mechanism | What pruning removes | What must remain pinned | What claim survives | | --- | --- | --- | --- | | journal | old sections | enough history to satisfy replay window | recent durable history | | cache | old blobs and their offsets | first retained index boundary | index-based reads after floor | | QMDB <code>any</code> | inactive old ops below floor | MMR nodes needed to bridge pruned range | historical facts above floor | | QMDB <code>current</code> | inactive ops plus old bitmap chunks | grafted or equivalent ops peaks for zero chunks | current-state proofs above floor |</p>
+<p>The lesson is that pruning pressure and proof pressure are coupled. The richer the claim, the more carefully the system must preserve authentication context even after discarding raw data.</p>
+<hr>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>The shadow of the design is easy to name once the mental model is clear.</p>
+<h3 id="the-log-can-be-damaged">The log can be damaged</h3>
+<p>Recovery only works if corruption is recognizable. That is why the journal types care about invalid sizes, missing blobs, checksum mismatches, and corruption errors. Append-only history helps, but it does not abolish bad storage. It makes damage detectable and localized.</p>
+<h3 id="the-view-can-be-ambiguous">The view can be ambiguous</h3>
+<p>Translated keys can collide. That is not an implementation accident. It is the explicit cost of compressing the in-memory view. When collisions get worse, lookups degrade because the view is no longer a unique answer. The system must go back to the real key or the real operation to decide which candidate is correct.</p>
+<p>The more adversarial version of this failure is not merely &quot;slower lookups.&quot; It is skewed translation creating hot buckets or ordered neighborhoods that no longer mean what the caller thinks they mean. That is why <code>Hashed&lt;T&gt;</code> comes with strong caveats: it can harden unordered lookups against crafted collisions, but it destroys lexical ordering and therefore cannot be used blindly in ordered proof schemes.</p>
+<h3 id="the-proof-may-say-less-than-the-application-hopes">The proof may say less than the application hopes</h3>
+<p>This is the most important limit in the chapter.</p>
+<p>If you only authenticate the log of operations, you can prove history, not current truth. That is why <code>qmdb::any</code> stops where it does. If you need current state proofs, the system must authenticate activity as well. If you need absence proofs, you need still more structure.</p>
+<p>Proof-bearing storage is not a key-value store with hashes sprinkled on top. The proof structure decides what statements are cheap, what statements are possible, and what statements are out of scope.</p>
+<p>This is where the family matrix matters. <code>keyless</code>, <code>immutable</code>, <code>any</code>, and <code>current</code> are not interchangeable implementations. They are different answers to the question &quot;which statement do you need another machine to believe?&quot;</p>
+<h3 id="pruning-can-destroy-meaning-not-just-bytes">Pruning can destroy meaning, not just bytes</h3>
+<p>Over-pruning is dangerous because the lost thing is often not raw data but interpretation. Remove the wrong history and you may still have a root, but no longer the ability to reconstruct the view or justify the guarantee your API claims to provide.</p>
+<p>The current-proof machinery makes this especially sharp. If the bitmap chunk is gone, the grafted pins are missing, or the verifier can no longer reconstruct the partial trailing chunk rules, the db may still answer local reads while no longer being able to export the proof the root once promised.</p>
+<h3 id="speculation-can-drift-from-reality">Speculation can drift from reality</h3>
+<p>QMDB&#x27;s stale changeset error is a reminder that speculative batching is only safe if branches fail loudly when the base state has moved. A proof-bearing system cannot silently merge a view built from one history onto a different history. The result would be fast, wrong, and hard to detect.</p>
+<hr>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>Read the storage crate as a climb from durable history to proof-bearing state.</p>
+<ol><li>Start with [<code>storage/src/lib.rs</code>](/home/r/coding/monorepo/storage/src/lib.rs). Learn the crate families and the <code>Persistable</code> contract.</li><li>Read [<code>storage/src/journal/mod.rs</code>](/home/r/coding/monorepo/storage/src/journal/mod.rs). This is the purest statement of the log layer.</li><li>Read [<code>storage/src/archive/mod.rs</code>](/home/r/coding/monorepo/storage/src/archive/mod.rs), [<code>storage/src/freezer/mod.rs</code>](/home/r/coding/monorepo/storage/src/freezer/mod.rs), and [<code>storage/src/index/mod.rs</code>](/home/r/coding/monorepo/storage/src/index/mod.rs). These are the view layer. Notice how each one answers a different operational question.</li><li>Read [<code>storage/src/merkle/mmr/mod.rs</code>](/home/r/coding/monorepo/storage/src/merkle/mmr/mod.rs). This is where history becomes portable evidence.</li><li>Compare it with [<code>storage/src/bmt/mod.rs</code>](/home/r/coding/monorepo/storage/src/bmt/mod.rs). That contrast helps fix when the crate wants a closed batch tree versus a growing historical accumulator.</li><li>Finish with [<code>storage/src/qmdb/mod.rs</code>](/home/r/coding/monorepo/storage/src/qmdb/mod.rs) and then the <code>keyless</code>, <code>immutable</code>, <code>any</code>, and <code>current</code> variants in that order. Once the earlier layers are clear, QMDB reads as composition instead of magic.</li></ol>
+<p>If you jump straight into <code>qmdb/current</code>, the bitmap grafting details will feel like a trick. If you arrive there by way of log, view, and proof, the same code reads like a necessary answer to a precise question.</p>
+<hr>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<h3 id="glossary">Glossary</h3>
+<p><strong>Log</strong> The durable sequence of records or operations that survives crashes and can be replayed.</p>
+<p><strong>View</strong> A structure derived from the log that makes queries practical without being the fundamental source of truth.</p>
+<p><strong>Proof-bearing state</strong> State whose answers can be tied to a trusted root with a compact proof.</p>
+<p><strong>Archive</strong> A write-once ordered view over stored records, addressed by index or key.</p>
+<p><strong>Freezer</strong> An immutable on-disk view optimized for low memory use and minimal rewriting.</p>
+<p><strong>Translator</strong> A function that compresses keys for indexing, accepting collisions as an explicit trade-off.</p>
+<p><strong>Authenticated journal</strong> An append-only journal paired position-for-position with an authenticated MMR, so durable items and proof-bearing leaves advance together.</p>
+<p><strong>Grafting</strong> The act of combining a bitmap chunk and an ops-MMR subtree root into one digest at a chosen height, so current-state proofs can ride a single path.</p>
+<p><strong>MMR</strong> An append-only authenticated structure that commits to growing history and supports compact inclusion proofs.</p>
+<p><strong>BMT</strong> A closed binary Merkle tree for fixed batches, finalized with leaf-count binding to prevent proof malleability.</p>
+<p><strong>QMDB</strong> A family of authenticated databases that derive active state from an operation log and prove facts about that state.</p>
+<h3 id="further-reading">Further Reading</h3>
+<ul><li><a href="/home/r/coding/monorepo/docs/blogs/mmr.html">mmr.html</a></li><li><a href="/home/r/coding/monorepo/docs/blogs/adb-any.html">adb-any.html</a></li><li><a href="/home/r/coding/monorepo/storage/src/lib.rs">lib.rs</a></li><li><a href="/home/r/coding/monorepo/storage/src/journal/mod.rs">journal/mod.rs</a></li><li><a href="/home/r/coding/monorepo/storage/src/freezer/mod.rs">freezer/mod.rs</a></li><li><a href="/home/r/coding/monorepo/storage/src/qmdb/mod.rs">qmdb/mod.rs</a></li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../stream/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-stream</span>
+          <span class="foot-sub">stream</span>
+        </a>
+        <div class="foot-center">
+          storage<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../broadcast/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-broadcast</span>
+          <span class="foot-sub">broadcast</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background-why-storage-becomes-a-systems-problem">Background: Why Storage Becomes a Systems Problem</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-storage-starts-by-naming-the-crash-boundary">3.1 Storage starts by naming the crash boundary</a></li><li><a class="toc-link" href="#3-2-the-authenticated-journal-is-the-bridge-from-bytes-to-proofs">3.2 The authenticated journal is the bridge from bytes to proofs</a></li><li><a class="toc-link" href="#3-3-the-log-is-still-the-durable-truth">3.3 The log is still the durable truth</a></li><li><a class="toc-link" href="#3-4-a-view-is-the-working-answer-not-the-fundamental-truth">3.4 A view is the working answer, not the fundamental truth</a></li><li><a class="toc-link" href="#3-5-an-index-is-a-compressed-memory-of-where-truth-lives">3.5 An index is a compressed memory of where truth lives</a></li><li><a class="toc-link" href="#3-6-proof-bearing-state-starts-when-history-becomes-authenticated">3.6 Proof-bearing state starts when history becomes authenticated</a></li><li><a class="toc-link" href="#3-7-qmdb-is-where-the-three-layers-snap-together">3.7 QMDB is where the three layers snap together</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-write-path-record-derive-then-publish">4.1 Write path: record, derive, then publish</a></li><li><a class="toc-link" href="#4-2-recovery-path-replay-realign-rebuild">4.2 Recovery path: replay, realign, rebuild</a></li><li><a class="toc-link" href="#4-3-read-path-the-view-finds-the-candidate-the-log-settles-it">4.3 Read path: the view finds the candidate, the log settles it</a></li><li><a class="toc-link" href="#4-4-proof-path-the-same-search-plus-an-authenticated-ladder">4.4 Proof path: the same search, plus an authenticated ladder</a></li><li><a class="toc-link" href="#4-5-sync-path-target-the-ops-root-rebuild-the-rest-deterministically">4.5 Sync path: target the ops root, rebuild the rest deterministically</a></li><li><a class="toc-link" href="#4-6-pruning-only-works-if-the-promise-survives">4.6 Pruning only works if the promise survives</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#crash-pressure">Crash pressure</a></li><li><a class="toc-link" href="#memory-pressure">Memory pressure</a></li><li><a class="toc-link" href="#write-amplification-pressure">Write amplification pressure</a></li><li><a class="toc-link" href="#proof-expressiveness-pressure">Proof expressiveness pressure</a></li><li><a class="toc-link" href="#5-1-structure-cost-table">5.1 Structure cost table</a></li><li><a class="toc-link" href="#5-2-pruning-and-proof-tradeoff-table">5.2 Pruning and proof tradeoff table</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#the-log-can-be-damaged">The log can be damaged</a></li><li><a class="toc-link" href="#the-view-can-be-ambiguous">The view can be ambiguous</a></li><li><a class="toc-link" href="#the-proof-may-say-less-than-the-application-hopes">The proof may say less than the application hopes</a></li><li><a class="toc-link" href="#pruning-can-destroy-meaning-not-just-bytes">Pruning can destroy meaning, not just bytes</a></li><li><a class="toc-link" href="#speculation-can-drift-from-reality">Speculation can drift from reality</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a><ul class="toc-sub"><li><a class="toc-link" href="#glossary">Glossary</a></li><li><a class="toc-link" href="#further-reading">Further Reading</a></li></ul></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

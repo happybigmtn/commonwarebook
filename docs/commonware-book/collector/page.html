@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-collector — commonware-book</title>
+  <meta name="description" content="Distributed systems are hard for a simple reason: messages do not arrive as a single clean conversation. They arrive late, out of order, twice, or not at all. Once a request fans out to many peers, th">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / collector
+      </span>
+      <span class="chapter-title">commonware-collector</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../invariants/page.html">← prev</a>
+        <a class="next" href="../deployer/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · collector · Complete · 12 min read</div>
+    <h1 class="ch-title">commonware-collector</h1>
+    <p class="ch-deck">A lesson in commitment-keyed coordination: ask many peers the same question, count only the replies that belong, and make cancellation a clean act of forgetting.</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Distributed systems are hard for a simple reason: messages do not arrive as a single clean conversation. They arrive late, out of order, twice, or not at all. Once a request fans out to many peers, the protocol has to answer a few basic questions before it can answer the application question.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part III. Shared Machinery</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">17 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">12 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-deployer</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background">Background</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-three-roles-keep-the-conversation-narrow">3.1 Three roles keep the conversation narrow</a></li><li><a class="toc-link" href="#3-2-the-mailbox-is-the-application-facing-door">3.2 The mailbox is the application-facing door</a></li><li><a class="toc-link" href="#3-3-the-engine-owns-the-ledger">3.3 The engine owns the ledger</a></li><li><a class="toc-link" href="#3-4-the-processed-future-pool-keeps-request-handling-from-pinning-the-loop">3.4 The processed future pool keeps request handling from pinning the loop</a></li><li><a class="toc-link" href="#3-5-commitment-is-the-shared-identity">3.5 Commitment is the shared identity</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-sending-a-request">4.1 Sending a request</a></li><li><a class="toc-link" href="#4-2-handling-an-incoming-request">4.2 Handling an incoming request</a></li><li><a class="toc-link" href="#4-3-receiving-a-response">4.3 Receiving a response</a></li><li><a class="toc-link" href="#4-4-canceling-a-request">4.4 Canceling a request</a></li><li><a class="toc-link" href="#4-5-cancel-then-late-reply-is-the-important-edge-case">4.5 Cancel-then-late-reply is the important edge case</a></li><li><a class="toc-link" href="#4-6-invalid-wire-handling-is-part-of-the-protocol">4.6 Invalid-wire handling is part of the protocol</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-tests-and-fuzzing-are-part-of-the-mechanism-story">5.1 Tests and fuzzing are part of the mechanism story</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="background">Background</h2>
+<p>Distributed systems are hard for a simple reason: messages do not arrive as a single clean conversation. They arrive late, out of order, twice, or not at all. Once a request fans out to many peers, the protocol has to answer a few basic questions before it can answer the application question.</p>
+<ul><li>Which peers were asked?</li><li>Which replies belong to this request?</li><li>Has this peer already answered?</li><li>What should happen if the request is canceled while replies are still in flight?</li></ul>
+<p>Those questions are about <strong>coordination</strong>, not application meaning. A reply can be timely and still belong to the wrong request. A request can be canceled and still have packets arrive later. A duplicate reply can be real network traffic and still not count twice.</p>
+<p>The naive response is to use a single boolean or a simple counter and hope the rest sorts itself out. That works only until the network misbehaves. Then the protocol needs to distinguish identity from order, and membership from content. That is why distributed systems often key work by a request ID, a digest, or a commitment: the identifier says which case the packet belongs to.</p>
+<p>The other naive response is to make cancellation mean rollback. That is usually too expensive and too fragile. In-flight messages cannot be taken back. The cleaner pattern is to close the case file and ignore late arrivals. That keeps the protocol honest about what it can and cannot control.</p>
+<p>The main tradeoff in this chapter is narrowness versus reuse. If the layer tries to understand the application&#x27;s meaning, it becomes too specialized. If it only tracks commitment and sender identity, it can serve many protocols while leaving the actual decision to the application.</p>
+<hr>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>Distributed protocols keep running into the same coordination problem. A leader, a client, or a replica needs to ask the same question of several peers, collect the replies that actually matter, and then stop the whole conversation when the request is no longer worth pursuing.</p>
+<p>That sounds ordinary until you try to make it safe.</p>
+<p>Once the request fans out, you need a ledger for who was asked, a rule for who is allowed to answer, a way to suppress duplicates, and a clean way to retire the request when the application changes its mind. If every protocol invents its own version of that machinery, the same mistakes get rewritten over and over.</p>
+<p><code>commonware-collector</code> exists to keep that machinery in one place. It takes a request with a commitment, routes it to a set of peers, and accepts replies only when they belong to that same commitment and come from peers that were actually contacted.</p>
+<p>The boundary is deliberate. The collector does not decide whether a reply is correct for the application. It decides whether the reply belongs to the current case file. The application owns meaning; the collector owns the coordination discipline.</p>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>Picture a switchboard, but think of it as a courtroom clerk rather than a network gadget. Each outstanding request gets a case file, and the case file is keyed by commitment.</p>
+<p>When <code>send</code> runs, the collector opens that case file and records two facts:</p>
+<ul><li>which peers were asked to weigh in,</li><li>which peers have already filed a reply.</li></ul>
+<p>That is the whole trick. Everything else follows from those two lists.</p>
+<ul><li>A request is not just a payload. It is a coordinated case.</li><li>A response is not just a packet. It is an answer that must point back to the same case.</li><li>Cancellation is not a rollback algorithm. It is the decision to close the case file so later answers have no place to land.</li></ul>
+<p>The commitment is the stable anchor because it names the case, not the route. Peers can answer in different orders, the network can duplicate traffic, and the application can decide to walk away. The commitment keeps all of those events attached to one shared point of reference.</p>
+<p>That is why the collector feels more like a clerk than a router:</p>
+<ul><li>stamp the request with the commitment,</li><li>stamp the ledger with the peers that were contacted,</li><li>stamp each valid response once,</li><li>and file the case away when the request is canceled.</li></ul>
+<p>The implementation is small because the idea is small. The power comes from using the same commitment everywhere the coordination needs a name.</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<h3 id="3-1-three-roles-keep-the-conversation-narrow">3.1 Three roles keep the conversation narrow</h3>
+<p><code>collector/src/lib.rs</code> splits the coordination contract into three obligations: starting and canceling work, answering work, and observing gathered replies. That division matters because the crate is not trying to be a full messaging framework. It is trying to keep each actor&#x27;s responsibility narrow so the commitment boundary stays visible.</p>
+<h3 id="3-2-the-mailbox-is-the-application-facing-door">3.2 The mailbox is the application-facing door</h3>
+<p><code>collector/src/p2p/ingress.rs</code> exposes a <code>Mailbox</code>.</p>
+<p>The mailbox does not interpret the protocol. It only translates application intent into engine messages:</p>
+<ul><li><code>send(recipients, request)</code> becomes work for the switchboard,</li><li><code>cancel(commitment)</code> becomes a request to retire the case file.</li></ul>
+<p>That keeps the surface area small. The hard state stays inside the engine.</p>
+<h3 id="3-3-the-engine-owns-the-ledger">3.3 The engine owns the ledger</h3>
+<p><code>collector/src/p2p/engine.rs</code> is where the metaphor becomes state.</p>
+<p>Its central structure is a map from commitment to two peer sets:</p>
+<ul><li>peers that were asked,</li><li>peers that have already replied.</li></ul>
+<p>Those two sets are enough to enforce the collector&#x27;s main invariant:</p>
+<p><strong>a reply counts only if the request was sent to that peer, and each peer counts once per commitment.</strong></p>
+<p>Around that ledger the engine keeps the machinery needed to make the contract operational: application commands, incoming requests, collected responses, blockers for invalid traffic, and counters that expose the amount of work still in flight. The metrics are secondary, but they make the pressure on the switchboard visible.</p>
+<p>One implementation detail deserves more weight than the old chapter gave it: the tracked map stores exactly what this layer is allowed to know.</p>
+<pre><code class="language-text">tracked[commitment] = (asked_peers, replied_peers)</code></pre>
+<p>That is intentionally narrow. There is no application verdict in the ledger, no &quot;best response so far,&quot; and no embedded timeout machine. The collector is not trying to become a protocol-specific state manager. It is proving a smaller claim: whether a response belongs to a case file and whether it should count exactly once.</p>
+<h3 id="3-4-the-processed-future-pool-keeps-request-handling-from-pinning-the-loop">3.4 The processed future pool keeps request handling from pinning the loop</h3>
+<p>The engine also has to solve a second problem: incoming requests may take time to answer, but the coordination loop still needs to keep moving.</p>
+<p>That is why <code>run()</code> creates a <code>commonware_utils::futures::Pool</code> called <code>processed</code>. When a request arrives, the engine hands it to the <code>Handler</code> together with a oneshot response channel, then pushes a future into the pool that will later resolve to <code>(peer, response)</code>.</p>
+<p>So the collector is maintaining two conversations at once:</p>
+<ul><li>the main event loop that owns the commitment ledger,</li><li>and an unordered completion pool for request handlers that may finish later.</li></ul>
+<p>That split is what lets the collector stay responsive to cancel commands and incoming responses even while handlers are still doing work.</p>
+<h3 id="3-5-commitment-is-the-shared-identity">3.5 Commitment is the shared identity</h3>
+<p>The request and response types are tied together by commitment and digest. The collector does not match replies by guessing or by inventing a new request ID. It matches them by the same identity the protocol already carries forward.</p>
+<p>That is what makes the crate reusable. It can sit underneath a vote, a query, a fragment exchange, or a challenge response, because it cares only that the request and response belong to the same committed case.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<h3 id="4-1-sending-a-request">4.1 Sending a request</h3>
+<p>The sequence begins when the application calls <code>send</code> on the mailbox.</p>
+<p>The mailbox creates an internal one-shot response channel, places the request into <code>Message::Send</code>, and hands it to the engine. The engine then does the coordination work:</p>
+<ol><li>it computes the request commitment,</li><li>it creates a tracking entry if this is the first time it has seen that commitment,</li><li>it marks the commitment as outstanding,</li><li>it sends the request to the chosen recipients through the p2p transport,</li><li>and it returns the peers that were actually reached.</li></ol>
+<p>That last step is important. Sending is not a promise that the network will obey. It is an attempt. The collector records the result of the attempt rather than pretending every peer was reached.</p>
+<h3 id="4-2-handling-an-incoming-request">4.2 Handling an incoming request</h3>
+<p>When a request arrives from the network, the engine does not answer it directly. It hands the request to the <code>Handler</code> together with the origin peer and a one-shot response channel.</p>
+<p>That gives the handler a simple choice: reply or stay silent. The engine can keep several handler futures in flight at once, so a slow peer does not pin the entire switchboard.</p>
+<p>This is another place where the coordination story matters. The collector does not force a response. It gives the handler a structured way to contribute one.</p>
+<h3 id="4-3-receiving-a-response">4.3 Receiving a response</h3>
+<p>When a response arrives, the engine checks the response against the case file before the monitor hears about it:</p>
+<ol><li>Does this commitment still exist?</li><li>Was the request ever sent to this peer?</li><li>Has this peer already answered for this commitment?</li></ol>
+<p>Only when all three answers are yes does the response count.</p>
+<p>That is the duplicate-suppression rule in its simplest form. The engine does not need a larger protocol for this part because the commitment and the peer identity already give it enough information to know whether a reply belongs.</p>
+<p>If the response is valid, the engine forwards it to the monitor with the current count for that commitment.</p>
+<p>It helps to state the response admission matrix directly:</p>
+<p>| Condition | Engine behavior | | --- | --- | | Commitment unknown | ignore as late or orphaned | | Peer was never asked | ignore as unsolicited | | Peer already replied | ignore as duplicate | | Response decode fails | block peer | | All checks pass | count once and forward to monitor |</p>
+<p>That table is the real personality of the crate. The collector does not know whether the answer is semantically correct for the application. It knows whether the answer belongs to this coordinated case.</p>
+<h3 id="4-4-canceling-a-request">4.4 Canceling a request</h3>
+<p>Cancellation is the moment the chapter&#x27;s thesis becomes practical.</p>
+<p>The application sends a commitment. The engine removes the matching tracking entry. From that point forward, late responses for that commitment are just orphans. They may still arrive, but they no longer have a case file to attach to.</p>
+<p>That is the right tradeoff for this layer. The collector does not try to unsend packets or unwind work already done elsewhere. It ends the coordination by forgetting the ledger.</p>
+<h3 id="4-5-cancel-then-late-reply-is-the-important-edge-case">4.5 Cancel-then-late-reply is the important edge case</h3>
+<p>The key edge case in this crate is not just duplicate replies. It is successful late replies after the application has already moved on.</p>
+<p>The tests in <code>collector/src/p2p/mod.rs</code> model this directly:</p>
+<ul><li>a request is sent,</li><li>its commitment is canceled immediately,</li><li>the remote side may still process and answer,</li><li>but the local engine no longer has a ledger entry for that commitment,</li><li>so the late response is ignored.</li></ul>
+<p>This is a deep design choice hiding in a small amount of code. The collector is refusing to pretend that cancellation can rewind the network. It can only close the case file locally.</p>
+<h3 id="4-6-invalid-wire-handling-is-part-of-the-protocol">4.6 Invalid-wire handling is part of the protocol</h3>
+<p>Both inbound requests and inbound responses travel through wrapped codec channels. If either fails to decode, the collector does not merely log the error. It uses the blocker to isolate the peer.</p>
+<p>That matters because malformed wire data is not just transport noise here. It is an attempt to inject a message into a commitment-tracking protocol without satisfying the grammar that makes the protocol safe to reason about.</p>
+<hr>
+<h2 id="5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</h2>
+<p>The collector is built for the pressures that show up in protocol code rather than in toy examples:</p>
+<ul><li><strong>Fanout pressure</strong> - one request can go to many peers at once.</li><li><strong>Response skew</strong> - some peers answer quickly, some answer late, and some answer twice.</li><li><strong>Concurrency pressure</strong> - many commitments can be outstanding at the same time.</li><li><strong>Shutdown pressure</strong> - requests can be canceled when the application moves on or the engine is stopping.</li><li><strong>Wire pressure</strong> - malformed request or response frames should be rejected rather than half-interpreted.</li><li><strong>Operational pressure</strong> - request and response traffic can be marked as priority without changing the collector&#x27;s basic shape.</li></ul>
+<p>The design answers all of that with the same move: keep the state local, minimal, and keyed by commitment.</p>
+<p>That is why the engine uses one map with two peer sets instead of a more elaborate graph of request states. The problem is coordination. The collector keeps the coordination visible and leaves the rest alone.</p>
+<h3 id="5-1-tests-and-fuzzing-are-part-of-the-mechanism-story">5.1 Tests and fuzzing are part of the mechanism story</h3>
+<p>This chapter gets much stronger once you read the tests and fuzz target as evidence rather than appendix material.</p>
+<p>The tests in <code>collector/src/p2p/mod.rs</code> cover the cases the prose most needs:</p>
+<ul><li>ordinary send-and-collect,</li><li>cancel before reply,</li><li>broadcast to several peers,</li><li>duplicate response suppression,</li><li>invalid request and response handling,</li><li>and shutdown behavior.</li></ul>
+<p>The fuzz target in <code>collector/fuzz/fuzz_targets/collector.rs</code> broadens that surface by varying recipient shapes, request/response encodings, handler behavior, and local timing inside the deterministic runtime.</p>
+<p>That is exactly the kind of evidence this chapter needed to stop sounding like an outside-in overview.</p>
+<hr>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>The collector is not a consensus protocol, and it is not a durability layer. It does not guarantee that every peer will answer, that responses will arrive in any global order, or that a canceled request can be revived later.</p>
+<p>Its job ends at the switchboard.</p>
+<p>That means the main failure modes are easy to name:</p>
+<ul><li>If a peer never receives the request, its reply will never count.</li><li>If a peer sends invalid wire data, the blocker can isolate it.</li><li>If a peer answers more than once, only the first response counts.</li><li>If the request was canceled, later responses are ignored.</li><li>If the engine shuts down, the mailbox stops being a reliable place to send new work.</li></ul>
+<p>There is a deeper limit worth stating plainly: the collector knows commitment and sender identity, but it does not know whether a response is correct in the application sense. The application still owns that meaning.</p>
+<p>That is not a weakness. It is why the crate can serve many protocols without turning into one more protocol with its own opinions.</p>
+<hr>
+<h2 id="7-how-to-read-the-source">7. How to Read the Source</h2>
+<p>Start in <code>collector/src/lib.rs</code> to understand the three roles that split the coordination boundary.</p>
+<p>Then read <code>collector/src/p2p/ingress.rs</code> for the application-facing edge and <code>collector/src/p2p/engine.rs</code> for the actual ledger mechanics:</p>
+<ul><li>how commitments enter <code>tracked</code>,</li><li>how the processed future pool keeps handlers from pinning the loop,</li><li>and how responses are admitted or discarded.</li></ul>
+<p>After that, read <code>collector/src/p2p/mod.rs</code> for the tests that prove the collector still behaves when replies are duplicated, canceled, delayed, or sent by the wrong peer.</p>
+<p>Finish with <code>collector/fuzz/fuzz_targets/collector.rs</code> if you want to see the broader search surface around malformed encodings and mixed workloads.</p>
+<hr>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>Commitment</strong> - the stable key that identifies one request case.</li><li><strong>Mailbox</strong> - the application-facing entry point for sending and canceling.</li><li><strong>Engine</strong> - the switchboard that tracks outstanding commitments and counts replies.</li><li><strong>Handler</strong> - the actor that processes incoming requests and may respond.</li><li><strong>Monitor</strong> - the observer that receives collected responses and counts.</li><li><strong>Blocker</strong> - the guard that can isolate peers sending invalid data.</li><li><strong>Outstanding commitments</strong> - the requests the engine is still tracking.</li></ul>
+<p>For a close sibling chapter, read <code>commonware-p2p</code> next. Collector sits on top of that transport and turns raw peer links into a reusable request/response workhorse.</p>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../invariants/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-invariants</span>
+          <span class="foot-sub">invariants</span>
+        </a>
+        <div class="foot-center">
+          collector<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../deployer/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-deployer</span>
+          <span class="foot-sub">deployer</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#background">Background</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-three-roles-keep-the-conversation-narrow">3.1 Three roles keep the conversation narrow</a></li><li><a class="toc-link" href="#3-2-the-mailbox-is-the-application-facing-door">3.2 The mailbox is the application-facing door</a></li><li><a class="toc-link" href="#3-3-the-engine-owns-the-ledger">3.3 The engine owns the ledger</a></li><li><a class="toc-link" href="#3-4-the-processed-future-pool-keeps-request-handling-from-pinning-the-loop">3.4 The processed future pool keeps request handling from pinning the loop</a></li><li><a class="toc-link" href="#3-5-commitment-is-the-shared-identity">3.5 Commitment is the shared identity</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-sending-a-request">4.1 Sending a request</a></li><li><a class="toc-link" href="#4-2-handling-an-incoming-request">4.2 Handling an incoming request</a></li><li><a class="toc-link" href="#4-3-receiving-a-response">4.3 Receiving a response</a></li><li><a class="toc-link" href="#4-4-canceling-a-request">4.4 Canceling a request</a></li><li><a class="toc-link" href="#4-5-cancel-then-late-reply-is-the-important-edge-case">4.5 Cancel-then-late-reply is the important edge case</a></li><li><a class="toc-link" href="#4-6-invalid-wire-handling-is-part-of-the-protocol">4.6 Invalid-wire handling is part of the protocol</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-what-pressure-it-is-designed-to-absorb">5. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-tests-and-fuzzing-are-part-of-the-mechanism-story">5.1 Tests and fuzzing are part of the mechanism story</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

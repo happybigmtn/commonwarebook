@@ -1,0 +1,26 @@
+digraph ModulePage {
+    graph [
+        goal="Assemble a navigable HTML chapter page for $module_display_name with embedded visual sections.",
+        model_stylesheet="
+            * { provider: anthropic; reasoning_effort: medium; backend: cli; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    assemble [
+        label="Assemble Page",
+        prompt="Build a complete HTML chapter page for `$module_display_name`.\n\nRead at minimum:\n- docs/commonware-book/BOOK-DESIGN.md\n- docs/template.html\n- docs/style.css\n- docs/shared.js\n- $chapter_dir/chapter.md\n- $chapter_dir/visuals.json\n- $chapter_dir/review.md\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Do not edit sibling chapter directories unless the prompt explicitly requires it.\n\nThen write `$chapter_dir/page.html`.\n\nRequirements:\n- Follow `docs/commonware-book/BOOK-DESIGN.md` precisely.\n- The page should feel like a crafted digital book chapter, not a generic docs page.\n- Keep compatibility with the existing `docs/` site assets, but prefer a stronger page-local visual treatment over simply inheriting the default monospace docs look.\n- The prose should be organized for scrolling reading with embedded interactive visualization sections placed where they naturally support the text.\n- Use semantic HTML.\n- Include a chapter-local table of contents.\n- Include a strong chapter opening with title, optional deck, and reading orientation.\n- Include explicit figure/lab sections for every visualization from `visuals.json`, each with title, learning goal, why-it-matters framing, control scaffold, scene scaffold, and caption.\n- Include margin-style or boxed explanatory callouts where useful, especially for invariants, failure modes, and source-reading guidance.\n- Include a `Next up` section that points toward the next conceptual modules.\n- Do not invent fake URLs or external assets.\n- Write valid standalone HTML that can be opened locally.\n\nConcrete editorial cues to include:\n- serif-led reading typography with mono metadata, counters, and figure chrome\n- an off-white or paper-tinted background instead of stark white\n- a slim sticky reading bar with breadcrumb and chapter progression\n- a centered chapter header with mono metadata line, large serif title, short deck, and divider mark\n- a narrow primary reading column with a right-rail TOC on desktop and an inline TOC on mobile\n- framed figure blocks that feel like technical plates rather than dashboard cards\n- hairline borders, subtle outlines, and restrained accent color for links and indicators\n- visible distinction between prose, code, and side commentary\n- an end marker and chapter progression footer that feel like page-turning apparatus\n\nDo not copy Making Software's branding or art direction literally. Reuse its editorial structure and reading rhythm.\n\nAfter writing the page, respond with a concise summary of the page structure."
+    ]
+
+    review [
+        label="Review Page",
+        goal_gate=true,
+        retry_target="assemble",
+        prompt="Audit `$chapter_dir/page.html` against the generated chapter materials and `docs/commonware-book/BOOK-DESIGN.md`.\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Keep review edits local to the current module page package.\n\nTasks:\n1. Verify the page reflects the technical content of `chapter.md` accurately.\n2. Verify every visualization in `visuals.json` has a meaningful placement and scaffold in the page.\n3. Verify the page actually follows the book design brief rather than reading like a plain docs page.\n4. Specifically check for the concrete book cues we want: serif-plus-mono hierarchy, paper-like palette, centered editorial header, slim sticky reading chrome, substantial figure plates, and chapter-progression navigation.\n5. Improve navigation, readability, chapter flow, and figure presentation.\n6. Fix any issues directly in the HTML.\n7. Append a short `Page QA` section to `$chapter_dir/review.md` that notes what changed during page review.\n\nRespond with a concise final verdict."
+    ]
+
+    start -> assemble -> review -> exit
+}

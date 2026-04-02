@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-log — commonware-book</title>
+  <meta name="description" content="This example sits at the intersection of two ideas that are easy to confuse: secrecy and commitment. Secrecy says who may know a value. Commitment says how everyone can agree that a value existed with">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / log
+      </span>
+      <span class="chapter-title">commonware-log</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../estimator/page.html">← prev</a>
+        <a class="next" href="../reshare/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · log · Complete · 8 min read</div>
+    <h1 class="ch-title">commonware-log</h1>
+    <p class="ch-deck">A Secret Log With a Public Commitment</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        This example sits at the intersection of two ideas that are easy to confuse: secrecy and commitment. Secrecy says who may know a value. Commitment says how everyone can agree that a value existed without revealing it. A hash is one of the simplest commitment tools because it is short, stable, and easy to verify.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part IV. Case Studies</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">23 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">8 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-reshare</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#commitments-secrecy-and-order">Commitments, Secrecy, and Order</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-boundary">3. The Boundary</a></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How The System Moves</a></li><li class="toc-item"><a class="toc-link" href="#5-why-the-example-is-small">5. Why The Example Is Small</a></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How To Read The Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="commitments-secrecy-and-order">Commitments, Secrecy, and Order</h2>
+<p>This example sits at the intersection of two ideas that are easy to confuse: secrecy and commitment. Secrecy says who may know a value. Commitment says how everyone can agree that a value existed without revealing it. A hash is one of the simplest commitment tools because it is short, stable, and easy to verify.</p>
+<p>The important vocabulary is payload, digest, and transcript. The payload is the private message. The digest is the public fingerprint of that message. The transcript is the ordered public record that consensus is willing to preserve. If you put the payload directly into the transcript, you make consensus carry data it does not need. If you hide the payload without a commitment, you make agreement impossible. The example chooses the middle path: keep the secret local and publish only the digest.</p>
+<p>The naive approach is to let the protocol order raw secrets and hope encryption solves the rest. That mixes privacy with agreement and makes the system do more work than necessary. Another naive approach is to keep the secret entirely out of the system and rely on ad hoc logs or side channels. That protects privacy, but it destroys the public fact that lets the network agree on what was proposed.</p>
+<p>The tradeoff is simple but important. Commitments give you public verifiability and compact state, but they do not give you the secret back. That means the application must own the secret, consensus must own the order, and persistence must keep the ordered commitment from being rewritten after restart.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>This chapter is not about hashing for its own sake. It is about deciding what belongs inside the protocol and what must stay outside it.</p>
+<p><code>commonware-log</code> shows one clean answer: keep the payload private, publish only the commitment, and let consensus order the commitment instead of the secret itself. Each turn, a participant creates a 16-byte message, hashes it, and gives consensus the digest. The raw message never becomes a protocol artifact.</p>
+<p>That distinction matters. If the application pushed the full payload through consensus, the protocol would have to carry secret data it does not need, know more about payload handling than it should, and expose more of the system than the example intends. Here, the application owns the secret. Consensus owns the ordering of the commitment.</p>
+<p>Persistence reinforces the same lesson. Consensus state is written to <code>storage-dir</code>, so restart does not invent a new history. It resumes the same one.</p>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>Think of each proposal as two separate objects.</p>
+<p>The first is a sealed envelope. That is the private payload. The second is the receipt. That is the public commitment.</p>
+<p>The sender keeps the envelope. The network sees the receipt. Everyone can agree on the receipt without ever opening the envelope. That is why the example uses a hash instead of the raw message. The hash is short, stable, and easy to compare. More importantly, it gives consensus the only thing it actually needs: a public fact that names a private value without revealing it.</p>
+<p>The genesis step uses the same pattern. Before the first real proposal, the example hashes the fixed message <code>commonware is neat</code> to seed the protocol with a known starting point. After that, each view is just another envelope and another receipt.</p>
+<p>The simplest way to remember the example is this:</p>
+<blockquote><p>consensus is the receipt book, not the post office.</p></blockquote>
+<hr>
+<h2 id="3-the-boundary">3. The Boundary</h2>
+<p>The whole example rests on one invariant:</p>
+<p><strong>Consensus only needs the digest of the secret, never the secret itself.</strong></p>
+<p>That invariant is enforced at the application boundary in <code>examples/log/src/application/mod.rs</code> and <code>examples/log/src/application/ingress.rs</code>. The application owns the hasher, the secret generation loop, and the local logging. The mailbox exposes only the digest to consensus.</p>
+<p>Three pieces make that boundary work:</p>
+<ol><li>**<code>Application</code>** in <code>examples/log/src/application/actor.rs</code> owns the secret generation loop. On <code>Propose</code>, it fills a 16-byte buffer, hashes it, logs the secret locally, and sends the digest back.</li><li>**<code>Mailbox</code>** in <code>examples/log/src/application/ingress.rs</code> implements the consensus-facing traits. It translates consensus requests into actor messages and returns the digest or verification result on a one-shot channel.</li><li>**<code>Reporter</code>** in <code>examples/log/src/application/reporter.rs</code> records what consensus has already decided. It reports notarization, finalization, and nullification as observable events.</li></ol>
+<p>The <code>Scheme</code> alias is part of the same lesson. It ties the example to the <code>ed25519</code> signing scheme used by simplex consensus. The example is not inventing its own agreement mechanism. It is showing how an application plugs into the one it already has.</p>
+<p>The last piece is what the example refuses to do. <code>Mailbox::broadcast</code> stays empty so the protocol cannot drift into transporting secrets it should only commit to. The example is about agreeing on a public fact, not distributing the private value behind it.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How The System Moves</h2>
+<p>The system has a simple rhythm, but the lecture is in the boundary crossing.</p>
+<p>First, <code>main.rs</code> parses identities, builds the authorized peer set, configures the network, and initializes the application plus consensus engine. That wiring matters because it shows the example as a full distributed system, not a toy function that happens to hash bytes.</p>
+<p>Then the loop begins:</p>
+<ol><li>Consensus asks the application for a genesis digest.</li><li>The application hashes the fixed genesis message and returns the result.</li><li>When a participant&#x27;s turn comes, consensus asks for a proposal.</li><li>The application generates a secret 16-byte message, hashes it, and returns the digest.</li><li>Consensus runs its normal validation and ordering logic on that digest.</li><li>The reporter emits progress when the digest is notarized or finalized.</li><li>The GUI renders those events so a human can watch the protocol breathe.</li></ol>
+<p>Two details are worth slowing down on.</p>
+<p>The first is that the application does not hand consensus a message and ask it to decide what to do with it. It hands consensus a digest. That keeps the public protocol surface small and makes the payload opaque.</p>
+<p>The second is that the application keeps the raw secret local. The digest moves across the boundary; the secret does not. That is the heart of the example. A private value becomes a public fact by being hashed, not by being exposed.</p>
+<hr>
+<h2 id="5-why-the-example-is-small">5. Why The Example Is Small</h2>
+<p>The example is deliberately narrow because its job is to teach a boundary, not to solve every related problem.</p>
+<p>It absorbs privacy pressure by keeping the raw payload out of the protocol. The network does not need the secret to agree on the commitment.</p>
+<p>It absorbs restart pressure because consensus state is persisted in <code>storage-dir</code>. If the process dies and comes back, the example resumes the old story instead of inventing a new one.</p>
+<p>It absorbs observability pressure by separating protocol from presentation. The reporter and GUI help a reader understand the run, but they do not shape the protocol itself.</p>
+<p>It also leaves work on the table on purpose. The example does not broadcast raw messages, backfill missing payloads, support multiple epochs, or build a durable archive of every secret ever proposed. Those problems belong to other layers. Leaving them out keeps the lesson focused on the commitment boundary.</p>
+<p>The most important omission is <code>Mailbox::broadcast</code>. The example does not use consensus as a transport for private data. It uses consensus to agree on the fact that some private data exists.</p>
+<hr>
+<h2 id="6-failure-modes-and-limits">6. Failure Modes and Limits</h2>
+<p>The example is honest about its limits.</p>
+<p>It does not support multiple epochs. <code>Application::genesis</code> asserts that the epoch is zero. That keeps the example focused on the first commitment path.</p>
+<p>It does not verify parent linkage in the application. If payloads were linked to their parents, the application would need to check that relationship. This example does not need that complexity to make its main point.</p>
+<p>It does not try to make <code>verify</code> clever. The example returns <code>true</code> because the interesting property is not cryptographic validation at that point. The interesting property is that consensus is already working with a digest the application produced.</p>
+<p>It also does not promise recovery of the plaintext after the node forgets it. The digest is enough for agreement. It is not enough to reconstruct the secret once the node has moved on.</p>
+<p>The limit to keep in mind is simple: this is a commitment example, not a full secret-sharing or retrieval system.</p>
+<hr>
+<h2 id="7-how-to-read-the-source">7. How To Read The Source</h2>
+<p>Read the source as a boundary diagram, from composition root to observability.</p>
+<p>Start with <code>examples/log/src/main.rs</code>.</p>
+<p>Read it for the system shape: how identities are parsed, how peers are authorized, how the network is wired, and where the application meets the consensus engine. The point is not the CLI. The point is how the boundary is assembled.</p>
+<p>Next read <code>examples/log/src/application/actor.rs</code>.</p>
+<p>That file contains the core move. It shows the application generating a secret, hashing it, and deciding that the digest is the thing worth sharing. The genesis path in the same file shows the same idea before the first real proposal.</p>
+<p>Then read <code>examples/log/src/application/ingress.rs</code>.</p>
+<p>This is the boundary file. It shows how consensus talks to the application and what the application refuses to do. The empty <code>broadcast</code> method is as important as the implemented ones.</p>
+<p>After that, read <code>examples/log/src/application/reporter.rs</code>.</p>
+<p>This file tells you what the system thinks is worth observing: notarization, finalization, and nullification. It is a clean view into protocol progress.</p>
+<p>Finally, skim <code>examples/log/src/gui.rs</code>.</p>
+<p>Treat it as a lens, not as the mechanism. It makes the run easier to watch, but it is not the reason the example exists.</p>
+<hr>
+<h2 id="8-glossary-and-further-reading">8. Glossary and Further Reading</h2>
+<ul><li><strong>Digest</strong> - the public commitment to the secret message.</li><li><strong>Genesis</strong> - the first agreed-upon digest that starts the story.</li><li><strong>Mailbox</strong> - the consensus-facing boundary that turns requests into actor messages.</li><li><strong>Reporter</strong> - the observer that turns consensus activity into structured logs.</li><li><strong>Persistence</strong> - the fact that consensus state lives in <code>storage-dir</code> and can be resumed after restart.</li><li><strong>Backfill</strong> - intentionally omitted here so the chapter can stay focused on commitment rather than retrieval.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>examples/log/src/main.rs</code></li><li><code>examples/log/src/application/actor.rs</code></li><li><code>examples/log/src/application/ingress.rs</code></li><li><code>examples/log/src/application/reporter.rs</code></li><li><code>docs/commonware-book/consensus/chapter.md</code></li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../estimator/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-estimator</span>
+          <span class="foot-sub">estimator</span>
+        </a>
+        <div class="foot-center">
+          log<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../reshare/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-reshare</span>
+          <span class="foot-sub">reshare</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#commitments-secrecy-and-order">Commitments, Secrecy, and Order</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-boundary">3. The Boundary</a></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How The System Moves</a></li><li class="toc-item"><a class="toc-link" href="#5-why-the-example-is-small">5. Why The Example Is Small</a></li><li class="toc-item"><a class="toc-link" href="#6-failure-modes-and-limits">6. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#7-how-to-read-the-source">7. How To Read The Source</a></li><li class="toc-item"><a class="toc-link" href="#8-glossary-and-further-reading">8. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-coding — commonware-book</title>
+  <meta name="description" content="The right mental model is a proof-carrying jigsaw.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / coding
+      </span>
+      <span class="chapter-title">commonware-coding</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../resolver/page.html">← prev</a>
+        <a class="next" href="../codec/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · coding · Complete · 24 min read</div>
+    <h1 class="ch-title">commonware-coding</h1>
+    <p class="ch-deck">A Lecture on Recoverability, Commitments, and Agreement Under Partial Information</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        The right mental model is a proof-carrying jigsaw.
+      </div>
+      <section class="chapter-contract" aria-label="Chapter contract"><h2 id="opening-apparatus">Opening Apparatus</h2>
+<p><strong>Promise.</strong> This chapter shows how coding lets a distributed system recover a payload, bind shards to one object, and preserve agreement while every node still sees only fragments.</p>
+<p><strong>Crux.</strong> Partial information is the normal case in an adversarial network, so the protocol has to turn fragments into evidence instead of pretending they are already the payload.</p>
+<p><strong>Primary invariant.</strong> A checked shard must point to one encoded object under one commitment, and honest nodes must not diverge about that object.</p>
+<p><strong>Naive failure.</strong> The naive story is &quot;split the block, send pieces around, and recover later.&quot; That fails because raw fragments do not tell honest nodes whether they belong to the same valid encoding story.</p>
+<p><strong>Reading map.</strong></p>
+<ul><li><code>coding/src/lib.rs</code>: the traits and invariants.</li><li><code>coding/src/reed_solomon.rs</code>: threshold recovery.</li><li><code>coding/src/zoda/mod.rs</code>: phased checking and validating checks.</li><li><code>coding/src/zoda/topology.rs</code>: how security becomes dimensions.</li></ul>
+<p><strong>Assumption ledger.</strong></p>
+<ul><li>The network is adversarial.</li><li>Encoding must be deterministic.</li><li>&quot;Checked&quot; means the shard has already crossed the protocol&#x27;s validation bar.</li></ul>
+<p>With that map in hand, the lecture begins where the system actually hurts: at the moment when no one has the whole picture.</p>
+<h2 id="backgrounder-redundancy-evidence-and-erasure">Backgrounder: Redundancy, Evidence, and Erasure</h2>
+<p>The broad idea behind coding is simple: if one copy of data is fragile, make the system hold more than one copy&#x27;s worth of information. That sounds like plain replication, but replication is only the first rung on the ladder.</p>
+<p>If you send the whole payload to every node, the system becomes easy to reason about but expensive to run. Network use scales with the number of receivers, and the sender stays the bottleneck. Classical error-correcting codes do better by splitting information into pieces with redundancy arranged by algebra rather than by brute force. A receiver does not need every piece, only enough of the right ones.</p>
+<p>That tradeoff matters because distributed systems do not live in a friendly world. Nodes fail, links drop packets, and some participants may lie. A fragment by itself is not proof that it belongs to a valid reconstruction. If the system only knows &quot;here are some shards,&quot; then a malicious sender can mix pieces from different payloads or force honest nodes to disagree about what they saw.</p>
+<p>So the background problem is not just recovery. It is recovery under partial information.</p>
+<p>The classical alternatives each miss something:</p>
+<ul><li><strong>Replication</strong> is easy but wasteful.</li><li><strong>Parity checks</strong> can detect some corruption but do not always recover the original object.</li><li><strong>Erasure coding</strong> improves efficiency, but raw shards still need a way to be tied to one specific encoded object.</li></ul>
+<p>That last point is the important one for adversarial protocols. The system needs both redundancy and evidence. Redundancy says enough missing pieces can be repaired. Evidence says the pieces all belong to the same story.</p>
+<p>This gives the core tradeoff in the crate:</p>
+<ul><li>more redundancy buys more tolerance for loss and delay,</li><li>more checking buys more confidence before reconstruction,</li><li>and both cost bandwidth, compute, or protocol complexity.</li></ul>
+<p><code>commonware-coding</code> lives at that intersection. It is not trying to make shards magically self-describing. It is teaching the system how to turn redundancy into something honest nodes can trust.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>A distributed system rarely gets to wait for full information before acting. That is the setting for <code>commonware-coding</code>.</p>
+<p>Suppose a leader has a 4 MiB block and fifty validators need it. The naive plan is simple: send the whole block to every validator. The leader now pushes 200 MiB across the network while everyone else waits, even though the rest of the system has bandwidth to spare.</p>
+<p>Erasure coding fixes that first problem. The leader can turn one payload into many shards, give a different shard to each validator, and let the validators help disseminate the block. The sender stops being the only node doing useful work.</p>
+<p>But this crate exists because that is not the whole problem.</p>
+<p>Once the payload is split, every participant sees only a fragment. They must make decisions under partial information. One node sees shards A, B, C. Another sees A, D, E. Consensus may move forward before either node has the full payload in hand. So the real question is not only &quot;can we reconstruct the data later?&quot; It is also &quot;what can we safely believe now?&quot;</p>
+<p>That is why <code>commonware-coding</code> is about three things at once:</p>
+<ul><li><strong>recoverability</strong>: enough shards should recover the original payload;</li><li><strong>commitments</strong>: shards should be tied to one specific encoded object;</li><li><strong>agreement</strong>: honest nodes should not form incompatible beliefs from different subsets of shards.</li></ul>
+<p>This is the chapter&#x27;s governing idea:</p>
+<blockquote><p>Coding matters in adversarial systems because nodes must agree before any one of them has the whole picture.</p></blockquote>
+<p><code>commonware-coding</code> gives the rest of the system a way to reason about that partial picture without pretending it is already complete.</p></section>
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part II. Evidence and State</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">9 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">24 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-codec</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-configuration-is-the-recoverability-contract">3.1 Configuration Is the Recoverability Contract</a></li><li><a class="toc-link" href="#3-2-scheme-turns-shards-into-evidence">3.2 Scheme Turns Shards Into Evidence</a></li><li><a class="toc-link" href="#3-3-phasedscheme-separates-local-knowledge-from-forwarded-knowledge">3.3 PhasedScheme Separates Local Knowledge From Forwarded Knowledge</a></li><li><a class="toc-link" href="#3-4-validatingscheme-marks-the-stronger-promise">3.4 ValidatingScheme Marks the Stronger Promise</a></li><li><a class="toc-link" href="#3-5-the-trait-ladder-is-really-a-guarantee-ladder">3.5 The Trait Ladder Is Really a Guarantee Ladder</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-standard-story-encode-check-recover">4.1 The Standard Story: Encode, Check, Recover</a></li><li><a class="toc-link" href="#4-2-the-phased-story-validate-earlier-forward-less">4.2 The Phased Story: Validate Earlier, Forward Less</a></li><li><a class="toc-link" href="#4-3-topology-is-part-of-the-argument">4.3 Topology Is Part of the Argument</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-two-systems-questions-two-answers">5. Two Systems Questions, Two Answers</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-reed-solomon-answers-the-recoverability-question">5.1 Reed-Solomon Answers the Recoverability Question</a></li><li><a class="toc-link" href="#5-2-zoda-answers-the-early-agreement-question">5.2 ZODA Answers the Early-Agreement Question</a></li><li><a class="toc-link" href="#5-3-why-phasedasscheme-is-a-useful-but-instructive-compromise">5.3 Why PhasedAsScheme Is a Useful but Instructive Compromise</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-it-spreads-transmission-work-across-the-network">6.1 It Spreads Transmission Work Across the Network</a></li><li><a class="toc-link" href="#6-2-it-makes-partial-information-explicit">6.2 It Makes Partial Information Explicit</a></li><li><a class="toc-link" href="#6-3-it-protects-agreement-not-just-local-success">6.3 It Protects Agreement, Not Just Local Success</a></li><li><a class="toc-link" href="#6-4-it-leaves-parallelism-as-policy">6.4 It Leaves Parallelism as Policy</a></li><li><a class="toc-link" href="#6-5-it-makes-canonicality-part-of-the-safety-budget">6.5 It Makes Canonicality Part of the Safety Budget</a></li><li><a class="toc-link" href="#6-6-the-tests-act-like-executable-proof-obligations">6.6 The Tests Act Like Executable Proof Obligations</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-failure-modes-and-limits">7. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-missing-information-still-matters">7.1 Missing Information Still Matters</a></li><li><a class="toc-link" href="#7-2-commitments-prevent-some-confusion-not-all-delay">7.2 Commitments Prevent Some Confusion, Not All Delay</a></li><li><a class="toc-link" href="#7-3-plain-recoverability-is-not-early-validity">7.3 Plain Recoverability Is Not Early Validity</a></li><li><a class="toc-link" href="#7-4-stronger-guarantees-need-more-structure">7.4 Stronger Guarantees Need More Structure</a></li><li><a class="toc-link" href="#7-5-determinism-is-part-of-the-safety-story">7.5 Determinism Is Part of the Safety Story</a></li><li><a class="toc-link" href="#7-6-even-valid-coding-does-not-remove-all-higher-level-risks">7.6 Even Valid Coding Does Not Remove All Higher-Level Risks</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-how-to-read-the-source-glossary-and-further-reading">8. How to Read the Source, Glossary, and Further Reading</a><ul class="toc-sub"><li><a class="toc-link" href="#reading-order">Reading Order</a></li><li><a class="toc-link" href="#what-to-watch-for">What to Watch For</a></li><li><a class="toc-link" href="#glossary">Glossary</a></li><li><a class="toc-link" href="#further-reading">Further Reading</a></li></ul></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="2-mental-model">2. Mental Model</h2>
+<p>The right mental model is a <strong>proof-carrying jigsaw</strong>.</p>
+<p>The payload is the finished picture. The shards are the puzzle pieces. The commitment is the picture on the box. A checked shard is not just a loose piece; it is a piece that carries enough evidence to say, &quot;I belong to this box, at this position, in this reconstruction story.&quot;</p>
+<p>That picture does real work.</p>
+<p>In an ordinary jigsaw, nobody worries that a malicious participant slipped in a piece from a different puzzle. In a distributed system, that is exactly the problem. A sender can fabricate shards. A relay can mix shards from different payloads. A receiver can see only a subset and still need to decide whether to vote, relay, or refuse to proceed.</p>
+<p>So the proof-carrying jigsaw is trying to answer three questions in order:</p>
+<ol><li>If enough pieces survive, can I reconstruct the picture?</li><li>If I am handed a piece, can I tell whether it belongs to the stated box?</li><li>Before full reconstruction, can I already know that the box describes a real puzzle rather than nonsense?</li></ol>
+<p>Reed-Solomon and ZODA are both answers inside this mental model, but they are answers to different systems questions.</p>
+<p>Reed-Solomon says: &quot;If enough correctly checked pieces survive, I can recover the payload.&quot;</p>
+<p>ZODA says: &quot;Before recovery, while pieces are still moving through the network, I can already certify something stronger about the validity of what is being disseminated.&quot;</p>
+<p>That difference is the heart of the crate. The point is not to compare two features on a checklist. The point is to see two different moments when a distributed system asks, &quot;Do I know enough yet?&quot;</p>
+<hr>
+<h2 id="3-the-core-ideas">3. The Core Ideas</h2>
+<p>Read <code>commonware-coding</code> from the outside in. The trait guarantees matter more than the algorithm internals.</p>
+<h3 id="3-1-configuration-is-the-recoverability-contract">3.1 Configuration Is the Recoverability Contract</h3>
+<p><code>coding/src/lib.rs</code></p>
+<pre><code class="language-rust">pub struct Config {
+    pub minimum_shards: NonZeroU16,
+    pub extra_shards: NonZeroU16,
+}</code></pre>
+<p>This is the main tradeoff surface of the crate.</p>
+<p><code>minimum_shards</code> is the threshold. It tells you how many checked shards must survive before recovery is possible.</p>
+<p><code>extra_shards</code> is the redundancy budget. It tells you how much extra network and storage cost you pay so that loss, delay, or malicious withholding does not immediately destroy recoverability.</p>
+<p><code>Config::total_shards()</code> is just:</p>
+<pre><code class="language-rust">minimum_shards + extra_shards</code></pre>
+<p>But the important idea is not the sum. The important idea is that the crate forces you to separate &quot;how much information must survive&quot; from &quot;how much slack the system buys.&quot;</p>
+<h3 id="3-2-scheme-turns-shards-into-evidence">3.2 <code>Scheme</code> Turns Shards Into Evidence</h3>
+<p>The standard interface is <code>Scheme</code>.</p>
+<pre><code class="language-rust">pub trait Scheme {
+    type Commitment: Digest;
+    type Shard;
+    type CheckedShard;
+
+    fn encode(...) -&gt; Result&lt;(Self::Commitment, Vec&lt;Self::Shard&gt;), Self::Error&gt;;
+    fn check(...) -&gt; Result&lt;Self::CheckedShard, Self::Error&gt;;
+    fn decode(...) -&gt; Result&lt;Vec&lt;u8&gt;, Self::Error&gt;;
+}</code></pre>
+<p>The order matters.</p>
+<p><code>encode</code> creates a commitment and a shard set.</p>
+<p><code>check</code> turns a raw shard into a checked shard. That checked form is the first big conceptual move in the crate. It says that the system should not treat raw network material as if it were ready for reconstruction. Evidence travels with the shard, and the type system makes that visible.</p>
+<p><code>decode</code> reconstructs from checked shards only.</p>
+<p>The trait documentation then adds the real distributed-systems content.</p>
+<p><strong>Check agreement</strong> means that if two honest nodes accept their own shards, they should not later disagree about one another&#x27;s shards under the same commitment.</p>
+<p><strong>Unique commitments</strong> means <code>encode</code> is deterministic. One payload and one configuration should not produce several commitments that all decode successfully. The commitment must stay a stable name for &quot;the thing we are talking about.&quot;</p>
+<p><strong>Commitment binding</strong> means checked shards from one commitment must not decode under another. Without that rule, the system could silently assemble a picture from pieces taken from different boxes.</p>
+<h3 id="3-3-phasedscheme-separates-local-knowledge-from-forwarded-knowledge">3.3 <code>PhasedScheme</code> Separates Local Knowledge From Forwarded Knowledge</h3>
+<p>Some coding schemes answer a harder question than plain recoverability. They care about what a node can know after receiving its own shard but before reconstruction.</p>
+<p>That is why <code>PhasedScheme</code> exists.</p>
+<pre><code class="language-rust">pub trait PhasedScheme {
+    type StrongShard;
+    type WeakShard;
+    type CheckingData;
+    type CheckedShard;
+
+    fn encode(...) -&gt; Result&lt;(Commitment, Vec&lt;StrongShard&gt;), Error&gt;;
+    fn weaken(...) -&gt; Result&lt;(CheckingData, CheckedShard, WeakShard), Error&gt;;
+    fn check(...) -&gt; Result&lt;CheckedShard, Error&gt;;
+    fn decode(...) -&gt; Result&lt;Vec&lt;u8&gt;, Error&gt;;
+}</code></pre>
+<p>The vocabulary is deliberate.</p>
+<p>A <strong>strong shard</strong> is what the encoder sends first. It carries enough material for the receiver to do local work.</p>
+<p><code>weaken</code> says: from that stronger object, the receiver can derive the checking data it needs, confirm its own shard, and produce a <strong>weak shard</strong> suitable for forwarding.</p>
+<p>Other participants can then use the checking data plus the weak shard to decide whether the forwarded piece fits the same valid story.</p>
+<p>This is not ornamentation. It captures a common systems fact: first recipients often know more than relays, and the protocol should say what proof survives that transition.</p>
+<h3 id="3-4-validatingscheme-marks-the-stronger-promise">3.4 <code>ValidatingScheme</code> Marks the Stronger Promise</h3>
+<p><code>ValidatingScheme</code> is a small trait with a large meaning.</p>
+<p>It marks schemes where a successful <code>check</code> proves more than shard inclusion. It proves that the shard came from a valid encoding of some underlying payload.</p>
+<p>That is the conceptual leap from ordinary commitment-bound coding to ZODA. The system does not merely learn &quot;this piece belongs to that box.&quot; It learns that the box itself came from a valid encoding story.</p>
+<h3 id="3-5-the-trait-ladder-is-really-a-guarantee-ladder">3.5 The Trait Ladder Is Really a Guarantee Ladder</h3>
+<p>At first glance, the crate seems to offer several overlapping abstractions: <code>Scheme</code>, <code>PhasedScheme</code>, <code>ValidatingScheme</code>, and the adapter <code>PhasedAsScheme&lt;P&gt;</code>. Read them as a ladder of increasingly strong statements about what the rest of the system may conclude.</p>
+<p><code>Scheme</code> gives the baseline distributed-systems contract:</p>
+<ul><li>the encoder deterministically names one encoded object with one commitment;</li><li><code>check</code> filters raw network material into checked evidence;</li><li><code>decode</code> converges on one payload, or fails.</li></ul>
+<p><code>PhasedScheme</code> adds a timing claim:</p>
+<ul><li>the first receiver can learn more than later relays;</li><li>that extra local knowledge can be distilled into <code>CheckingData</code>;</li><li>later weak shards can then be judged against the same story before full reconstruction.</li></ul>
+<p><code>ValidatingScheme</code> adds the strongest semantic claim:</p>
+<ul><li>a successful check means not just &quot;membership under this commitment,&quot;</li><li>but &quot;membership in a valid encoding story under this commitment.&quot;</li></ul>
+<p>Finally, <code>PhasedAsScheme&lt;P&gt;</code> shows how these layers relate. The adapter turns a phased scheme back into a plain <code>Scheme</code> by calling <code>weaken</code> inside <code>check</code>, storing the resulting <code>CheckingData</code>, and then requiring all adapted checked shards to agree on that checking data during <code>decode</code>.</p>
+<p>That is useful for tests and generic code, but it also teaches a conceptual lesson. If you flatten a phased scheme back into <code>Scheme</code>, you keep its decode-time safety properties and lose the operational advantage of weak-shard forwarding. The type system is telling you when certainty appears.</p>
+<hr>
+<h2 id="4-how-the-system-moves">4. How the System Moves</h2>
+<p>The crate becomes clear once you follow the data in time.</p>
+<h3 id="4-1-the-standard-story-encode-check-recover">4.1 The Standard Story: Encode, Check, Recover</h3>
+<p>For a plain <code>Scheme</code>, the motion is:</p>
+<pre><code class="language-text">payload
+  -&gt; encode
+  -&gt; commitment + raw shards
+  -&gt; check each shard against the commitment
+  -&gt; gather enough checked shards
+  -&gt; decode
+  -&gt; payload</code></pre>
+<p>That sequence says something important about trust.</p>
+<p>The network first learns a commitment. Then each participant tests the shard it received against that commitment. Only after enough checked shards accumulate does anyone try to reconstruct the payload.</p>
+<p>Reed-Solomon follows that path in a direct way, but the directness can hide how much safety work the implementation is doing.</p>
+<p>The encode path in <code>coding/src/reed_solomon.rs</code> is not merely &quot;run an erasure coder.&quot; It first forces the payload into one canonical byte layout:</p>
+<ol><li>prefix the payload with its original length;</li><li>split the prefixed bytes into <code>k = minimum_shards</code> equal-sized shards;</li><li>round the shard length up to an even number, because the SIMD backend wants that regularity;</li><li>fill all remaining tail bytes with zero padding.</li></ol>
+<p>That preparation step is the first agreement mechanism in the file. A leader is not allowed to choose several different byte layouts that all decode to the same high-level payload. The layout has to be canonical before coding even begins.</p>
+<p>Then the implementation does the obvious Reed-Solomon work:</p>
+<ol><li>produce <code>m = extra_shards</code> recovery shards with cached encoders;</li><li>hash every original and recovery shard;</li><li>build one BMT root over the whole shard family;</li><li>package each outgoing shard as <code>Chunk { shard, index, proof }</code>.</li></ol>
+<p>The important shift happens at <code>check</code>. A raw <code>Chunk</code> is still only a proposal: &quot;here is some shard data, and here is a Merkle proof that claims it belongs at index <code>i</code>.&quot; <code>Chunk::verify</code> turns that proposal into a <code>CheckedChunk</code> only if three things line up together:</p>
+<ul><li>the caller&#x27;s expected index matches the embedded shard index;</li><li>the Merkle proof actually proves inclusion under the stated root;</li><li>the verifier records the root and the shard digest inside the checked value.</li></ul>
+<p>That last point matters. <code>CheckedChunk</code> does not merely say &quot;proof passed once.&quot; It carries the root it was checked against so that <code>decode</code> can reject cross-commitment mixing later.</p>
+<p>So the real Reed-Solomon timeline in Commonware is this:</p>
+<pre><code class="language-text">payload
+  -&gt; canonical byte layout
+  -&gt; original shards + recovery shards
+  -&gt; BMT root
+  -&gt; checked chunks
+  -&gt; RS decode
+  -&gt; canonical re-encode
+  -&gt; rebuilt BMT root
+  -&gt; payload</code></pre>
+<p>The striking step is the one near the end. <code>decode</code> does not trust recovery just because the Reed-Solomon engine produced bytes. It:</p>
+<ul><li>rejects empty input and too-few chunks;</li><li>rejects invalid indices and duplicate indices;</li><li>rejects checked chunks whose remembered root differs from the decode-time commitment;</li><li>reconstructs missing originals;</li><li>re-encodes those originals to regenerate the recovery shards;</li><li>rebuilds the Merkle tree over the full shard family;</li><li>and only then accepts the root as consistent.</li></ul>
+<p>That means decode is not only a recovery routine. It is a <em>canonicality audit</em>. The code is asking whether reconstructing the object and re-encoding it produces the same commitment story.</p>
+<p>Only after that does <code>extract_data</code> strip the 4-byte length prefix and verify that every tail byte after the declared payload length is zero. That final zero padding check is why the crate can reject non-canonical shard families that would otherwise decode to the same visible bytes. The agreement guarantee is not merely &quot;we all got back something parseable.&quot; It is &quot;we all got back the unique payload compatible with one canonical encoding under this commitment.&quot;</p>
+<h3 id="4-2-the-phased-story-validate-earlier-forward-less">4.2 The Phased Story: Validate Earlier, Forward Less</h3>
+<p>For a <code>PhasedScheme</code>, the motion is richer:</p>
+<pre><code class="language-text">payload
+  -&gt; encode
+  -&gt; commitment + strong shards
+  -&gt; weaken(my strong shard)
+  -&gt; checking data + checked self shard + weak shard
+  -&gt; receive weak shards from others
+  -&gt; check those weak shards
+  -&gt; gather enough checked shards
+  -&gt; decode</code></pre>
+<p>The key shift is when knowledge becomes available.</p>
+<p>In the standard story, the system&#x27;s strongest statement often arrives at decode-time: &quot;now we have enough to reconstruct.&quot;</p>
+<p>In the phased story, a node can say something useful earlier. After handling its own strong shard, it has checking data that lets it evaluate incoming weak shards before full reconstruction.</p>
+<p>This is why <code>StrongShard</code>, <code>WeakShard</code>, and <code>CheckingData</code> deserve their own types. They are not implementation clutter. They are the stages in which local certainty changes.</p>
+<p>ZODA&#x27;s encode path makes that visible in code.</p>
+<p>First, the payload is interpreted as field elements and arranged into a matrix. Then that matrix is Reed-Solomon encoded row-wise into a larger matrix with <code>encoded_rows</code>. Each encoded row is hashed, and those row hashes are committed with a BMT root.</p>
+<p>At that point the implementation creates the actual commitment. It does not commit directly to the payload bytes. It starts a transcript, commits the original byte length and the row-commitment root, and summarizes that transcript. That summary becomes the stable commitment to &quot;this encoded object of this byte length.&quot;</p>
+<p>Only then does the code derive the extra machinery that makes ZODA special:</p>
+<ul><li>a checking matrix from transcript-derived noise,</li><li>a checksum matrix <code>Z = XH</code> over the original data matrix,</li><li>and a transcript-driven shuffle of encoded row indices.</li></ul>
+<p>That ordering is not decorative. The checksum is itself committed back into the transcript before row sampling is finalized. The chapter should linger on that point because it closes a real attack surface: followers must not be tricked into validating different local challenge stories against the same outward commitment.</p>
+<p>Each <code>StrongShard</code> then contains:</p>
+<ul><li>the original byte length,</li><li>the row-commitment root,</li><li>a multi-proof for the sampled encoded rows,</li><li>the sampled rows themselves,</li><li>and the shared checksum matrix.</li></ul>
+<p>The strong shard is therefore a first-recipient artifact. It carries enough material for the owner to reconstruct the local checking context.</p>
+<p><code>weaken</code> is the crucial pivot. Given your own strong shard, it:</p>
+<ol><li>strips the shard down to a <code>WeakShard</code> containing only rows plus proof;</li><li>reconstructs <code>CheckingData</code> from the commitment, byte length, root, and checksum;</li><li>immediately self-checks the weak shard against that checking data.</li></ol>
+<p>So <code>weaken</code> is not &quot;compress and forward.&quot; It is &quot;derive the local proof system that all later forwarded evidence must satisfy.&quot;</p>
+<p><code>CheckingData::check</code> then performs the actual early-validity test:</p>
+<ul><li>it re-derives the topology from the commitment story;</li><li>re-derives the checking matrix and shuffled row indices from the transcript;</li><li>verifies that the shard&#x27;s rows are included in the committed row set at the right sampled positions;</li><li>computes the shard&#x27;s local checksum image <code>X&#x27;_S H</code>;</li><li>compares it against the corresponding rows of the encoded checksum matrix.</li></ul>
+<p>That last comparison is the heart of ZODA. The shard is not only being asked, &quot;do you belong to the announced row commitment?&quot; It is being asked, &quot;are you consistent with the checksum relation that a valid encoding would induce?&quot;</p>
+<p>The decode path then turns that early evidence back into recovery. It fills an evaluation vector at the shuffled row positions, counts how many distinct rows were actually supplied, recovers the coefficient form, and truncates back to the original <code>data_bytes</code>.</p>
+<p>This is why the trait split matters so much. A plain scheme postpones its strongest statement until reconstruction. A validating phased scheme says much more as soon as the first honest recipient has successfully weakened its own shard.</p>
+<h3 id="4-3-topology-is-part-of-the-argument">4.3 Topology Is Part of the Argument</h3>
+<p>ZODA introduces <code>Topology</code> to decide:</p>
+<ul><li>how many rows the encoded matrix has,</li><li>how many samples each shard carries,</li><li>how many column samples are needed,</li><li>and how the implementation reaches its security target.</li></ul>
+<p>That can sound like sizing logic. It is proof layout.</p>
+<p><code>Topology::reckon</code> is where a verbal security target turns into numbers the code can enforce. It chooses:</p>
+<ul><li>how many data columns the unencoded matrix should have;</li><li>how many rows the payload therefore occupies;</li><li>how many samples each shard must carry;</li><li>how many encoded rows are needed after redundancy and power-of-two padding;</li><li>and how many checksum columns are required to reach the target security.</li></ul>
+<p>The function optimizes within proof constraints, not just within performance constraints. It tries to increase the number of columns because ZODA is more efficient with wider matrices, but it only accepts a candidate shape if the required sample count still fits inside the encoded row budget.</p>
+<p>Two details are especially worth teaching.</p>
+<p>First, the encoded row count is rounded up to a power of two. That is partly a technical convenience for the math machinery, but it also changes the sampling space against which the security calculation is made.</p>
+<p>Second, checksum columns are doubled in effect because the code is simulating a larger extension field using pairs of base-field columns. So topology is not just deciding geometry. It is deciding how much evidence an honest node gets per shard about the claim that the leader really encoded one coherent payload.</p>
+<p>That is why the chapter should treat topology as part of the proof, not an appendix. In ZODA, matrix shape is a security statement.</p>
+<hr>
+<h2 id="5-two-systems-questions-two-answers">5. Two Systems Questions, Two Answers</h2>
+<p>Now we can say cleanly what Reed-Solomon and ZODA each contribute.</p>
+<p>The wrong comparison is &quot;simple scheme versus advanced scheme.&quot; The right comparison is &quot;what statement can the rest of the distributed system safely make at each stage?&quot;</p>
+<p>| Stage | Reed-Solomon | ZODA | | --- | --- | --- | | After one shard is checked | &quot;This shard belongs at this index under this commitment.&quot; | &quot;This shard belongs under this commitment and is consistent with a valid encoding story.&quot; | | During forwarding | Relays mostly move commitment-bound pieces. | First recipients can derive checking data, then forward weaker shards without losing the proof story. | | At threshold | Enough checked chunks can reconstruct one canonical payload. | Enough checked shards can reconstruct one payload, and the system already had stronger local validity evidence earlier. | | Main uncertainty window | Between first checks and final decode. | Narrower, because the validity relation is already being checked before decode. |</p>
+<h3 id="5-1-reed-solomon-answers-the-recoverability-question">5.1 Reed-Solomon Answers the Recoverability Question</h3>
+<p>Reed-Solomon is the right answer when the system&#x27;s first question is:</p>
+<blockquote><p>If enough honest pieces survive, can everyone recover the same payload later?</p></blockquote>
+<p>That is the recoverability question.</p>
+<p>The scheme spreads the data across more shards than are strictly necessary and lets any threshold-sized subset rebuild the original payload. Add a commitment and inclusion proofs, and each receiver can reject shards that do not belong to the advertised encoded object.</p>
+<p>This is already a strong distributed-systems story. It gives the network a stable commitment, a way to check shard membership, and a deterministic decode path that converges by canonical re-encoding and root reconstruction.</p>
+<p>But notice when the strongest knowledge appears. Reed-Solomon is most natural when the system can afford to say, &quot;We will know the final answer once enough checked shards arrive and we reconstruct.&quot;</p>
+<p>That is not a weakness. It is a choice about where certainty becomes available.</p>
+<h3 id="5-2-zoda-answers-the-early-agreement-question">5.2 ZODA Answers the Early-Agreement Question</h3>
+<p>ZODA becomes interesting when the system&#x27;s question changes:</p>
+<blockquote><p>Before reconstruction, while shards are still moving, can a node already know that the dissemination is not arbitrary nonsense?</p></blockquote>
+<p>That is the early-agreement question.</p>
+<p>If a malicious leader invents Reed-Solomon-looking shards and commits to them, honest nodes may spend time relaying and collecting before the fraud becomes obvious. The problem is not that recovery fails in the end. The problem is that the system had to operate under ambiguity for too long.</p>
+<p>ZODA shortens that ambiguous period. A checked shard does not merely say that it matches the commitment. It says it comes from a valid encoding story. That is why <code>ValidatingScheme</code> is the real climax of the crate.</p>
+<p>So the contrast between the two schemes is not &quot;basic versus advanced&quot; or &quot;faster versus safer.&quot; The better contrast is:</p>
+<ul><li>Reed-Solomon is for systems that need strong recoverability once enough evidence accumulates.</li><li>ZODA is for systems that need useful agreement guarantees earlier, while evidence is still partial and the protocol may already be moving.</li></ul>
+<p>Both live inside the proof-carrying jigsaw. They simply answer different questions about when a node has enough proof to act.</p>
+<h3 id="5-3-why-phasedasscheme-is-a-useful-but-instructive-compromise">5.3 Why <code>PhasedAsScheme</code> Is a Useful but Instructive Compromise</h3>
+<p>The adapter deserves one more note because it shows how these schemes fit into a larger codebase.</p>
+<p>If some higher layer wants a uniform <code>Scheme</code> interface, <code>PhasedAsScheme&lt;Zoda&gt;</code> lets ZODA participate without rewriting every caller. But the adapter also proves a conceptual point: if the caller insists on the plain scheme interface, the phased system must stash checking data inside the checked shard and then verify consistency at decode time.</p>
+<p>That works, and it is correct, but it is no longer the full distributed-systems story ZODA was built to tell. The adapter keeps the safety theorem while hiding the operational theorem about when certainty becomes available.</p>
+<hr>
+<h2 id="6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</h2>
+<p><code>commonware-coding</code> lives where bandwidth pressure and trust pressure meet.</p>
+<h3 id="6-1-it-spreads-transmission-work-across-the-network">6.1 It Spreads Transmission Work Across the Network</h3>
+<p>Coding exists because the leader should not be the only node paying the full dissemination cost. By making the payload recoverable from a subset of shards, the crate lets the rest of the network help carry the block.</p>
+<h3 id="6-2-it-makes-partial-information-explicit">6.2 It Makes Partial Information Explicit</h3>
+<p>The crate never pretends that seeing one shard is equivalent to seeing the payload. Instead it names the intermediate states: raw shard, checked shard, strong shard, weak shard, checking data. That vocabulary is how the rest of the system avoids over-claiming what it knows.</p>
+<h3 id="6-3-it-protects-agreement-not-just-local-success">6.3 It Protects Agreement, Not Just Local Success</h3>
+<p>The dangerous outcome is not merely &quot;my node failed to decode.&quot; The dangerous outcome is &quot;two honest nodes each accepted what they saw, but those local views cannot be reconciled into one global payload.&quot;</p>
+<p>That is why check agreement and commitment binding sit at the center of the crate&#x27;s contract. They are what keep partial information from turning into divergent belief.</p>
+<h3 id="6-4-it-leaves-parallelism-as-policy">6.4 It Leaves Parallelism as Policy</h3>
+<p>The hot paths take a <code>commonware_parallel::Strategy</code>. That matters because parallelism affects throughput, but it should not blur the algorithmic story. The same coding guarantees can run with different execution policies depending on the surrounding runtime.</p>
+<h3 id="6-5-it-makes-canonicality-part-of-the-safety-budget">6.5 It Makes Canonicality Part of the Safety Budget</h3>
+<p>An adversarial system cannot afford to say, &quot;all these byte layouts decode to equivalent application data, so any of them is fine.&quot; That attitude creates room for split commitments, replay confusion, and cross-node disagreement about what exactly was disseminated.</p>
+<p>Commonware&#x27;s coding crate is stricter. Reed-Solomon requires one canonical length-prefix-and-zero-padding layout, and decode re-derives the full shard family to confirm that the commitment is the unique one compatible with the recovered payload. ZODA similarly refuses to separate its validation story from the transcript, checksum, and sampling story that produced the commitment.</p>
+<p>In other words, canonicality is not polish. It is the difference between &quot;recover something&quot; and &quot;recover the one object consensus thought it was talking about.&quot;</p>
+<h3 id="6-6-the-tests-act-like-executable-proof-obligations">6.6 The Tests Act Like Executable Proof Obligations</h3>
+<p>This crate is unusually readable if you treat its tests as the theorem checklist for the public traits.</p>
+<p><code>coding/src/lib.rs</code> asks the broad contract questions:</p>
+<ul><li>can different threshold-sized subsets round-trip to the same payload?</li><li>do mixed commitments get rejected?</li><li>does decode reject an empty checked-shard set?</li><li>do phased checks reject weak shards derived from a different commitment?</li></ul>
+<p><code>coding/src/reed_solomon.rs</code> then nails down the concrete canonicality story:</p>
+<ul><li>duplicate indices must be rejected;</li><li>tampered checked chunks must fail;</li><li>mismatched config and proof shape must fail;</li><li>non-canonical shard families that happen to decode must still be rejected.</li></ul>
+<p><code>coding/src/zoda/mod.rs</code> does the same for early-validity claims:</p>
+<ul><li>duplicate checked-shard indices should reduce to insufficient unique rows;</li><li>checksum malleability attempts should fail after challenge binding;</li><li>decode must reject checked shards whose commitment story no longer matches.</li></ul>
+<p>Those tests matter because the higher-level protocol will not re-prove these facts every time it uses the crate. It assumes the coding layer has already made them true.</p>
+<hr>
+<h2 id="7-failure-modes-and-limits">7. Failure Modes and Limits</h2>
+<p>This is the shadow of the design.</p>
+<h3 id="7-1-missing-information-still-matters">7.1 Missing Information Still Matters</h3>
+<p>If fewer than <code>minimum_shards</code> checked shards are available, decode must fail. No commitment scheme can manufacture missing information out of nothing.</p>
+<h3 id="7-2-commitments-prevent-some-confusion-not-all-delay">7.2 Commitments Prevent Some Confusion, Not All Delay</h3>
+<p>Reed-Solomon checks can reject the wrong index, the wrong proof, duplicate indices, and shards mixed across commitments. Those are important failures to catch, because they are exactly what adversarial senders and sloppy integration layers produce.</p>
+<p>But catching membership does not automatically give early certainty about the validity of the whole encoding. That is the line Reed-Solomon stops at.</p>
+<h3 id="7-3-plain-recoverability-is-not-early-validity">7.3 Plain Recoverability Is Not Early Validity</h3>
+<p>This is the central limit of the simpler story. A malicious sender can choose an arbitrary family of encoded-looking shards and a matching commitment. Nothing forces honest nodes to learn immediately that the larger encoding story is bad. They may only discover that later, when reconstruction or deeper cross-checking begins.</p>
+<p>That is not an implementation bug. It is the systems reason for having ZODA.</p>
+<h3 id="7-4-stronger-guarantees-need-more-structure">7.4 Stronger Guarantees Need More Structure</h3>
+<p>ZODA buys earlier certainty by carrying more machinery: strong shards, weak shards, checking data, sampled rows, checksum columns, topology sizing. The crate is explicit about that price. Earlier agreement is possible, but it is not free.</p>
+<h3 id="7-5-determinism-is-part-of-the-safety-story">7.5 Determinism Is Part of the Safety Story</h3>
+<p>If encoding were nondeterministic, one payload could admit several commitments. Then the commitment would stop being a stable handle for consensus and dissemination. Determinism is therefore not a cosmetic implementation choice. It is part of what lets the wider system coordinate on one object while seeing only fragments of it.</p>
+<h3 id="7-6-even-valid-coding-does-not-remove-all-higher-level-risks">7.6 Even Valid Coding Does Not Remove All Higher-Level Risks</h3>
+<p>This chapter has intentionally treated the coding layer as a truth-preserving subsystem. But it is still only one layer.</p>
+<p>Coding does not decide:</p>
+<ul><li>whether the payload should have been proposed at all;</li><li>whether the sender is authorized;</li><li>whether the recovered payload is semantically acceptable to the application;</li><li>or whether the network collected shards quickly enough for liveness goals.</li></ul>
+<p>So the crate&#x27;s guarantees are powerful, but they are also scoped. It protects the statement &quot;these fragments describe one coherent encoded object&quot; far better than it protects the larger statement &quot;this object should become part of the system&#x27;s history.&quot; Higher layers still have to make that second judgment.</p>
+<hr>
+<h2 id="8-how-to-read-the-source-glossary-and-further-reading">8. How to Read the Source, Glossary, and Further Reading</h2>
+<p>Do not start with the algebra. Start with the promises, then read the concrete scheme, then read the stronger scheme.</p>
+<h3 id="reading-order">Reading Order</h3>
+<ol><li>**<code>coding/src/lib.rs</code>** Read <code>Config</code>, <code>Scheme</code>, <code>PhasedScheme</code>, and <code>ValidatingScheme</code>. This file names the invariants the rest of the crate must preserve.</li></ol>
+<ol><li>**<code>coding/src/reed_solomon.rs</code>** Read this next to see the cleanest full story of encode, commitment, check, and decode.</li></ol>
+<ol><li>**<code>coding/src/zoda/mod.rs</code>** Read this when you want to see how the crate moves from recoverability to earlier validity guarantees.</li></ol>
+<ol><li>**<code>coding/src/zoda/topology.rs</code>** Read this after the main ZODA flow is clear. It explains how security goals become concrete sample counts and matrix dimensions.</li></ol>
+<ol><li><strong>Blog context</strong> Read <code>docs/blogs/coding.html</code> and <code>docs/blogs/zoda.md</code> for the surrounding systems motivation: leader bottlenecks, delayed reconstruction, and why earlier guarantees matter to higher-level protocols.</li></ol>
+<h3 id="what-to-watch-for">What to Watch For</h3>
+<ul><li>where the crate distinguishes raw shards from checked shards;</li><li>where commitments become the stable name of the encoded object;</li><li>where decode enforces commitment binding;</li><li>where ZODA upgrades the meaning of a successful check;</li><li>and where matrix sizing becomes part of the proof story rather than a pure performance detail.</li></ul>
+<h3 id="glossary">Glossary</h3>
+<p><strong>Commitment</strong> A digest that names one encoded object and anchors later shard checks.</p>
+<p><strong>Checked shard</strong> A shard that has already been validated against the right commitment and index.</p>
+<p><strong>Check agreement</strong> The guarantee that honest nodes who accept their own shards will also agree on one another&#x27;s shards under the same commitment.</p>
+<p><strong>Commitment binding</strong> The rule that checked shards from one commitment must not decode under another.</p>
+<p>**<code>minimum_shards</code>** How many checked shards must survive before recovery is possible.</p>
+<p>**<code>extra_shards</code>** How much redundancy the system buys beyond the minimum threshold.</p>
+<p><strong>Strong shard</strong> The richer shard form first sent by a phased scheme.</p>
+<p><strong>Weak shard</strong> The forwarded shard form checked later by other participants.</p>
+<p><strong>Checking data</strong> Auxiliary material derived from a strong shard that lets later participants validate weak shards.</p>
+<p><strong>Validating scheme</strong> A scheme where a successful check proves valid encoding, not merely shard membership.</p>
+<h3 id="further-reading">Further Reading</h3>
+<ul><li><code>coding/src/lib.rs</code></li><li><code>coding/src/reed_solomon.rs</code></li><li><code>coding/src/zoda/mod.rs</code></li><li><code>coding/src/zoda/topology.rs</code></li><li><a href="/home/r/coding/monorepo/docs/blogs/coding.html">docs/blogs/coding.html</a></li><li><a href="/home/r/coding/monorepo/docs/blogs/zoda.md">docs/blogs/zoda.md</a></li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../resolver/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-resolver</span>
+          <span class="foot-sub">resolver</span>
+        </a>
+        <div class="foot-center">
+          coding<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../codec/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-codec</span>
+          <span class="foot-sub">codec</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-the-core-ideas">3. The Core Ideas</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-configuration-is-the-recoverability-contract">3.1 Configuration Is the Recoverability Contract</a></li><li><a class="toc-link" href="#3-2-scheme-turns-shards-into-evidence">3.2 Scheme Turns Shards Into Evidence</a></li><li><a class="toc-link" href="#3-3-phasedscheme-separates-local-knowledge-from-forwarded-knowledge">3.3 PhasedScheme Separates Local Knowledge From Forwarded Knowledge</a></li><li><a class="toc-link" href="#3-4-validatingscheme-marks-the-stronger-promise">3.4 ValidatingScheme Marks the Stronger Promise</a></li><li><a class="toc-link" href="#3-5-the-trait-ladder-is-really-a-guarantee-ladder">3.5 The Trait Ladder Is Really a Guarantee Ladder</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-how-the-system-moves">4. How the System Moves</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-the-standard-story-encode-check-recover">4.1 The Standard Story: Encode, Check, Recover</a></li><li><a class="toc-link" href="#4-2-the-phased-story-validate-earlier-forward-less">4.2 The Phased Story: Validate Earlier, Forward Less</a></li><li><a class="toc-link" href="#4-3-topology-is-part-of-the-argument">4.3 Topology Is Part of the Argument</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-two-systems-questions-two-answers">5. Two Systems Questions, Two Answers</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-reed-solomon-answers-the-recoverability-question">5.1 Reed-Solomon Answers the Recoverability Question</a></li><li><a class="toc-link" href="#5-2-zoda-answers-the-early-agreement-question">5.2 ZODA Answers the Early-Agreement Question</a></li><li><a class="toc-link" href="#5-3-why-phasedasscheme-is-a-useful-but-instructive-compromise">5.3 Why PhasedAsScheme Is a Useful but Instructive Compromise</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-it-spreads-transmission-work-across-the-network">6.1 It Spreads Transmission Work Across the Network</a></li><li><a class="toc-link" href="#6-2-it-makes-partial-information-explicit">6.2 It Makes Partial Information Explicit</a></li><li><a class="toc-link" href="#6-3-it-protects-agreement-not-just-local-success">6.3 It Protects Agreement, Not Just Local Success</a></li><li><a class="toc-link" href="#6-4-it-leaves-parallelism-as-policy">6.4 It Leaves Parallelism as Policy</a></li><li><a class="toc-link" href="#6-5-it-makes-canonicality-part-of-the-safety-budget">6.5 It Makes Canonicality Part of the Safety Budget</a></li><li><a class="toc-link" href="#6-6-the-tests-act-like-executable-proof-obligations">6.6 The Tests Act Like Executable Proof Obligations</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-failure-modes-and-limits">7. Failure Modes and Limits</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-missing-information-still-matters">7.1 Missing Information Still Matters</a></li><li><a class="toc-link" href="#7-2-commitments-prevent-some-confusion-not-all-delay">7.2 Commitments Prevent Some Confusion, Not All Delay</a></li><li><a class="toc-link" href="#7-3-plain-recoverability-is-not-early-validity">7.3 Plain Recoverability Is Not Early Validity</a></li><li><a class="toc-link" href="#7-4-stronger-guarantees-need-more-structure">7.4 Stronger Guarantees Need More Structure</a></li><li><a class="toc-link" href="#7-5-determinism-is-part-of-the-safety-story">7.5 Determinism Is Part of the Safety Story</a></li><li><a class="toc-link" href="#7-6-even-valid-coding-does-not-remove-all-higher-level-risks">7.6 Even Valid Coding Does Not Remove All Higher-Level Risks</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-how-to-read-the-source-glossary-and-further-reading">8. How to Read the Source, Glossary, and Further Reading</a><ul class="toc-sub"><li><a class="toc-link" href="#reading-order">Reading Order</a></li><li><a class="toc-link" href="#what-to-watch-for">What to Watch For</a></li><li><a class="toc-link" href="#glossary">Glossary</a></li><li><a class="toc-link" href="#further-reading">Further Reading</a></li></ul></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

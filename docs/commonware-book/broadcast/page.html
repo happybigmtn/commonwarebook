@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-broadcast — commonware-book</title>
+  <meta name="description" content="This chapter explains how commonware-broadcast disseminates a payload, caches it by digest, and serves later replay requests without claiming to solve ordering, durability, or agreement.">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / broadcast
+      </span>
+      <span class="chapter-title">commonware-broadcast</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../storage/page.html">← prev</a>
+        <a class="next" href="../resolver/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · broadcast · Complete · 19 min read</div>
+    <h1 class="ch-title">commonware-broadcast</h1>
+    <p class="ch-deck">A Town Crier With a Ledger, a Queue, and a Forgetting Rule</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        This chapter explains how commonware-broadcast disseminates a payload, caches it by digest, and serves later replay requests without claiming to solve ordering, durability, or agreement.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part II. Evidence and State</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">7 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">19 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-resolver</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#opening-ledger">Opening Ledger</a></li><li class="toc-item"><a class="toc-link" href="#background-why-dissemination-needs-memory">Background: Why Dissemination Needs Memory</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-public-contract-real-mechanism">3. Public Contract, Real Mechanism</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-the-three-questions-the-mailbox-supports">3.1 The Three Questions the Mailbox Supports</a></li><li><a class="toc-link" href="#3-2-what-the-config-is-really-controlling">3.2 What the Config Is Really Controlling</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-the-engine-s-memory-model">4. The Engine&#x27;s Memory Model</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-items-shared-payload-memory">4.1 items: Shared Payload Memory</a></li><li><a class="toc-link" href="#4-2-deques-bounded-peer-histories">4.2 deques: Bounded Peer Histories</a></li><li><a class="toc-link" href="#4-3-counts-shared-ownership-across-peer-histories">4.3 counts: Shared Ownership Across Peer Histories</a></li><li><a class="toc-link" href="#4-4-waiters-deferred-replay">4.4 waiters: Deferred Replay</a></li><li><a class="toc-link" href="#4-5-external-authorities">4.5 External Authorities</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-the-event-loop-is-the-main-character">5. The Event Loop Is the Main Character</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-a-loop-turn-starts-by-cleaning-dead-waiters">5.1 A Loop Turn Starts by Cleaning Dead Waiters</a></li><li><a class="toc-link" href="#5-2-local-broadcast-begins-with-local-insertion">5.2 Local Broadcast Begins With Local Insertion</a></li><li><a class="toc-link" href="#5-3-application-replay-hits-the-shared-cache-first">5.3 Application Replay Hits the Shared Cache First</a></li><li><a class="toc-link" href="#5-4-network-input-crosses-a-decode-boundary">5.4 Network Input Crosses a Decode Boundary</a></li><li><a class="toc-link" href="#5-5-peer-set-updates-trigger-structural-forgetting">5.5 Peer-Set Updates Trigger Structural Forgetting</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-duplicate-refresh-semantics">6. Duplicate-Refresh Semantics</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-first-arrival-from-a-peer">6.1 First Arrival From a Peer</a></li><li><a class="toc-link" href="#6-2-duplicate-from-the-same-peer">6.2 Duplicate From the Same Peer</a></li><li><a class="toc-link" href="#6-3-duplicate-across-different-peers">6.3 Duplicate Across Different Peers</a></li><li><a class="toc-link" href="#6-4-why-this-matters">6.4 Why This Matters</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-waiter-discipline-and-replay-semantics">7. Waiter Discipline and Replay Semantics</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-get-and-subscribe-are-different-contracts">7.1 get and subscribe Are Different Contracts</a></li><li><a class="toc-link" href="#7-2-waiters-are-released-by-digest-before-duplicate-suppression">7.2 Waiters Are Released by Digest Before Duplicate Suppression</a></li><li><a class="toc-link" href="#7-3-dropped-waiters-are-ordinary-not-exceptional">7.3 Dropped Waiters Are Ordinary, Not Exceptional</a></li><li><a class="toc-link" href="#7-4-shutdown-semantics-are-cleanly-bounded">7.4 Shutdown Semantics Are Cleanly Bounded</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-forgetting-on-purpose">8. Forgetting On Purpose</a><ul class="toc-sub"><li><a class="toc-link" href="#8-1-deque-overflow">8.1 Deque Overflow</a></li><li><a class="toc-link" href="#8-2-shared-payload-survival">8.2 Shared Payload Survival</a></li><li><a class="toc-link" href="#8-3-membership-driven-forgetting">8.3 Membership-Driven Forgetting</a></li><li><a class="toc-link" href="#8-4-what-replay-means-after-forgetting">8.4 What Replay Means After Forgetting</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#9-malformed-input-partial-failure-and-bounded-honesty">9. Malformed Input, Partial Failure, and Bounded Honesty</a><ul class="toc-sub"><li><a class="toc-link" href="#9-1-malformed-bytes-do-not-become-messages">9.1 Malformed Bytes Do Not Become Messages</a></li><li><a class="toc-link" href="#9-2-send-failure-still-leaves-a-local-replay-record">9.2 Send Failure Still Leaves a Local Replay Record</a></li><li><a class="toc-link" href="#9-3-recipient-selection-is-exact-not-aspirational">9.3 Recipient Selection Is Exact, Not Aspirational</a></li><li><a class="toc-link" href="#9-4-packet-loss-is-a-caller-level-retry-story">9.4 Packet Loss Is a Caller-Level Retry Story</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#10-executable-invariants">10. Executable Invariants</a></li><li class="toc-item"><a class="toc-link" href="#11-observability-and-tuning">11. Observability and Tuning</a></li><li class="toc-item"><a class="toc-link" href="#12-what-pressure-this-design-absorbs">12. What Pressure This Design Absorbs</a><ul class="toc-sub"><li><a class="toc-link" href="#12-1-duplication">12.1 Duplication</a></li><li><a class="toc-link" href="#12-2-delay">12.2 Delay</a></li><li><a class="toc-link" href="#12-3-churn">12.3 Churn</a></li><li><a class="toc-link" href="#12-4-boundedness">12.4 Boundedness</a></li><li><a class="toc-link" href="#12-5-malice-and-corruption-at-the-transport-edge">12.5 Malice and Corruption at the Transport Edge</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#13-comparisons-and-limits">13. Comparisons and Limits</a></li><li class="toc-item"><a class="toc-link" href="#14-how-to-read-the-source">14. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#15-glossary-and-further-reading">15. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="opening-ledger">Opening Ledger</h2>
+<p>This chapter explains how <code>commonware-broadcast</code> disseminates a payload, caches it by digest, and serves later replay requests without claiming to solve ordering, durability, or agreement.</p>
+<p><strong>Crux.</strong> The engine is not &quot;a sender with a cache.&quot; It is an event loop that keeps four facts in sync:</p>
+<ul><li>which payloads are currently remembered,</li><li>which peers still justify remembering them,</li><li>which applications are waiting for which digests,</li><li>and which peers are still socially relevant enough to keep in memory.</li></ul>
+<p><strong>Primary invariant.</strong> A payload remains in shared memory if and only if at least one tracked peer deque still contains its digest.</p>
+<p><strong>Secondary invariant.</strong> Waiters are keyed by digest, not by sender, path, or recipient set. If the payload arrives from anywhere, every waiter for that digest should become eligible to complete.</p>
+<p><strong>Naive failure.</strong> The easy mistake is to equate &quot;I sent a payload&quot; with &quot;everyone now has it&quot; and then to keep resending full bytes until the network feels quiet. That wastes bandwidth, makes duplicates expensive, and still gives late readers no stable replay key.</p>
+<p><strong>Reading map.</strong></p>
+<ul><li>Section 1 explains the systems problem.</li><li>Section 2 gives the mental model.</li><li>Sections 3 and 4 name the public surface and internal state.</li><li>Sections 5 through 9 follow the real machine: loop, duplicates, waiters, forgetting, and malformed input.</li><li>Section 10 turns the tests into executable invariants.</li></ul>
+<p><strong>Assumption ledger.</strong></p>
+<ul><li>The network is best-effort. Delay, duplication, and packet loss are normal.</li><li>Peer membership is external. The broadcast engine consumes peer-set updates; it does not define the peer sets itself.</li><li>Memory is bounded. Old digests will be forgotten on purpose.</li><li>Replay is digest-addressed. Sender identity matters for retention accounting, not for lookup.</li><li>This crate is BETA, so the behavioral contract matters.</li></ul>
+<hr>
+<h2 id="background-why-dissemination-needs-memory">Background: Why Dissemination Needs Memory</h2>
+<p>Broadcast sounds like a simple act: send a payload to many peers. In practice, the hard part is what happens after the first send.</p>
+<p>The key vocabulary is broad but manageable:</p>
+<ul><li><strong>dissemination</strong> is getting a payload into circulation,</li><li><strong>replay</strong> is asking for that same payload again later,</li><li><strong>digest</strong> is the compact name that identifies the payload,</li><li><strong>duplicate suppression</strong> avoids storing or resending the same payload too many times,</li><li><strong>retention</strong> decides how long a recent payload should stay available.</li></ul>
+<p>The naive approach is to treat &quot;I sent it&quot; as the same thing as &quot;the system has it.&quot; That fails as soon as packets are duplicated, delayed, or received out of order. It also fails for late readers, who need to ask for the payload by a stable name rather than by the memory of which peer happened to say it first.</p>
+<p>The tradeoff is between freshness and bounded memory. If you remember too little, replay breaks. If you remember too much, the broadcast layer turns into an unbounded cache. The interesting design problem is how to keep the recent payloads that are still socially relevant while forgetting the ones that no longer justify their cost.</p>
+<p>That is the background for this chapter. The Commonware mechanism then makes that tradeoff explicit with digest-based storage, peer histories, waiters, and intentional forgetting.</p>
+<hr>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>In a wide-area distributed system, dissemination and agreement are different jobs.</p>
+<p>The first job is simple to state and hard to do well: get a payload into circulation now, under ordinary network messiness, and make it possible for late readers to ask for that same payload again. The second job is consensus: decide whether the system should accept, order, or commit that payload. Those jobs should not be collapsed into one abstraction.</p>
+<p><code>commonware-broadcast</code> owns the first job.</p>
+<p>It gives the rest of the system a digest-addressed memory for recently seen payloads. That sounds smaller than &quot;reliable broadcast,&quot; and it is. The crate does not promise total delivery, finality, or durable storage. It promises a different kind of usefulness:</p>
+<ol><li>the sender can inject a payload into circulation,</li><li>the local node will remember that payload by digest,</li><li>later readers can ask for the digest directly,</li><li>if the payload is not present yet, they can wait on that digest,</li><li>memory will eventually be reclaimed according to bounded, explicit rules.</li></ol>
+<p>This is the right promise for higher-level protocols that already know the digest they care about and need a live replay layer, not a permanent archive.</p>
+<p>The simplest wrong design would resend full payloads until everyone &quot;probably&quot; has them. That wastes bytes and still does not answer the late-reader question: &quot;Now that the broadcast wave has passed, how do I ask for the same object again?&quot; <code>commonware-broadcast</code> answers that by centering the digest, not the transmission event.</p>
+<hr>
+<h2 id="2-mental-model">2. Mental Model</h2>
+<p>Think of a town crier who does not merely shout. He also keeps a ledger.</p>
+<p>When a proclamation arrives, he writes down its digest. If several couriers repeat the same proclamation, he does not create several proclamations. He keeps one shared text and records that several recent courier histories still refer to it. If a citizen asks for the proclamation by digest, he checks the ledger. If the text is already on hand, he answers immediately. If not, he keeps the request open under that digest until the text appears.</p>
+<p>Two facts make the metaphor useful.</p>
+<p>First, the crier does not keep an infinite archive. He remembers a bounded recent history per courier. When an old digest falls out of every relevant courier history, the shared text is forgotten too.</p>
+<p>Second, the crier does not care which courier eventually satisfies a waiting citizen. The waiting citizen asked for a digest, not for &quot;the copy from courier A.&quot; Arrival from any path is good enough.</p>
+<p>That is the buffered broadcast engine in one picture:</p>
+<ul><li>one shared cache of payloads by digest,</li><li>one bounded recent-digest deque per peer,</li><li>one reference count per digest across all peer deques,</li><li>one waiter list per digest for pending replay requests.</li></ul>
+<p>The rest of the chapter makes that invariant explicit.</p>
+<hr>
+<h2 id="3-public-contract-real-mechanism">3. Public Contract, Real Mechanism</h2>
+<p>The public trait is the promise boundary: it names the send path, but not the storage, retention, or replay story behind it.</p>
+<p>The buffered implementation carries the mechanism. The mailbox is the application entry point, the engine owns the event loop and shared memory, <code>Config</code> defines how much history the protocol is allowed to remember, and <code>Metrics</code> exposes the result as a live system instead of a pile of state.</p>
+<p>That split matters. The crate is not &quot;just a trait&quot; or &quot;just a cache.&quot; The mailbox names the interaction; the engine decides whether the protocol can honor it.</p>
+<h3 id="3-1-the-three-questions-the-mailbox-supports">3.1 The Three Questions the Mailbox Supports</h3>
+<p>The mailbox is small because the questions are precise.</p>
+<p><code>broadcast(recipients, message)</code> asks:</p>
+<blockquote><p>Put this payload into circulation now. Also tell me which peers the network send path claims to have reached.</p></blockquote>
+<p><code>get(digest)</code> asks:</p>
+<blockquote><p>Do you have this payload now? Answer once.</p></blockquote>
+<p><code>subscribe(digest)</code> asks:</p>
+<blockquote><p>Wake me when this digest becomes available.</p></blockquote>
+<p><code>subscribe_prepared(digest, responder)</code> asks the same question with externally prepared plumbing. The point is not convenience. The point is that waiting is a first-class protocol state, not a side effect of repeated polling.</p>
+<h3 id="3-2-what-the-config-is-really-controlling">3.2 What the Config Is Really Controlling</h3>
+<p><code>Config</code> looks modest, but each field names a protocol commitment:</p>
+<ul><li><code>public_key</code> tells the engine which peer identity to use for local insertion. The local node participates in the replay story too.</li><li><code>mailbox_size</code> defines ingress backpressure. How many application requests can queue before sends become lossy.</li><li><code>deque_size</code> defines the retention window per peer.</li><li><code>priority</code> marks whether outgoing network sends should be prioritized over other traffic.</li><li><code>codec_config</code> defines the decoding bounds for incoming messages.</li><li><code>peer_provider</code> defines which peer histories remain relevant enough to keep.</li></ul>
+<p>These are not cosmetic knobs. They are the policy surface that decides how much history the broadcast layer is allowed to preserve.</p>
+<hr>
+<h2 id="4-the-engine-s-memory-model">4. The Engine&#x27;s Memory Model</h2>
+<p>If you open <code>broadcast/src/buffered/engine.rs</code>, read it as a state machine, not as a module of helpers.</p>
+<p>The engine maintains four linked memories:</p>
+<ul><li><code>items: Digest -&gt; Message</code></li><li><code>deques: Peer -&gt; VecDeque&lt;Digest&gt;</code></li><li><code>counts: Digest -&gt; usize</code></li><li><code>waiters: Digest -&gt; Vec&lt;oneshot::Sender&lt;Message&gt;&gt;</code></li></ul>
+<p>Each structure exists because the protocol needs a different kind of memory.</p>
+<h3 id="4-1-items-shared-payload-memory">4.1 <code>items</code>: Shared Payload Memory</h3>
+<p><code>items</code> is the actual replay cache. It stores each payload at most once, keyed by digest.</p>
+<p>This is the layer a <code>get()</code> call hits. It is also the layer that allows a <code>subscribe()</code> call to resolve immediately when the digest is already known.</p>
+<h3 id="4-2-deques-bounded-peer-histories">4.2 <code>deques</code>: Bounded Peer Histories</h3>
+<p><code>deques</code> stores a bounded recent-digest history per peer. This is not merely an LRU convenience. It is the proof that a payload is still live in the current social world of the engine.</p>
+<p>The same digest can appear in multiple peer deques. That is how the engine models &quot;several peers have recently carried the same message.&quot;</p>
+<h3 id="4-3-counts-shared-ownership-across-peer-histories">4.3 <code>counts</code>: Shared Ownership Across Peer Histories</h3>
+<p><code>counts</code> tells the engine how many peer histories still justify keeping a digest in <code>items</code>.</p>
+<p>This map is what prevents two opposite mistakes:</p>
+<ul><li>storing duplicate payload copies for the same digest,</li><li>or evicting a shared payload too early when one peer forgets it but another peer still references it.</li></ul>
+<h3 id="4-4-waiters-deferred-replay">4.4 <code>waiters</code>: Deferred Replay</h3>
+<p><code>waiters</code> stores pending subscriptions keyed by digest.</p>
+<p>This is the part of the design that turns replay from a polling API into a digest-addressed rendezvous. The waiter map says:</p>
+<blockquote><p>&quot;You do not have to ask repeatedly. If the digest shows up later, the engine will complete your request.&quot;</p></blockquote>
+<h3 id="4-5-external-authorities">4.5 External Authorities</h3>
+<p>The engine also depends on two outside authorities:</p>
+<ul><li>the wrapped sender/receiver pair, which defines what &quot;sent&quot; and &quot;received&quot; mean at the transport boundary,</li><li>the peer-set provider, which tells the engine which peers are still tracked.</li></ul>
+<p>That boundary is deliberate. Broadcast owns live dissemination memory. It does not own transport semantics or membership semantics.</p>
+<hr>
+<h2 id="5-the-event-loop-is-the-main-character">5. The Event Loop Is the Main Character</h2>
+<p>The loop is the chapter&#x27;s real subject.</p>
+<p>The engine is not &quot;a cache with helper methods.&quot; It is a <code>select_loop!</code> reactor over four classes of events:</p>
+<pre><code class="language-text">loop {
+    cleanup closed waiters
+    publish waiter metric
+
+    select {
+        mailbox message        =&gt; handle application request
+        network payload        =&gt; decode and insert or drop
+        peer-set update        =&gt; evict untracked peer histories
+        stop                   =&gt; shut down cleanly
+    }
+}</code></pre>
+<p>That picture is concept-first and code-faithful. It is the chapter&#x27;s real timeline.</p>
+<h3 id="5-1-a-loop-turn-starts-by-cleaning-dead-waiters">5.1 A Loop Turn Starts by Cleaning Dead Waiters</h3>
+<p>At the top of each loop turn, the engine calls <code>cleanup_waiters()</code>. Closed responders are removed before anything else happens.</p>
+<p>This matters because waiting is lossy at the application boundary by design. The application is allowed to drop a subscription. The engine should not keep that dead promise forever. The test <code>test_dropped_waiters_for_missing_digest_are_cleaned_up</code> in <code>broadcast/src/buffered/mod.rs</code> makes this explicit.</p>
+<p>This is a good example of Commonware style: small abstraction, complete ownership of the edge case.</p>
+<h3 id="5-2-local-broadcast-begins-with-local-insertion">5.2 Local Broadcast Begins With Local Insertion</h3>
+<p>When the mailbox receives <code>Message::Broadcast</code>, <code>handle_broadcast()</code> does two things in a deliberate order:</p>
+<ol><li>it inserts the message into the local cache as if it had been seen from the local peer,</li><li>only then does it send the message outward.</li></ol>
+<p>That ordering is the replay story.</p>
+<p>If the sender broadcasts a payload and then immediately asks for the digest, the local node should already be able to replay it. The engine is not waiting for the network to echo the payload back before it becomes locally real.</p>
+<p>The test <code>test_self_retrieval</code> proves exactly that: a pre-broadcast waiter can be satisfied by the sender&#x27;s own broadcast path, and a post-broadcast <code>get</code> is effectively immediate.</p>
+<h3 id="5-3-application-replay-hits-the-shared-cache-first">5.3 Application Replay Hits the Shared Cache First</h3>
+<p><code>handle_subscribe()</code> first checks <code>items</code>.</p>
+<ul><li>If the payload is already present, the responder is completed immediately.</li><li>If not, the responder is added to the waiter list for that digest.</li></ul>
+<p><code>handle_get()</code> is stricter. It performs a one-shot cache lookup and returns <code>Option&lt;Message&gt;</code>.</p>
+<p>This distinction is small but architecturally clean:</p>
+<ul><li><code>get</code> asks for present state,</li><li><code>subscribe</code> asks for future state,</li><li><code>broadcast</code> changes the world.</li></ul>
+<h3 id="5-4-network-input-crosses-a-decode-boundary">5.4 Network Input Crosses a Decode Boundary</h3>
+<p>The network path in <code>run()</code> first receives bytes, then decodes them with the configured codec bounds, then hands valid messages to <code>handle_network()</code>.</p>
+<p>That decode boundary is the broadcast crate&#x27;s first honesty check. Malformed bytes are not &quot;weird messages.&quot; They are invalid transport input. The engine logs the failure, increments the invalid receive metric, and continues. It does not poison the cache and it does not stop valid later traffic from being processed.</p>
+<p>The test <code>test_malformed_network_payload_does_not_break_valid_traffic</code> is worth calling out because it captures a real adversarial pressure. The claim is not &quot;malformed bytes never happen.&quot; The claim is &quot;malformed bytes do not corrupt the engine&#x27;s useful work.&quot;</p>
+<h3 id="5-5-peer-set-updates-trigger-structural-forgetting">5.5 Peer-Set Updates Trigger Structural Forgetting</h3>
+<p>The loop also listens to the peer-set subscription. When tracked membership changes, the engine calls <code>evict_untracked_peers()</code>.</p>
+<p>This is not a garbage collector in the generic sense. It is a social forgetting rule:</p>
+<blockquote><p>histories belonging to peers that no longer exist in any tracked set must no longer keep payloads alive.</p></blockquote>
+<p>This is one of the most important concept-first points in the crate. Memory is driven by live membership, not by abstract object age alone.</p>
+<hr>
+<h2 id="6-duplicate-refresh-semantics">6. Duplicate-Refresh Semantics</h2>
+<p>The most interesting function in the crate is <code>insert_message()</code>.</p>
+<p>It does not merely &quot;put the message in the cache.&quot; It enforces the precise relationship between waiters, per-peer recency, shared ownership, and eviction.</p>
+<h3 id="6-1-first-arrival-from-a-peer">6.1 First Arrival From a Peer</h3>
+<p>When a digest is new to that peer:</p>
+<ol><li>any waiters for the digest are removed and completed,</li><li>the digest is pushed to the front of that peer&#x27;s deque,</li><li>the digest&#x27;s global refcount is incremented,</li><li>the payload is inserted into <code>items</code> if the new refcount is 1,</li><li>if the deque is now too long, the oldest digest is popped and its refcount is decremented.</li></ol>
+<p>This is the full memory update, not just &quot;cache insert.&quot;</p>
+<h3 id="6-2-duplicate-from-the-same-peer">6.2 Duplicate From the Same Peer</h3>
+<p>If the same peer delivers the same digest again, the engine does something more subtle.</p>
+<p>It looks for the digest inside that peer&#x27;s deque. If found:</p>
+<ul><li>the digest is moved to the front if it was not already there,</li><li><code>counts</code> is unchanged,</li><li><code>items</code> is unchanged,</li><li>the function returns <code>false</code>, which the caller records as a dropped duplicate.</li></ul>
+<p>This is the crate&#x27;s duplicate-refresh semantics.</p>
+<p>The message is not globally new. The payload should not be stored again. But the peer has refreshed evidence that this digest is still part of its recent history, so the peer-local recency order should change.</p>
+<p>That distinction is central to the chapter. The engine does not try to remove duplicates from the network. It makes duplicates cheap and semantically clear:</p>
+<ul><li>globally, no new payload,</li><li>locally, recency refreshed.</li></ul>
+<h3 id="6-3-duplicate-across-different-peers">6.3 Duplicate Across Different Peers</h3>
+<p>If two different peers send the same digest, the payload is still stored once in <code>items</code>, but the refcount grows. This is what allows the message to survive the forgetting of one peer history while another peer history still justifies it.</p>
+<p>The tests <code>test_cache_eviction_multi_peer</code>, <code>test_ref_count_across_peers</code>, and <code>test_peer_set_update_preserves_shared_messages</code> all exist to prove this multi-owner story.</p>
+<h3 id="6-4-why-this-matters">6.4 Why This Matters</h3>
+<p>Without this split between shared payload storage and per-peer recent histories, the engine would be forced into one of two bad designs:</p>
+<ul><li>one payload copy per peer, which is wasteful,</li><li>or one global recency queue with no memory of which peers still justify retention, which forgets the wrong things.</li></ul>
+<p>The current design is better because it remembers exactly the fact the crate needs: which live peer histories still point at the digest.</p>
+<hr>
+<h2 id="7-waiter-discipline-and-replay-semantics">7. Waiter Discipline and Replay Semantics</h2>
+<p>The waiter path deserves its own section because it is where replay becomes digest-addressed rather than sender-addressed.</p>
+<h3 id="7-1-get-and-subscribe-are-different-contracts">7.1 <code>get</code> and <code>subscribe</code> Are Different Contracts</h3>
+<p><code>get(digest)</code> returns one answer now:</p>
+<ul><li><code>Some(payload)</code> if the shared cache already has it,</li><li><code>None</code> otherwise.</li></ul>
+<p><code>subscribe(digest)</code> creates a deferred contract:</p>
+<ul><li>immediate completion if already cached,</li><li>otherwise storage in <code>waiters[digest]</code> until arrival,</li><li>or cancellation if the receiver is dropped or the engine shuts down.</li></ul>
+<p>This is a better interface than &quot;keep polling until maybe something happens.&quot; It makes absence explicit and waiting explicit.</p>
+<h3 id="7-2-waiters-are-released-by-digest-before-duplicate-suppression">7.2 Waiters Are Released by Digest Before Duplicate Suppression</h3>
+<p>One subtle code fact matters here.</p>
+<p><code>insert_message()</code> releases waiters before it checks whether the digest is a duplicate in the peer&#x27;s deque. Conceptually, that is the right order. The question for a waiter is:</p>
+<blockquote><p>&quot;Did the payload for this digest arrive?&quot;</p></blockquote>
+<p>not:</p>
+<blockquote><p>&quot;Was this globally novel traffic?&quot;</p></blockquote>
+<p>If the digest is now materialized for replay, the waiters should be eligible to complete.</p>
+<h3 id="7-3-dropped-waiters-are-ordinary-not-exceptional">7.3 Dropped Waiters Are Ordinary, Not Exceptional</h3>
+<p>The application can drop a subscription at any time. The engine does not treat that as corruption. It cleans dead responders on later loop turns and updates metrics accordingly.</p>
+<p>This detail matters because it keeps the crate from quietly accumulating dead obligations. It is also part of the reason the chapter should speak in terms of &quot;promises that can be withdrawn&quot; rather than &quot;immutable subscriptions.&quot;</p>
+<h3 id="7-4-shutdown-semantics-are-cleanly-bounded">7.4 Shutdown Semantics Are Cleanly Bounded</h3>
+<p>After shutdown:</p>
+<ul><li><code>broadcast()</code> should fail or report an empty result,</li><li><code>subscribe()</code> should resolve to cancellation,</li><li><code>get()</code> should return <code>None</code>,</li><li>and nothing should panic.</li></ul>
+<p>The shutdown tests in <code>broadcast/src/buffered/mod.rs</code> are important because they show that the crate treats termination as part of the contract, not as undefined behavior.</p>
+<hr>
+<h2 id="8-forgetting-on-purpose">8. Forgetting On Purpose</h2>
+<p>Broadcast becomes useful only if forgetting is honest and predictable.</p>
+<h3 id="8-1-deque-overflow">8.1 Deque Overflow</h3>
+<p>Each peer has a bounded <code>VecDeque</code> of recent digests. When a new digest pushes the deque over <code>deque_size</code>, the oldest digest is popped from the back and its global refcount is decremented.</p>
+<p>If the count reaches zero, the shared payload is removed from <code>items</code>.</p>
+<p>This means eviction is not purely age-based and not purely global. It is age-within-peer-history plus cross-peer ownership accounting.</p>
+<p><code>test_cache_eviction_single_peer</code> is the simple case: one peer&#x27;s history forgets the oldest digest, so the payload disappears from replay.</p>
+<h3 id="8-2-shared-payload-survival">8.2 Shared Payload Survival</h3>
+<p><code>test_cache_eviction_multi_peer</code> and <code>test_ref_count_across_peers</code> show the more interesting case: the same digest may survive one peer&#x27;s forgetting because another peer&#x27;s history still points at it.</p>
+<p>This is exactly what <code>counts</code> is for: shared ownership, not bookkeeping.</p>
+<h3 id="8-3-membership-driven-forgetting">8.3 Membership-Driven Forgetting</h3>
+<p>Deque overflow is local forgetting. <code>evict_untracked_peers()</code> is structural forgetting.</p>
+<p>When a peer leaves every tracked peer set, the engine removes that peer&#x27;s entire deque and decrements all corresponding digest counts. If that peer was the last live justification for a digest, the payload leaves the shared cache.</p>
+<p>The tests <code>test_peer_set_update_evicts_disconnected_peer_buffers</code> and <code>test_peer_set_update_preserves_shared_messages</code> are the clearest specification of this rule.</p>
+<h3 id="8-4-what-replay-means-after-forgetting">8.4 What Replay Means After Forgetting</h3>
+<p>Once every tracked reference to a digest is gone, replay at this layer is over.</p>
+<p>That is not a bug. It is the design. If an application needs replay across long epochs, across restarts, or across membership turnover, it must persist the payload somewhere else. This crate gives a live dissemination memory, not a historical archive.</p>
+<hr>
+<h2 id="9-malformed-input-partial-failure-and-bounded-honesty">9. Malformed Input, Partial Failure, and Bounded Honesty</h2>
+<p><code>commonware-broadcast</code> is careful about which failures belong to it.</p>
+<h3 id="9-1-malformed-bytes-do-not-become-messages">9.1 Malformed Bytes Do Not Become Messages</h3>
+<p>Malformed transport payloads fail at decode time. The engine logs, increments an invalid metric, and continues. No cache mutation, no waiter release, no replay artifact.</p>
+<p>That is the right boundary: broadcast is willing to ingest untrusted bytes, but only decoded messages participate in the ledger.</p>
+<h3 id="9-2-send-failure-still-leaves-a-local-replay-record">9.2 Send Failure Still Leaves a Local Replay Record</h3>
+<p><code>handle_broadcast()</code> inserts the local copy before trying the outward send. If the send fails, the responder gets an empty list, but the local node still remembers the payload by digest.</p>
+<p>This is honest and useful.</p>
+<ul><li>It does not pretend the network succeeded.</li><li>It does not erase the fact that the local application emitted the payload.</li></ul>
+<h3 id="9-3-recipient-selection-is-exact-not-aspirational">9.3 Recipient Selection Is Exact, Not Aspirational</h3>
+<p>The mailbox supports arbitrary recipient sets through the underlying P2P <code>Recipients</code> type. The test <code>test_selective_recipients</code> proves a simple but important fact: recipient selection affects who receives the payload over the network, but not whether the sender itself can replay the payload locally.</p>
+<h3 id="9-4-packet-loss-is-a-caller-level-retry-story">9.4 Packet Loss Is a Caller-Level Retry Story</h3>
+<p>The packet-loss test is also instructive. With unreliable links, a single broadcast is not enough to reach everyone. The test retries from above the crate until all peers have seen the digest.</p>
+<p>That is exactly the right separation of responsibilities. This crate is a best-effort dissemination primitive with replay memory, not an eventual delivery theorem.</p>
+<hr>
+<h2 id="10-executable-invariants">10. Executable Invariants</h2>
+<p>The invariants deserve to be named because the tests already enforce them.</p>
+<ol><li><strong>Local-first insertion.</strong> A local broadcast must make the digest replayable on the sender even before any peer echoes it back. Proven by <code>test_self_retrieval</code>.</li></ol>
+<ol><li><strong>Shared-cache liveness.</strong> A payload exists in <code>items</code> if and only if at least one tracked peer deque still references its digest. Proven by <code>test_cache_eviction_single_peer</code>, <code>test_cache_eviction_multi_peer</code>, <code>test_ref_count_across_peers</code>, and the peer-set update tests.</li></ol>
+<ol><li><strong>Duplicate refresh without double ownership.</strong> A duplicate from the same peer refreshes that peer&#x27;s recency order but does not increase the global refcount or create a second payload copy. Proven structurally by <code>insert_message()</code> and behaviorally by the eviction tests.</li></ol>
+<ol><li><strong>Digest-addressed waiter release.</strong> Waiters complete when the digest becomes available, regardless of which peer path supplied the payload. Proven by <code>test_get_nonexistent</code> and <code>test_self_retrieval</code>.</li></ol>
+<ol><li><strong>Dead waiters do not accumulate.</strong> Closed subscriptions are cleaned on later loop turns. Proven by <code>test_dropped_waiters_for_missing_digest_are_cleaned_up</code>.</li></ol>
+<ol><li><strong>Malformed bytes do not poison later traffic.</strong> Proven by <code>test_malformed_network_payload_does_not_break_valid_traffic</code>.</li></ol>
+<ol><li><strong>Membership drives forgetting.</strong> When a peer leaves all tracked sets, its remembered digests lose their ownership weight immediately. Proven by <code>test_peer_set_update_evicts_disconnected_peer_buffers</code>.</li></ol>
+<ol><li><strong>Shared ownership survives partial membership churn.</strong> Proven by <code>test_peer_set_update_preserves_shared_messages</code>.</li></ol>
+<ol><li><strong>Shutdown is a bounded failure mode, not a panic surface.</strong> Proven by <code>test_operations_after_shutdown_do_not_panic</code> and <code>test_clean_shutdown</code>.</li></ol>
+<p>These are not decorative tests. They are the executable form of the lecture.</p>
+<hr>
+<h2 id="11-observability-and-tuning">11. Observability and Tuning</h2>
+<p>The metrics file is small, but it matters because it shows what the engine treats as scarce.</p>
+<ul><li><code>peer</code> counts received broadcasts by peer.</li><li><code>receive</code> classifies inbound messages by status.</li><li><code>subscribe</code> counts waiter completions.</li><li><code>get</code> counts one-shot replay lookups.</li><li><code>waiters</code> tracks the number of digests currently awaited.</li></ul>
+<p><code>waiters</code> is the clearest signal. It counts distinct missing digests that still carry interest, not generic subscription handles.</p>
+<p>The config fields and the metrics together define the operational surface:</p>
+<ul><li><code>mailbox_size</code> shapes ingress pressure,</li><li><code>deque_size</code> shapes replay horizon,</li><li><code>priority</code> shapes network scheduling,</li><li><code>codec_config</code> shapes the decode trust boundary,</li><li><code>peer_provider</code> shapes the meaning of liveness,</li><li>metrics show whether the chosen settings actually fit the workload.</li></ul>
+<hr>
+<h2 id="12-what-pressure-this-design-absorbs">12. What Pressure This Design Absorbs</h2>
+<p>The crate is designed for five ordinary pressures.</p>
+<h3 id="12-1-duplication">12.1 Duplication</h3>
+<p>Wide-area traffic duplicates payloads. The engine keeps those duplicates cheap: one shared payload, several peer-local recency references.</p>
+<h3 id="12-2-delay">12.2 Delay</h3>
+<p>Readers can ask for a digest before it arrives and wait without polling.</p>
+<h3 id="12-3-churn">12.3 Churn</h3>
+<p>Tracked membership changes do not leave orphaned retention state forever.</p>
+<h3 id="12-4-boundedness">12.4 Boundedness</h3>
+<p>Memory growth is explicit and finite.</p>
+<h3 id="12-5-malice-and-corruption-at-the-transport-edge">12.5 Malice and Corruption at the Transport Edge</h3>
+<p>Malformed input is rejected at the decode boundary and does not become a cache event.</p>
+<hr>
+<h2 id="13-comparisons-and-limits">13. Comparisons and Limits</h2>
+<p>This crate sits in a narrow layer between transport and consensus.</p>
+<p>Compared with consensus:</p>
+<ul><li>broadcast disseminates and replays,</li><li>consensus orders and commits.</li></ul>
+<p>Compared with durable storage:</p>
+<ul><li>broadcast forgets on purpose,</li><li>storage remembers on purpose.</li></ul>
+<p>Compared with a topic pub/sub system:</p>
+<ul><li>broadcast subscriptions are digest-addressed and one-object-oriented,</li><li>pub/sub subscriptions are stream-oriented.</li></ul>
+<p>Compared with naive gossip-resend loops:</p>
+<ul><li>broadcast gives a stable replay key and bounded memory,</li><li>gossip-resend alone gives neither.</li></ul>
+<p>What it does <strong>not</strong> guarantee:</p>
+<ul><li>total order,</li><li>eventual delivery to every peer,</li><li>permanent retention,</li><li>recovery after shutdown,</li><li>or agreement about which payload the system should accept.</li></ul>
+<p>Those are not omissions. They are boundary lines.</p>
+<hr>
+<h2 id="14-how-to-read-the-source">14. How to Read the Source</h2>
+<p>Read the source in this order.</p>
+<ol><li><code>broadcast/src/lib.rs</code> Start with the public trait to see how little the transport layer promises.</li></ol>
+<ol><li><code>broadcast/src/buffered/ingress.rs</code> Learn the three mailbox questions: send, check once, or wait.</li></ol>
+<ol><li><code>broadcast/src/buffered/config.rs</code> Read the policy surface before the control flow.</li></ol>
+<ol><li><code>broadcast/src/buffered/engine.rs</code> Treat this as the main lecture text. Focus on: <code>run</code>, <code>handle_broadcast</code>, <code>handle_subscribe</code>, <code>handle_get</code>, <code>handle_network</code>, <code>insert_message</code>, <code>evict_untracked_peers</code>, and <code>cleanup_waiters</code>.</li></ol>
+<ol><li><code>broadcast/src/buffered/metrics.rs</code> Read this after the control flow so the counters line up with the state machine.</li></ol>
+<ol><li><code>broadcast/src/buffered/mod.rs</code> Then read the tests. They are the clearest statement of the behavioral contract.</li></ol>
+<ol><li><code>broadcast/fuzz/fuzz_targets/broadcast_engine_operations.rs</code> Finally, read the fuzz target. It stress-tests randomized interleavings of send, subscribe, get, sleep, cache size, recipient shape, and lossy network conditions. It is especially useful as evidence that the mailbox and engine should remain stable under mixed workloads.</li></ol>
+<p>One caveat is worth noting: the fuzz target is strongest on mailbox and network interleavings. The peer-set eviction story is covered more directly by the unit tests.</p>
+<hr>
+<h2 id="15-glossary-and-further-reading">15. Glossary and Further Reading</h2>
+<ul><li><strong>Digest</strong> - the stable identity of a payload.</li><li><strong>Replay</strong> - later retrieval of a payload by digest.</li><li><strong>Waiter</strong> - a pending subscription for a digest not yet present in cache.</li><li><strong>Deque</strong> - the bounded recent-digest history for one peer.</li><li><strong>Refcount</strong> - the number of peer histories still pointing at a digest.</li><li><strong>Tracked peer set</strong> - the live membership universe that still counts for retention.</li><li><strong>Duplicate refresh</strong> - the act of moving a digest to the front of one peer&#x27;s deque without changing global ownership.</li><li><strong>Membership-driven forgetting</strong> - dropping payloads because the peers that justified retaining them are no longer tracked.</li></ul>
+<p>Further reading:</p>
+<ul><li><code>docs/blogs/commonware-broadcast.html</code></li><li><code>broadcast/src/buffered/engine.rs</code></li><li><code>broadcast/src/buffered/mod.rs</code></li><li><code>broadcast/fuzz/fuzz_targets/broadcast_engine_operations.rs</code></li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../storage/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-storage</span>
+          <span class="foot-sub">storage</span>
+        </a>
+        <div class="foot-center">
+          broadcast<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../resolver/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-resolver</span>
+          <span class="foot-sub">resolver</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#opening-ledger">Opening Ledger</a></li><li class="toc-item"><a class="toc-link" href="#background-why-dissemination-needs-memory">Background: Why Dissemination Needs Memory</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-mental-model">2. Mental Model</a></li><li class="toc-item"><a class="toc-link" href="#3-public-contract-real-mechanism">3. Public Contract, Real Mechanism</a><ul class="toc-sub"><li><a class="toc-link" href="#3-1-the-three-questions-the-mailbox-supports">3.1 The Three Questions the Mailbox Supports</a></li><li><a class="toc-link" href="#3-2-what-the-config-is-really-controlling">3.2 What the Config Is Really Controlling</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#4-the-engine-s-memory-model">4. The Engine&#x27;s Memory Model</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-items-shared-payload-memory">4.1 items: Shared Payload Memory</a></li><li><a class="toc-link" href="#4-2-deques-bounded-peer-histories">4.2 deques: Bounded Peer Histories</a></li><li><a class="toc-link" href="#4-3-counts-shared-ownership-across-peer-histories">4.3 counts: Shared Ownership Across Peer Histories</a></li><li><a class="toc-link" href="#4-4-waiters-deferred-replay">4.4 waiters: Deferred Replay</a></li><li><a class="toc-link" href="#4-5-external-authorities">4.5 External Authorities</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-the-event-loop-is-the-main-character">5. The Event Loop Is the Main Character</a><ul class="toc-sub"><li><a class="toc-link" href="#5-1-a-loop-turn-starts-by-cleaning-dead-waiters">5.1 A Loop Turn Starts by Cleaning Dead Waiters</a></li><li><a class="toc-link" href="#5-2-local-broadcast-begins-with-local-insertion">5.2 Local Broadcast Begins With Local Insertion</a></li><li><a class="toc-link" href="#5-3-application-replay-hits-the-shared-cache-first">5.3 Application Replay Hits the Shared Cache First</a></li><li><a class="toc-link" href="#5-4-network-input-crosses-a-decode-boundary">5.4 Network Input Crosses a Decode Boundary</a></li><li><a class="toc-link" href="#5-5-peer-set-updates-trigger-structural-forgetting">5.5 Peer-Set Updates Trigger Structural Forgetting</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#6-duplicate-refresh-semantics">6. Duplicate-Refresh Semantics</a><ul class="toc-sub"><li><a class="toc-link" href="#6-1-first-arrival-from-a-peer">6.1 First Arrival From a Peer</a></li><li><a class="toc-link" href="#6-2-duplicate-from-the-same-peer">6.2 Duplicate From the Same Peer</a></li><li><a class="toc-link" href="#6-3-duplicate-across-different-peers">6.3 Duplicate Across Different Peers</a></li><li><a class="toc-link" href="#6-4-why-this-matters">6.4 Why This Matters</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#7-waiter-discipline-and-replay-semantics">7. Waiter Discipline and Replay Semantics</a><ul class="toc-sub"><li><a class="toc-link" href="#7-1-get-and-subscribe-are-different-contracts">7.1 get and subscribe Are Different Contracts</a></li><li><a class="toc-link" href="#7-2-waiters-are-released-by-digest-before-duplicate-suppression">7.2 Waiters Are Released by Digest Before Duplicate Suppression</a></li><li><a class="toc-link" href="#7-3-dropped-waiters-are-ordinary-not-exceptional">7.3 Dropped Waiters Are Ordinary, Not Exceptional</a></li><li><a class="toc-link" href="#7-4-shutdown-semantics-are-cleanly-bounded">7.4 Shutdown Semantics Are Cleanly Bounded</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#8-forgetting-on-purpose">8. Forgetting On Purpose</a><ul class="toc-sub"><li><a class="toc-link" href="#8-1-deque-overflow">8.1 Deque Overflow</a></li><li><a class="toc-link" href="#8-2-shared-payload-survival">8.2 Shared Payload Survival</a></li><li><a class="toc-link" href="#8-3-membership-driven-forgetting">8.3 Membership-Driven Forgetting</a></li><li><a class="toc-link" href="#8-4-what-replay-means-after-forgetting">8.4 What Replay Means After Forgetting</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#9-malformed-input-partial-failure-and-bounded-honesty">9. Malformed Input, Partial Failure, and Bounded Honesty</a><ul class="toc-sub"><li><a class="toc-link" href="#9-1-malformed-bytes-do-not-become-messages">9.1 Malformed Bytes Do Not Become Messages</a></li><li><a class="toc-link" href="#9-2-send-failure-still-leaves-a-local-replay-record">9.2 Send Failure Still Leaves a Local Replay Record</a></li><li><a class="toc-link" href="#9-3-recipient-selection-is-exact-not-aspirational">9.3 Recipient Selection Is Exact, Not Aspirational</a></li><li><a class="toc-link" href="#9-4-packet-loss-is-a-caller-level-retry-story">9.4 Packet Loss Is a Caller-Level Retry Story</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#10-executable-invariants">10. Executable Invariants</a></li><li class="toc-item"><a class="toc-link" href="#11-observability-and-tuning">11. Observability and Tuning</a></li><li class="toc-item"><a class="toc-link" href="#12-what-pressure-this-design-absorbs">12. What Pressure This Design Absorbs</a><ul class="toc-sub"><li><a class="toc-link" href="#12-1-duplication">12.1 Duplication</a></li><li><a class="toc-link" href="#12-2-delay">12.2 Delay</a></li><li><a class="toc-link" href="#12-3-churn">12.3 Churn</a></li><li><a class="toc-link" href="#12-4-boundedness">12.4 Boundedness</a></li><li><a class="toc-link" href="#12-5-malice-and-corruption-at-the-transport-edge">12.5 Malice and Corruption at the Transport Edge</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#13-comparisons-and-limits">13. Comparisons and Limits</a></li><li class="toc-item"><a class="toc-link" href="#14-how-to-read-the-source">14. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#15-glossary-and-further-reading">15. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+  <title>commonware-estimator — commonware-book</title>
+  <meta name="description" content="Distributed performance is not one number. A mechanism can look fast in one region, slow in another, and completely different once the proposer changes or a threshold is crossed. So the first lesson i">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/commonware-book/book.css">
+</head>
+<body>
+  <header class="reading-bar" role="banner">
+    <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
+      <span class="crumb">
+        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / estimator
+      </span>
+      <span class="chapter-title">commonware-estimator</span>
+      <div class="prog">
+        <span class="prog-label" id="prog-label">sec. 1</span>
+        <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
+        <a class="prev" href="../chat/page.html">← prev</a>
+        <a class="next" href="../log/page.html">next →</a>
+      </div>
+    </div>
+  </header>
+
+  <header class="ch-header" aria-label="Chapter introduction">
+    <div class="ch-meta">commonware-book · estimator · Complete · 10 min read</div>
+    <h1 class="ch-title">commonware-estimator</h1>
+    <p class="ch-deck">A Wind Tunnel for Distributed Mechanisms</p>
+    <div class="ch-divider" aria-hidden="true">✶</div>
+  </header>
+
+  <div class="page-shell">
+    <main class="page-content" id="main-content">
+      <div class="orientation" role="doc-intro">
+        Distributed performance is not one number. A mechanism can look fast in one region, slow in another, and completely different once the proposer changes or a threshold is crossed. So the first lesson is to stop asking for a single average and start asking for the contour of the cost.
+      </div>
+      
+      <div class="chapter-capsule" aria-label="Chapter facts">
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Family</div>
+          <div class="chapter-capsule__value">Part IV. Case Studies</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Chapter</div>
+          <div class="chapter-capsule__value">22 of 25</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Read</div>
+          <div class="chapter-capsule__value">10 min</div>
+        </div>
+        <div class="chapter-capsule__item">
+          <div class="chapter-capsule__label">Next</div>
+          <div class="chapter-capsule__value">commonware-log</div>
+        </div>
+      </div>
+      <div class="toc-inline" aria-label="Chapter table of contents">
+        <details>
+          <summary>Contents</summary>
+          <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#why-performance-needs-a-shape">Why Performance Needs a Shape</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-measurement-shape">2. Measurement Shape</a></li><li class="toc-item"><a class="toc-link" href="#3-the-wind-tunnel">3. The Wind Tunnel</a></li><li class="toc-item"><a class="toc-link" href="#4-the-instruments">4. The Instruments</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-geography-becomes-friction">4.1 Geography becomes friction</a></li><li><a class="toc-link" href="#4-2-cloudping-becomes-latency-and-jitter">4.2 CloudPing becomes latency and jitter</a></li><li><a class="toc-link" href="#4-3-message-size-bends-the-line">4.3 Message size bends the line</a></li><li><a class="toc-link" href="#4-4-thresholds-create-cliffs">4.4 Thresholds create cliffs</a></li><li><a class="toc-link" href="#4-5-statistics-are-the-readout">4.5 Statistics are the readout</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-how-the-tunnel-runs">5. How the Tunnel Runs</a></li><li class="toc-item"><a class="toc-link" href="#6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</a></li><li class="toc-item"><a class="toc-link" href="#7-failure-modes-and-limits">7. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#8-how-to-read-the-source">8. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#9-glossary-and-further-reading">9. Glossary and Further Reading</a></li></ul>
+        </details>
+      </div>
+      <article class="prose" id="prose">
+        <h2 id="why-performance-needs-a-shape">Why Performance Needs a Shape</h2>
+<p>Distributed performance is not one number. A mechanism can look fast in one region, slow in another, and completely different once the proposer changes or a threshold is crossed. So the first lesson is to stop asking for a single average and start asking for the contour of the cost.</p>
+<p>The useful vocabulary is latency, jitter, bandwidth, backlog, threshold, and placement. Latency is how long one message takes. Jitter is how much that delay varies. Bandwidth is how much data can move. Backlog is how much work can pile up before the system has to wait. A threshold is the point where enough responses have arrived to move forward. Placement is where the peers and leaders happen to live. A realistic experiment has to consider all of them at once.</p>
+<p>The naive approach is to run one benchmark on one machine, with one proposer, and trust the result. That hides the hardest parts of the problem. It hides geography by putting everyone on the same host. It hides leadership bias by keeping the proposer fixed. It hides protocol cliffs by using tiny messages or small loads that never cross the thresholds where real costs appear.</p>
+<p>The better tradeoff is a wind tunnel, not a scoreboard. A wind tunnel keeps the scenario controlled enough to repeat, but varied enough to show where the drag appears. That means accepting some simplification, like modeled region links instead of a full internet trace, in exchange for a measurement that can be rerun, compared, and reasoned about. <code>commonware-estimator</code> is built around that tradeoff: more structure than a benchmark, less fantasy than an idealized proof.</p>
+<h2 id="1-what-problem-does-this-solve">1. What Problem Does This Solve?</h2>
+<p>When a new distributed mechanism looks good on a laptop, the result is often less meaningful than it seems. A laptop gives the mechanism a gift that real deployments never get: one machine, one clock, one network, and one proposer that is usually sitting next to the rest of the system.</p>
+<p>That makes the measurement look clean in exactly the wrong way.</p>
+<p>The real mistake is to treat performance as a single number. In a distributed system, performance has shape:</p>
+<ul><li>some peers are close together and some are not,</li><li>some regions have more bandwidth than others,</li><li>one proposer can make the mechanism look fast while another makes it look sluggish,</li><li>and one blocking step can hide the cost of everything that comes after it.</li></ul>
+<p><code>commonware-estimator</code> exists to make that shape visible before the protocol is deployed. It does not prove safety or liveness. It does something narrower and more useful for design work: it turns a mechanism into a repeatable measurement experiment.</p>
+<p>That is why I think of it as a wind tunnel for distributed mechanisms. You put the design in the tunnel, blow realistic network conditions across it, and watch where the drag appears.</p>
+<hr>
+<h2 id="2-measurement-shape">2. Measurement Shape</h2>
+<p>The point of the estimator is not to tell you whether a mechanism is &quot;fast&quot; in the abstract. It is to show you the contour of its cost.</p>
+<p>A good design may look flat in one region and steep in another. It may stay smooth while traffic is small, then hit a cliff when a threshold step or a larger message arrives. It may behave well when leadership starts in one region and very differently when leadership moves somewhere else.</p>
+<p>That is the kind of shape you want before deployment. A single number hides the bends. A measurement shape makes them visible.</p>
+<hr>
+<h2 id="3-the-wind-tunnel">3. The Wind Tunnel</h2>
+<p>The easiest picture is a lab bench with two layers.</p>
+<p>The bottom layer is the network model:</p>
+<ul><li>a set of AWS regions,</li><li>a peer count per region,</li><li>optional ingress and egress limits for each region,</li><li>and a latency matrix that says how expensive it is to talk from one region to another.</li></ul>
+<p>The top layer is the mechanism script:</p>
+<ul><li>send a proposal,</li><li>wait for replies,</li><li>collect a quorum,</li><li>broadcast the next phase,</li><li>and keep going until the script is done.</li></ul>
+<p>The important point is that the script is not a toy example of the network. It is the mechanism&#x27;s actual control flow, expressed in a tiny DSL. That lets the simulator ask a useful question:</p>
+<p><strong>What happens to this logic when the environment becomes geographical?</strong></p>
+<p>One more detail matters a lot: the simulator rotates the proposer. If a mechanism only looks good when the proposer is in the fast region, that is not a lucky result. It is a warning. By running the same task once per proposer, the estimator exposes how leadership placement changes the observed latency.</p>
+<p>So the mental model is not &quot;a benchmark.&quot; It is &quot;the same protocol story, performed under every plausible lead actor, with a realistic stage.&quot;</p>
+<hr>
+<h2 id="4-the-instruments">4. The Instruments</h2>
+<h3 id="4-1-geography-becomes-friction">4.1 Geography becomes friction</h3>
+<p><code>examples/estimator/src/lib.rs</code> defines a <code>Distribution</code> as a map from region name to <code>RegionConfig</code>. Each region carries:</p>
+<ul><li>a peer count,</li><li>an optional egress cap,</li><li>and an optional ingress cap.</li></ul>
+<p>That design matters because the network is not treated as abstract background. The placement of peers is part of the experiment itself. A mechanism that spans <code>us-east-1</code> and <code>ap-southeast-2</code> is not just &quot;more distributed&quot; than one that stays in a single region. It is operating under a different cost structure.</p>
+<h3 id="4-2-cloudping-becomes-latency-and-jitter">4.2 CloudPing becomes latency and jitter</h3>
+<p>The simulator loads CloudPing matrices from <code>p50.json</code> and <code>p90.json</code>, or downloads fresh values if the user asks for a reload. Those tables are not used as a direct &quot;ping = latency&quot; copy.</p>
+<p>Instead, the code turns them into a simpler model:</p>
+<ul><li>one value for average latency,</li><li>one value for jitter.</li></ul>
+<p>CloudPing reports round-trip timing, so the model splits each value into an approximate one-way delay and uses the gap between p50 and p90 as a coarse jitter band. That is not a physics experiment. It is a practical way to keep the shape of real regional links without pretending to be more precise than the data supports.</p>
+<h3 id="4-3-message-size-bends-the-line">4.3 Message size bends the line</h3>
+<p>The simulator lets message commands carry a <code>size</code> parameter. That seems like a small detail until bandwidth caps enter the picture.</p>
+<p>A protocol with 4-byte messages and a protocol with 4 KB messages do not pay the same cost on a limited link. Without message size, the model would miss an entire class of delays. With it, the estimator can ask whether the mechanism still looks good once proposals, votes, or certificates are large enough to matter.</p>
+<h3 id="4-4-thresholds-create-cliffs">4.4 Thresholds create cliffs</h3>
+<p>The task file is where a protocol becomes measurable.</p>
+<p>The DSL has a small set of commands:</p>
+<ul><li><code>propose</code> sends a message from the current proposer to everyone.</li><li><code>broadcast</code> sends a message to everyone.</li><li><code>reply</code> sends a message back to the proposer, or records the proposer&#x27;s local receipt.</li><li><code>wait</code> blocks until enough messages of a given ID have arrived.</li><li><code>collect</code> does the same thing, but only matters for the proposer.</li></ul>
+<p>The command set is intentionally small because the point is not to build a new language. The point is to model the moves that matter in consensus-like and broadcast-like mechanisms: propose, respond, wait, and collect.</p>
+<p>Compound expressions with <code>&amp;&amp;</code> and <code>||</code> let the script express control flow that would otherwise require bespoke code. That is useful because protocols do not just wait for one threshold. They often wait for a threshold and then one more condition, or for either of two possible conditions to become true.</p>
+<h3 id="4-5-statistics-are-the-readout">4.5 Statistics are the readout</h3>
+<p>The simulator does not stop at a run ending. It records when each tracked line of the task first unblocks, then prints:</p>
+<ul><li>proposer latency,</li><li>per-region latency,</li><li>overall latency across all regions,</li><li>and finally aggregated results across every proposer run.</li></ul>
+<p>That gives the reader three different views of the same mechanism:</p>
+<ul><li>where the proposer spends time,</li><li>where each region spends time,</li><li>and what the mechanism looks like in aggregate when leadership moves around.</li></ul>
+<p>The experiment is therefore not &quot;did it finish?&quot; The experiment is &quot;what did it cost, and where did the cost land?&quot;</p>
+<hr>
+<h2 id="5-how-the-tunnel-runs">5. How the Tunnel Runs</h2>
+<p>The main flow in <code>examples/estimator/src/main.rs</code> is easier to understand as one experiment loop than as a sequence of setup chores.</p>
+<p>The CLI reads a task file and a region distribution. That is the experiment definition: what behavior to simulate and under what placement.</p>
+<p>The distribution parser accepts per-region peer counts and optional bandwidth limits. That makes the network shape explicit instead of hidden in code.</p>
+<p>The estimator loads cached CloudPing data unless <code>--reload</code> is set. From there it builds a region-to-region latency table that every simulated link can use.</p>
+<p>For each proposer index, the simulator starts a deterministic runtime seeded by that proposer index. That choice is subtle but valuable. It means the same proposer run can be reproduced, and different proposers do not share the same random stream.</p>
+<p>The simulator registers every peer, assigns it to a region, and applies the region&#x27;s bandwidth caps. It then connects every peer pair with a simulated link whose latency and jitter come from the table built earlier.</p>
+<p>Each peer steps through the DSL in lockstep with the others. Commands that simply send messages advance immediately. Commands that wait for a threshold block until enough matching messages have been received. Compound expressions only advance when their subexpressions say they can.</p>
+<p>The interesting part is that the simulator records the moment a blocking step unblocks. That timestamp is what later becomes the latency output.</p>
+<p>After one run finishes, the simulator repeats the same task with the next peer as proposer.</p>
+<p>That is the whole point of the estimator&#x27;s reporting model:</p>
+<ul><li>see one run,</li><li>then see all runs,</li><li>then compare them.</li></ul>
+<p>The aggregated output is the answer to the design question. If the same mechanism looks very different depending on proposer placement, the design is telling you something real.</p>
+<hr>
+<h2 id="6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</h2>
+<p>The first pressure is <strong>regional skew</strong>.</p>
+<p>In a real deployment, a quorum is not just a quorum. It is a quorum across a geography. The estimator makes that visible by forcing every peer to live in a region and by charging every link the cost of that placement.</p>
+<p>The second pressure is <strong>bandwidth bottlenecks</strong>.</p>
+<p>A mechanism that only sends tiny messages may look fine on latency alone. As soon as proposals, votes, or certificates grow, the time spent moving bytes starts to matter. Region-specific egress and ingress caps let the simulator show those delays.</p>
+<p>The third pressure is <strong>control-flow complexity</strong>.</p>
+<p>Protocols are rarely a straight line. They wait for this condition or that condition, and sometimes they need both. The DSL&#x27;s <code>&amp;&amp;</code> and <code>||</code> operators let the mechanism express those branches without turning the example into a full language implementation.</p>
+<p>The fourth pressure is <strong>repeatable comparison</strong>.</p>
+<p>Because the runtime is deterministic, the same proposer run can be reproduced exactly. Because the proposer rotates, the experiment does not overfit to one leadership placement. Those two properties together make the output useful for design work.</p>
+<hr>
+<h2 id="7-failure-modes-and-limits">7. Failure Modes and Limits</h2>
+<p>The estimator is intentionally not a correctness machine.</p>
+<p>It does not prove that a protocol is safe. It does not prove that a protocol is live. It does not tell you whether the mechanism is good in the abstract.</p>
+<p>It only tells you how the mechanism behaves under a particular network model.</p>
+<p>That model has limits:</p>
+<ul><li>CloudPing data is a snapshot-based approximation, not a live Internet probe.</li><li>The DSL is expressive enough for the example&#x27;s target class, but it is not a general-purpose programming language.</li><li>The simulator assumes the interesting part of the mechanism can be captured as message flow plus threshold logic.</li><li>The statistics are descriptive, not magical. They summarize a run; they do not explain away protocol design mistakes.</li></ul>
+<p>Those limits are not flaws. They are the boundary that makes the tool useful. The crate is trying to answer a specific kind of design question, and it stops where that question stops.</p>
+<hr>
+<h2 id="8-how-to-read-the-source">8. How to Read the Source</h2>
+<p>Read the source as the life cycle of one experiment, from task definition to latency readout.</p>
+<p>Start with <code>examples/estimator/src/main.rs</code>.</p>
+<p>Read it as the experiment loop:</p>
+<ol><li>parse the CLI,</li><li>load the task,</li><li>build the network model,</li><li>run the simulation once per proposer,</li><li>print the observed latencies,</li><li>then print the aggregate view.</li></ol>
+<p>After that, move to <code>examples/estimator/src/lib.rs</code>.</p>
+<p>That file explains the idea behind the experiment:</p>
+<ul><li>how the DSL is parsed,</li><li>how thresholds are converted into required counts,</li><li>how CloudPing data becomes the latency table,</li><li>and how the simulation decides whether a command can advance.</li></ul>
+<p>Finally, glance at <code>examples/estimator/src/p50.json</code> and <code>examples/estimator/src/p90.json</code>.</p>
+<p>Those files are not prose, but they are the data source that gives the whole example its realism. If you want to understand why the simulated links feel geographically specific, those matrices are the reason.</p>
+<hr>
+<h2 id="9-glossary-and-further-reading">9. Glossary and Further Reading</h2>
+<ul><li><strong>Proposer rotation</strong> - running the same mechanism once per peer so the effect of leadership placement is visible.</li><li><strong>Threshold command</strong> - a blocking step that waits for some count or percent of the network.</li><li><strong>CloudPing</strong> - the external latency source used to approximate region-to- region delay and jitter.</li><li><strong>Jitter</strong> - the variance around the baseline latency of a link.</li><li><strong>Measurement shape</strong> - the contour formed by latency, bandwidth, and leadership placement together.</li><li><strong>Simulated network</strong> - the all-to-all region graph built by the runtime before the task script starts moving messages.</li></ul>
+      </article>
+
+      <div class="end-marker" aria-hidden="true">
+        <span class="end-glyph">✶ ✶ ✶</span>
+        <span class="end-label">End of chapter</span>
+      </div>
+
+      <nav class="chapter-footer" aria-label="Chapter navigation">
+        <a href="../chat/page.html" class="foot-prev">
+          <span class="foot-dir">← previous</span>
+          <span class="foot-title">commonware-chat</span>
+          <span class="foot-sub">chat</span>
+        </a>
+        <div class="foot-center">
+          estimator<br>
+          <span style="font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase;">complete chapter</span>
+        </div>
+        <a href="../log/page.html" class="foot-next">
+          <span class="foot-dir">next →</span>
+          <span class="foot-title">commonware-log</span>
+          <span class="foot-sub">log</span>
+        </a>
+      </nav>
+
+      <footer class="site-footer">
+        Built from <code>chapter.md</code> using the shared Commonware book renderer.
+      </footer>
+    </main>
+
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="toc-label">Contents</div>
+      <ul class="toc-list"><li class="toc-item"><a class="toc-link" href="#why-performance-needs-a-shape">Why Performance Needs a Shape</a></li><li class="toc-item"><a class="toc-link" href="#1-what-problem-does-this-solve">1. What Problem Does This Solve?</a></li><li class="toc-item"><a class="toc-link" href="#2-measurement-shape">2. Measurement Shape</a></li><li class="toc-item"><a class="toc-link" href="#3-the-wind-tunnel">3. The Wind Tunnel</a></li><li class="toc-item"><a class="toc-link" href="#4-the-instruments">4. The Instruments</a><ul class="toc-sub"><li><a class="toc-link" href="#4-1-geography-becomes-friction">4.1 Geography becomes friction</a></li><li><a class="toc-link" href="#4-2-cloudping-becomes-latency-and-jitter">4.2 CloudPing becomes latency and jitter</a></li><li><a class="toc-link" href="#4-3-message-size-bends-the-line">4.3 Message size bends the line</a></li><li><a class="toc-link" href="#4-4-thresholds-create-cliffs">4.4 Thresholds create cliffs</a></li><li><a class="toc-link" href="#4-5-statistics-are-the-readout">4.5 Statistics are the readout</a></li></ul></li><li class="toc-item"><a class="toc-link" href="#5-how-the-tunnel-runs">5. How the Tunnel Runs</a></li><li class="toc-item"><a class="toc-link" href="#6-what-pressure-it-is-designed-to-absorb">6. What Pressure It Is Designed To Absorb</a></li><li class="toc-item"><a class="toc-link" href="#7-failure-modes-and-limits">7. Failure Modes and Limits</a></li><li class="toc-item"><a class="toc-link" href="#8-how-to-read-the-source">8. How to Read the Source</a></li><li class="toc-item"><a class="toc-link" href="#9-glossary-and-further-reading">9. Glossary and Further Reading</a></li></ul>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const key = 'commonware-book-theme';
+      const button = document.getElementById('theme-toggle');
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+      const saved = localStorage.getItem(key);
+      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      root.dataset.theme = initial;
+      const syncButton = () => {
+        if (!button) return;
+        const current = root.dataset.theme || 'light';
+        button.textContent = current === 'dark' ? 'light' : 'dark';
+        button.setAttribute('aria-label', current === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      };
+      syncButton();
+      button?.addEventListener('click', () => {
+        const current = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = current;
+        localStorage.setItem(key, current);
+        syncButton();
+      });
+    })();
+
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.prose h2[id], .prose h3[id]');
+    const progFill = document.getElementById('prog-fill');
+    const progLabel = document.getElementById('prog-label');
+    const main = document.getElementById('main-content');
+
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        tocLinks.forEach((link) => link.classList.remove('active'));
+        const active = document.querySelector(`.toc-link[href="#${entry.target.id}"]`);
+        if (active) {
+          active.classList.add('active');
+          if (progLabel) {
+            progLabel.textContent = active.textContent.trim();
+          }
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach((section) => obs.observe(section));
+
+    window.addEventListener('scroll', () => {
+      const rect = main.getBoundingClientRect();
+      const total = Math.max(main.offsetHeight - window.innerHeight, 1);
+      const scrolled = Math.max(0, -rect.top);
+      const pct = Math.min(100, (scrolled / total) * 100);
+      progFill.style.width = pct + '%';
+    }, { passive: true });
+  </script>
+</body>
+</html>
