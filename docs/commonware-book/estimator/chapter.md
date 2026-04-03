@@ -4,351 +4,134 @@
 
 ---
 
-## Why Performance Needs a Shape
+Have you ever noticed how a new distributed algorithm looks incredibly fast when you run it on your laptop?
 
-Distributed performance is not one number. A mechanism can look fast in one
-region, slow in another, and completely different once the proposer changes or
-a threshold is crossed. So the first lesson is to stop asking for a single
-average and start asking for the contour of the cost.
+Well, of course it does! Your laptop gives the protocol a magnificent gift that reality never will: one machine, one perfectly synchronized clock, one tiny internal network, and a leader that happens to live exactly zero millimeters away from everyone else. 
 
-The useful vocabulary is latency, jitter, bandwidth, backlog, threshold, and
-placement. Latency is how long one message takes. Jitter is how much that
-delay varies. Bandwidth is how much data can move. Backlog is how much work
-can pile up before the system has to wait. A threshold is the point where
-enough responses have arrived to move forward. Placement is where the peers
-and leaders happen to live. A realistic experiment has to consider all of them
-at once.
+When you measure performance that way, you aren't really measuring the protocol. You're just measuring how fast your computer can talk to itself. It looks beautifully clean, but in exactly the wrong way.
 
-The naive approach is to run one benchmark on one machine, with one proposer,
-and trust the result. That hides the hardest parts of the problem. It hides
-geography by putting everyone on the same host. It hides leadership bias by
-keeping the proposer fixed. It hides protocol cliffs by using tiny messages or
-small loads that never cross the thresholds where real costs appear.
+In the real world, distributed performance is never just a single number. It has a shape. Some computers are close together; some are far apart. Some network pipes are fat, and some are thin. If you change who the leader is, the whole mechanism might suddenly look sluggish. Or it might cruise along fine until the messages get just a little bit too big, and then—*bam!*—it hits a cliff and stalls.
 
-The better tradeoff is a wind tunnel, not a scoreboard. A wind tunnel keeps
-the scenario controlled enough to repeat, but varied enough to show where the
-drag appears. That means accepting some simplification, like modeled region
-links instead of a full internet trace, in exchange for a measurement that can
-be rerun, compared, and reasoned about. `commonware-estimator` is built
-around that tradeoff: more structure than a benchmark, less fantasy than an
-idealized proof.
+So, how do we see this shape *before* we put the protocol out into the wild? 
 
-## 1. What Problem Does This Solve?
-
-When a new distributed mechanism looks good on a laptop, the result is often
-less meaningful than it seems. A laptop gives the mechanism a gift that real
-deployments never get: one machine, one clock, one network, and one proposer
-that is usually sitting next to the rest of the system.
-
-That makes the measurement look clean in exactly the wrong way.
-
-The real mistake is to treat performance as a single number. In a distributed
-system, performance has shape:
-
-- some peers are close together and some are not,
-- some regions have more bandwidth than others,
-- one proposer can make the mechanism look fast while another makes it look
-  sluggish,
-- and one blocking step can hide the cost of everything that comes after it.
-
-`commonware-estimator` exists to make that shape visible before the protocol
-is deployed. It does not prove safety or liveness. It does something narrower
-and more useful for design work: it turns a mechanism into a repeatable
-measurement experiment.
-
-That is why I think of it as a wind tunnel for distributed mechanisms. You
-put the design in the tunnel, blow realistic network conditions across it, and
-watch where the drag appears.
+We don't need a simple scoreboard or a generic benchmark. We need a **wind tunnel**. We need a place where we can take our mechanism, blow realistic geographical weather across it, and watch carefully to see where the drag appears. That is exactly what `commonware-estimator` is built to do.
 
 ---
 
-## 2. Measurement Shape
+## 1. The Anatomy of Drag
 
-The point of the estimator is not to tell you whether a mechanism is "fast"
-in the abstract. It is to show you the contour of its cost.
+To understand the shape of a protocol's performance, we need a vocabulary for the friction it encounters. 
 
-A good design may look flat in one region and steep in another. It may stay
-smooth while traffic is small, then hit a cliff when a threshold step or a
-larger message arrives. It may behave well when leadership starts in one
-region and very differently when leadership moves somewhere else.
+- **Latency** is just how long a piece of information takes to get from A to B.
+- **Jitter** is the wiggle room—how much that delay bounces around unpredictably.
+- **Bandwidth** is the thickness of the pipe; how much data can we shove through at once?
+- **Threshold** is the magic number of responses we need before we can stop waiting and move on.
+- **Placement** is geography. Where do the peers live? Where does the leader live?
 
-That is the kind of shape you want before deployment. A single number hides
-the bends. A measurement shape makes them visible.
-
----
-
-## 3. The Wind Tunnel
-
-The easiest picture is a lab bench with two layers.
-
-The bottom layer is the network model:
-
-- a set of AWS regions,
-- a peer count per region,
-- optional ingress and egress limits for each region,
-- and a latency matrix that says how expensive it is to talk from one region
-  to another.
-
-The top layer is the mechanism script:
-
-- send a proposal,
-- wait for replies,
-- collect a quorum,
-- broadcast the next phase,
-- and keep going until the script is done.
-
-The important point is that the script is not a toy example of the network.
-It is the mechanism's actual control flow, expressed in a tiny DSL. That lets
-the simulator ask a useful question:
-
-**What happens to this logic when the environment becomes geographical?**
-
-One more detail matters a lot: the simulator rotates the proposer. If a
-mechanism only looks good when the proposer is in the fast region, that is not
-a lucky result. It is a warning. By running the same task once per proposer,
-the estimator exposes how leadership placement changes the observed latency.
-
-So the mental model is not "a benchmark." It is "the same protocol story,
-performed under every plausible lead actor, with a realistic stage."
+If you only test with small messages, you hide the bandwidth limits. If you only test in one region, you hide the latency. If you only use one leader, you hide the placement bias. The estimator brings all of these physical realities back into the picture.
 
 ---
 
-## 4. The Instruments
+## 2. Building the Wind Tunnel
 
-### 4.1 Geography becomes friction
+Imagine setting up a laboratory bench. We need two things: a stage (the network) and a script (the protocol).
 
-`examples/estimator/src/lib.rs` defines a `Distribution` as a map from region
-name to `RegionConfig`. Each region carries:
+### The Stage: Geography as Friction
+If you look inside `examples/estimator/src/lib.rs`, you'll see we define a `Distribution`. This isn't abstract math; it's a map of regions. We say, "Put 5 peers in `us-east-1` and 3 peers in `ap-southeast-2`." We can even pinch the pipes by setting `egress_cap` and `ingress_cap` to limit bandwidth.
 
-- a peer count,
-- an optional egress cap,
-- and an optional ingress cap.
+To make the travel time realistic, the simulator loads real-world latency matrices (from CloudPing). But it doesn't just treat "ping" as a perfect number. It looks at the average time (P50) and the slow time (P90), and turns that gap into our **jitter**. It’s a practical, simple model of real regional links.
 
-That design matters because the network is not treated as abstract background.
-The placement of peers is part of the experiment itself. A mechanism that
-spans `us-east-1` and `ap-southeast-2` is not just "more distributed" than one
-that stays in a single region. It is operating under a different cost
-structure.
+### The Script: A Tiny DSL and the Power of Rust Enums
+We don't want to write a whole new programming language just to run a test. We just need to express the *moves* that actually matter in consensus protocols. We do this by defining a Domain Specific Language (DSL).
 
-### 4.2 CloudPing becomes latency and jitter
+Let’s look at how beautifully Rust lets us define this inside `lib.rs`:
 
-The simulator loads CloudPing matrices from `p50.json` and `p90.json`, or
-downloads fresh values if the user asks for a reload. Those tables are not
-used as a direct "ping = latency" copy.
+```rust
+pub enum Command {
+    Propose(u32, Option<usize>),
+    Broadcast(u32, Option<usize>),
+    Reply(u32, Option<usize>),
+    Collect(u32, Threshold, Option<(Duration, Duration)>),
+    Wait(u32, Threshold, Option<(Duration, Duration)>),
+    Or(Box<Self>, Box<Self>),
+    And(Box<Self>, Box<Self>),
+}
+```
 
-Instead, the code turns them into a simpler model:
+Now, an `enum` in Rust isn't just a simple list of names like in some older languages; it's a way to say, "A command can be *exactly one* of these distinct shapes, and each shape can hold its own special cargo." A `Propose` command carries a message ID (a `u32`) and an optional size (because a 4-byte "yes" moves faster than a 4-megabyte "certificate"). 
 
-- one value for average latency,
-- one value for jitter.
+But look at the branching logic: `Or(Box<Self>, Box<Self>)`. What's going on there? If we want a command to be "Wait for this OR Wait for that," we are defining a structure that contains itself! If Rust tried to put that directly in memory, the compiler would say, "Wait, how big is this? It could be infinitely recursive!" 
 
-CloudPing reports round-trip timing, so the model splits each value into an
-approximate one-way delay and uses the gap between p50 and p90 as a coarse
-jitter band. That is not a physics experiment. It is a practical way to keep
-the shape of real regional links without pretending to be more precise than
-the data supports.
-
-### 4.3 Message size bends the line
-
-The simulator lets message commands carry a `size` parameter. That seems like
-a small detail until bandwidth caps enter the picture.
-
-A protocol with 4-byte messages and a protocol with 4 KB messages do not pay
-the same cost on a limited link. Without message size, the model would miss an
-entire class of delays. With it, the estimator can ask whether the mechanism
-still looks good once proposals, votes, or certificates are large enough to
-matter.
-
-### 4.4 Thresholds create cliffs
-
-The task file is where a protocol becomes measurable.
-
-The DSL has a small set of commands:
-
-- `propose` sends a message from the current proposer to everyone.
-- `broadcast` sends a message to everyone.
-- `reply` sends a message back to the proposer, or records the proposer's
-  local receipt.
-- `wait` blocks until enough messages of a given ID have arrived.
-- `collect` does the same thing, but only matters for the proposer.
-
-The command set is intentionally small because the point is not to build a new
-language. The point is to model the moves that matter in consensus-like and
-broadcast-like mechanisms: propose, respond, wait, and collect.
-
-Compound expressions with `&&` and `||` let the script express control flow
-that would otherwise require bespoke code. That is useful because protocols do
-not just wait for one threshold. They often wait for a threshold and then one
-more condition, or for either of two possible conditions to become true.
-
-### 4.5 Statistics are the readout
-
-The simulator does not stop at a run ending. It records when each tracked line
-of the task first unblocks, then prints:
-
-- proposer latency,
-- per-region latency,
-- overall latency across all regions,
-- and finally aggregated results across every proposer run.
-
-That gives the reader three different views of the same mechanism:
-
-- where the proposer spends time,
-- where each region spends time,
-- and what the mechanism looks like in aggregate when leadership moves
-  around.
-
-The experiment is therefore not "did it finish?"
-The experiment is "what did it cost, and where did the cost land?"
+To fix that, we wrap the inner commands in a `Box`. A `Box` simply takes the data, puts it somewhere out on the heap, and leaves behind a fixed-size pointer. It’s Rust’s way of saying, "Don't worry about the size right now, just hold this tag that tells you where to find the rest of the logic." It makes building complex, branching protocol logic wonderfully elegant.
 
 ---
 
-## 5. How the Tunnel Runs
+## 3. The Engine in Motion
 
-The main flow in `examples/estimator/src/main.rs` is easier to understand as
-one experiment loop than as a sequence of setup chores.
+So, how does the machine actually run? Let's trace the loop inside `examples/estimator/src/main.rs`.
 
-The CLI reads a task file and a region distribution. That is the experiment
-definition: what behavior to simulate and under what placement.
+When you fire it up, it reads the region distribution and your protocol script. It builds a virtual network of peers and wires them together with those CloudPing latencies. Then, it does something brilliant: **it runs a deterministic simulation**. 
 
-The distribution parser accepts per-region peer counts and optional bandwidth
-limits. That makes the network shape explicit instead of hidden in code.
+Because we control the random seed, the whole universe ticks forward predictably. If a peer hits a `wait{id=1, threshold=67%}`, the peer drops down into the engine's `can_command_advance` logic. It simply checks its inbox. If it only has 50% of the messages, it stops and waits. When enough messages finally crawl across the simulated network to hit 67%, the peer writes down the exact timestamp: *"I unblocked right... NOW."*
 
-The estimator loads cached CloudPing data unless `--reload` is set. From there
-it builds a region-to-region latency table that every simulated link can use.
+### Asynchronous Mail Chutes
+How do we actually run this simulation without it becoming a tangled mess of operating system threads? We use Rust's asynchronous tasks and channels. 
 
-For each proposer index, the simulator starts a deterministic runtime seeded by
-that proposer index. That choice is subtle but valuable. It means the same
-proposer run can be reproduced, and different proposers do not share the same
-random stream.
+In `main.rs`, you'll see this setup:
 
-The simulator registers every peer, assigns it to a region, and applies the
-region's bandwidth caps. It then connects every peer pair with a simulated
-link whose latency and jitter come from the table built earlier.
+```rust
+let (tx, mut rx) = mpsc::channel(peers);
+let jobs = spawn_peer_jobs(&context, proposer_idx, peers, identities, commands, tx);
 
-Each peer steps through the DSL in lockstep with the others. Commands that
-simply send messages advance immediately. Commands that wait for a threshold
-block until enough matching messages have been received. Compound expressions
-only advance when their subexpressions say they can.
+// ... later on ...
+for _ in 0..peers {
+    responders.push(rx.recv().await.unwrap());
+}
+```
 
-The interesting part is that the simulator records the moment a blocking step
-unblocks. That timestamp is what later becomes the latency output.
+MPSC stands for "Multi-Producer, Single-Consumer." Think of it as a mail chute. We spawn a lightweight asynchronous task (`spawn_peer_jobs`) for each peer. They all live in the same deterministic runtime, ticking forward cooperatively. When a peer finishes its entire script, it drops a message down the chute using its "producer" transmitter (`tx`). 
 
-After one run finishes, the simulator repeats the same task with the next peer
-as proposer.
+The main engine, acting as the "consumer" (`rx`), just sits at the bottom of the chute and waits: `rx.recv().await.unwrap()`. Once it receives a completion message from every single peer, it knows the play is over, and it can shut the universe down. The `.await` syntax is the secret sauce here—it tells the runtime, "Hey, I'm stuck waiting for mail, go ahead and let another peer do some work." It keeps the simulation perfectly cooperative.
 
-That is the whole point of the estimator's reporting model:
+### Rotating the Proposer
+This is the most important part of the experiment. Once the script finishes, the engine resets the universe, picks the *next* peer in the network to be the leader, and runs the exact same script again.
 
-- see one run,
-- then see all runs,
-- then compare them.
-
-The aggregated output is the answer to the design question. If the same
-mechanism looks very different depending on proposer placement, the design is
-telling you something real.
+If a protocol looks blazing fast when the leader is in Virginia, but crawls to a halt when the leader is in Tokyo, you don't have a fast protocol—you have a lucky one. By systematically rotating the proposer and running the whole play again, the estimator exposes the true cost of leadership placement.
 
 ---
 
-## 6. What Pressure It Is Designed To Absorb
+## 4. Reading the Instruments
 
-The first pressure is **regional skew**.
+When the dust settles, the simulator doesn't just say "Done." It gives you the timestamps it recorded. 
 
-In a real deployment, a quorum is not just a quorum. It is a quorum across a
-geography. The estimator makes that visible by forcing every peer to live in a
-region and by charging every link the cost of that placement.
+You get to see:
+1. **The Proposer's View:** How long did the leader spend waiting?
+2. **The Regional View:** How long did the peers in Europe wait compared to the peers in Asia?
+3. **The Aggregate View:** What happens when we average the results across *every single proposer run*?
 
-The second pressure is **bandwidth bottlenecks**.
-
-A mechanism that only sends tiny messages may look fine on latency alone. As
-soon as proposals, votes, or certificates grow, the time spent moving bytes
-starts to matter. Region-specific egress and ingress caps let the simulator
-show those delays.
-
-The third pressure is **control-flow complexity**.
-
-Protocols are rarely a straight line. They wait for this condition or that
-condition, and sometimes they need both. The DSL's `&&` and `||` operators let
-the mechanism express those branches without turning the example into a full
-language implementation.
-
-The fourth pressure is **repeatable comparison**.
-
-Because the runtime is deterministic, the same proposer run can be reproduced
-exactly. Because the proposer rotates, the experiment does not overfit to one
-leadership placement. Those two properties together make the output useful for
-design work.
+You can watch the lines bend. You can see the cliffs appear when messages get too big or thresholds get too high. You aren't just getting a single number; you are seeing the contour of the mechanism's cost.
 
 ---
 
-## 7. Failure Modes and Limits
+## 5. What It Is, and What It Isn't
 
-The estimator is intentionally not a correctness machine.
+It's important to know the limits of your laboratory equipment.
 
-It does not prove that a protocol is safe.
-It does not prove that a protocol is live.
-It does not tell you whether the mechanism is good in the abstract.
+`commonware-estimator` is **not** a correctness machine. It won't prove that your protocol is safe. It won't prove that it's live or free of deadlocks. The math and the logic proofs have to happen somewhere else.
 
-It only tells you how the mechanism behaves under a particular network model.
-
-That model has limits:
-
-- CloudPing data is a snapshot-based approximation, not a live Internet probe.
-- The DSL is expressive enough for the example's target class, but it is not a
-  general-purpose programming language.
-- The simulator assumes the interesting part of the mechanism can be captured
-  as message flow plus threshold logic.
-- The statistics are descriptive, not magical. They summarize a run; they do
-  not explain away protocol design mistakes.
-
-Those limits are not flaws. They are the boundary that makes the tool useful.
-The crate is trying to answer a specific kind of design question, and it stops
-where that question stops.
+What the estimator *does* is absorb the pressures of reality—regional skew, bandwidth bottlenecks, and leadership placement—so you can compare designs. It lets you ask, "If I change this wait condition to an OR, how much time do I save in the worst case?" and get a repeatable, geographical answer.
 
 ---
 
-## 8. How to Read the Source
+## 6. How to Explore the Source
 
-Read the source as the life cycle of one experiment, from task definition to
-latency readout.
+If you want to poke around the machinery yourself, here is the best way to read the code:
 
-Start with `examples/estimator/src/main.rs`.
+1. **Start with `examples/estimator/src/main.rs`.** 
+   Read `run_simulation_logic`. This is the beating heart of the wind tunnel. Watch how it sets up the virtual network, spawns a job for each peer, and passes messages around in virtual time using the `mpsc` channels. 
+2. **Then look at `examples/estimator/src/lib.rs`.** 
+   Look for `can_command_advance`. This function is the physics rule for when a peer is allowed to take its next step. It evaluates the exact thresholds and logic (`&&`, `||`) of your script against the peer's inbox.
+3. **Finally, peek at `p50.json` and `p90.json`.**
+   They aren't code, but they are the raw friction of the internet, captured as a matrix.
 
-Read it as the experiment loop:
-
-1. parse the CLI,
-2. load the task,
-3. build the network model,
-4. run the simulation once per proposer,
-5. print the observed latencies,
-6. then print the aggregate view.
-
-After that, move to `examples/estimator/src/lib.rs`.
-
-That file explains the idea behind the experiment:
-
-- how the DSL is parsed,
-- how thresholds are converted into required counts,
-- how CloudPing data becomes the latency table,
-- and how the simulation decides whether a command can advance.
-
-Finally, glance at `examples/estimator/src/p50.json` and
-`examples/estimator/src/p90.json`.
-
-Those files are not prose, but they are the data source that gives the whole
-example its realism. If you want to understand why the simulated links feel
-geographically specific, those matrices are the reason.
-
----
-
-## 9. Glossary and Further Reading
-
-- **Proposer rotation** - running the same mechanism once per peer so the
-  effect of leadership placement is visible.
-- **Threshold command** - a blocking step that waits for some count or percent
-  of the network.
-- **CloudPing** - the external latency source used to approximate region-to-
-  region delay and jitter.
-- **Jitter** - the variance around the baseline latency of a link.
-- **Measurement shape** - the contour formed by latency, bandwidth, and
-  leadership placement together.
-- **Simulated network** - the all-to-all region graph built by the runtime
-  before the task script starts moving messages.
+This tool exists because a distributed mechanism isn't just an abstract idea. It's a physical process that moves information across the Earth. And to design physical things well, you need to put them in the wind tunnel.

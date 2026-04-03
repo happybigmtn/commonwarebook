@@ -1,373 +1,127 @@
 # commonware-parallel
 
-## One Algorithm, Two Execution Policies
+## One Algorithm, Two Ways to Run
 
----
+Have you ever noticed what happens when people want to make their program run faster using multiple cores? They look at a perfectly beautiful, simple loop they've written, and they say, "I need to parallelize this!"
 
-## Opening Apparatus
+So what do they do? They write a *second* version of the exact same algorithm. Only this time, it's covered in mutexes, thread spawns, and shared state. They twist the logic around just to make the scheduler happy.
 
-**Promise.** This chapter shows how `commonware-parallel` lets one algorithm
-run sequentially or in parallel without changing what the algorithm means.
+And then what happens? A month goes by. Somebody finds a bug in the first loop and fixes it. But they completely forget to update the second, parallel loop! Now the codebase has two different pieces of code that are *supposed* to do the same thing, but they drift apart. They don't even compute the same answer anymore! It's a mess.
 
-**Crux.** Parallelism is a scheduling choice, not permission to rewrite the
-logic into a second code path with different edge cases.
+This chapter is about `commonware-parallel`. The whole point of this crate is to solve this exact problem with a very simple promise: **You write what your algorithm means exactly once. How it gets scheduled—whether on one thread or many—is a separate choice that you make later, without changing the logic.**
 
-**Primary invariant.** The strategy may change partitioning, locality, and
-thread count, but it must not change the result the algorithm computes.
+## The Core Idea: Meaning vs. Scheduling
 
-**Naive failure.** The easy mistake is to write one sequential loop and one
-parallel loop and call them "equivalent." The loops quickly drift:
+Think about it like this. Your algorithm is a recipe, and the computer is a kitchen.
 
-- one path gets a bug fix that the other never receives,
-- one path preserves a boundary case the other drops,
-- one path accidentally changes meaning when a chunk boundary moves.
+- The **`Sequential`** strategy is like having exactly one cook. He takes the recipe, starts at step one, and works his way to the end, all by himself.
+- The **`Rayon`** strategy is like a kitchen full of cooks. They chop up the ingredients into separate piles. Each cook prepares a part of the meal independently, and then they bring all their plates together at the very end.
 
-**Reading map.**
+The beautiful thing here is: **the recipe doesn't change**. The policy of *who* does the work changes, but *what* they are cooking remains exactly the same!
 
-- `parallel/src/lib.rs` defines the policy boundary.
-- `Strategy` is the abstraction the rest of the workspace writes against.
-- `Sequential` is the reference semantics.
-- `Rayon` shows how the same fold shape becomes partitioned work.
-- The property tests at the bottom are the proof that the two policies still
-  compute the same result.
+We achieve this in Rust by defining a boundary called a `Strategy`. Instead of writing `for` loops directly, you describe your work as a "reduction" or a "fold", and you let the `Strategy` trait decide how to physically run it on the machine.
 
-**Assumption ledger.**
+## The Workhorse: `fold_init`
 
-- The reader is comfortable with folds, reductions, and partitions.
-- The chapter is about CPU-bound work, not I/O concurrency.
-- `Sequential` is not a fallback here. It is the meaning-preserving baseline.
+To understand how this works, we have to look at the most important tool in this crate. It's a method called `fold_init`.
 
-## Background
+If you know what a regular `fold` is, you know it takes a long list of things and squashes them down into one final result—like adding a list of numbers to get a sum. But `fold_init` gives you a little something extra, something absolutely essential for real-world programming: **local scratch space**.
 
-Parallel work only helps when the algorithm can be split without changing its
-meaning. That sounds obvious, but many "parallel" rewrites quietly break that
-rule.
+Imagine you're processing a huge list of items, and to figure out each item, you need to use a temporary buffer. If you try to share *one* buffer across many threads, they will all step on each other's toes! You'd have to use a lock, and then they'd all just end up waiting in line. You've ruined the parallelism!
 
-The useful vocabulary is small:
+Instead, `fold_init` lets you give *each individual worker* its own private scratch space. Let's look at the Rust syntax. I've simplified the signature so we can see what the machinery is actually doing:
 
-- **Partitioning** splits one input into independent chunks.
-- **Local state** is the scratch space owned by one partition.
-- **Reduction** merges partial results back into one answer.
-- **Associativity** lets the merge happen in different groupings without
-  changing the meaning.
-- **Determinism** means the answer does not depend on scheduling luck.
-
-The trap is to assume that "same final type" means "same algorithm." It does
-not. A parallel rewrite can preserve the type and still lose the meaning.
-Common failure modes include:
-
-- pushing order-sensitive work into a `par_iter` and hoping order falls out the
-  same way,
-- sharing mutable state through locks and then pretending the lock made the
-  algorithm equivalent,
-- partitioning first and only later discovering that the partition boundary
-  split the one place where the algorithm needed context.
-
-That is why this crate treats the sequential path as the reference semantics.
-Once the algorithm is written as a fold or reduction, the execution strategy
-can change how the work is scheduled without changing what the algorithm says.
-
-## 1. What Problem Does This Solve?
-
-Some algorithms are obviously order-sensitive. Many are not. They look like
-simple loops, but they are really reductions with hidden structure:
-
-- parse items,
-- accumulate local state,
-- merge partial answers,
-- and keep the result canonical.
-
-The mistake is to treat the sequential version as the "real" implementation
-and the parallel version as a later optimization. That leaves the codebase with
-two places where meaning can drift.
-
-`commonware-parallel` prevents that split. The algorithm says what the work
-means. The strategy says how the work is scheduled. The whole crate is built
-to keep that boundary visible.
-
-## 2. Mental Model
-
-Think of the algorithm as a contract and the strategy as the kitchen.
-
-- `Sequential` is one cook following the recipe from start to finish.
-- `Rayon` is several cooks preparing independent chunks and then combining the
-  plates.
-
-The recipe does not change when the kitchen changes. That is the point. The
-policy changes. The meaning does not.
-
-This is also why the trait is small. `Strategy` does not try to model threads,
-work stealing, or queues. It models fold-shaped work:
-
-- give each partition its own local state,
-- process items against that state,
-- then combine partial results.
-
-If the problem does not fit that shape, forcing it through the abstraction is
-usually the wrong move.
-
-## 3. The Core Ideas
-
-### 3.1 `Strategy` Marks the Boundary
-
-`Strategy` is the center of the crate because it separates meaning from
-scheduling. The methods are named after common reduction shapes, but they all
-respect the same contract: the algorithm may describe local work and merge
-work, yet it may not know whether one thread or many are doing it.
-
-That is why the trait is more useful than a thread-pool wrapper. A wrapper
-would expose execution machinery. `Strategy` exposes the algebra of the work.
-
-### 3.2 `fold_init` Is the Primitive
-
-`fold_init` is the most important method in the crate.
-
-It gives each partition three things:
-
-- the current accumulator,
-- a partition-local init value,
-- and the next item.
-
-That local init value is the honest place for scratch state:
-
-- a reusable buffer,
-- a temporary encoder,
-- a small cache,
-- or any mutable state that should not be shared across partitions.
-
-This is the key move in the crate. The algorithm can say, "I need mutable
-state," without saying anything about mutexes or shared ownership.
-
-### 3.3 Associativity Is the Real Requirement
-
-Parallelism is safe only when the reduction is lawful. In practice, that means
-the merge operator must be associative in the way the algorithm uses it.
-
-Simple sums are easy:
-
-```text
-(a + b) + c == a + (b + c)
+```rust
+fn fold_init<I, INIT, T, R, ID, F, RD>(
+    &self,
+    iter: I,          // The list of things we want to process
+    init: INIT,       // 1. How to create private scratch space (makes type `T`)
+    identity: ID,     // 2. How to create a starting accumulator (makes type `R`)
+    fold_op: F,       // 3. The local work: (accumulator, scratch space, item) -> accumulator
+    reduce_op: RD,    // 4. The merge work: (accumulator, accumulator) -> accumulator
+) -> R
 ```
 
-But many real algorithms are not plain sums. They have boundary effects.
-That is where `fold_init` matters. It lets each partition produce a canonical
-local summary, and then the reduction only has to merge summaries, not raw
-items.
+Let's walk through exactly what the cooks are doing here:
+1. **`init`**: Each cook gets their own private scratch pad (of type `T`). They don't share this with anyone. No locks, no waiting!
+2. **`identity`**: Each cook gets a fresh plate to put their intermediate results on (of type `R`).
+3. **`fold_op`**: This is the actual chopping and cooking. A cook takes an item from their pile, maybe uses their scratch pad to help process it, and adds the result to their plate.
+4. **`reduce_op`**: When all the cooks are done, we have a bunch of plates. This operation takes two plates and combines them into one. We keep doing this until only one giant plate is left!
 
-If the reduction is not associative, partitioning changes the meaning. A tree
-of partial results is not the same as one left-to-right pass. That is not a
-performance detail. It is a semantic change.
+Let's look at a real, physical example. Let's say we want to format some numbers into a list of strings. We want to use a reusable `String` buffer so we aren't constantly asking the operating system for new memory allocations:
 
-### 3.4 A Worked Algorithm: Coalescing Ranges
+```rust
+use commonware_parallel::{Strategy, Sequential};
 
-Suppose the input is a stream of possibly overlapping ranges, and the goal is
-to produce one canonical list of disjoint ranges.
+let strategy = Sequential;
+let data = vec![1u32, 2, 3, 4, 5];
 
-The sequential version is straightforward:
-
-1. keep a current range,
-2. merge the next range if it overlaps the current one,
-3. otherwise emit the current range and start a new one,
-4. repeat until the input ends.
-
-That algorithm is reduction-shaped, but it is also boundary-sensitive. A range
-can start in one chunk and finish in the next.
-
-If you parallelize it badly, you get the classic drift:
-
-- one partition emits `[1, 4]`,
-- the next partition emits `[3, 5]`,
-- and a naive concatenation returns both, even though the canonical answer is
-  `[1, 5]`.
-
-The fix is not "make it parallel anyway." The fix is to change the partition
-summary so it is safe to merge.
-
-One useful summary looks like this:
-
-- `ranges`: the canonical disjoint ranges inside one partition,
-- `head`: the first range, if any,
-- `tail`: the last range, if any.
-
-Each partition does local merging first. The reduction then only needs to look
-at the boundary between the left tail and the right head. If those two ranges
-overlap, it merges them and re-canonicalizes the seam. Everything inside each
-partition is already normalized.
-
-That reduction is associative because each intermediate result is itself a
-canonical summary. The merge step only needs to repair the edge between two
-summaries, and repairing that edge does not depend on whether the tree groups
-the partitions as `((a b) c)` or `(a (b c))`.
-
-That is the deeper lesson of the crate:
-
-- if you only concatenate partition outputs, you lose meaning,
-- if you reduce raw items without canonical summaries, you lose context,
-- if you summarize each partition canonically, you can preserve meaning while
-  changing execution policy.
-
-### 3.5 `Sequential` Is the Reference Semantics
-
-`Sequential` is deliberately boring.
-
-It creates one init value, walks the iterator in order, folds every item on the
-current thread, and ignores the reduce closure because there is only one
-partition.
-
-That simplicity is the point. `Sequential` is the clearest statement of what
-the algorithm means before any scheduling policy is applied.
-
-### 3.6 `Rayon` Makes Partitioning Explicit
-
-The Rayon implementation does not just "use threads." It controls how work is
-split.
-
-It first collects the input into a `Vec`. That is a deliberate tradeoff:
-
-- contiguous partitions preserve local order,
-- each partition can accumulate privately,
-- and the reduction sees one summary per partition instead of one summary per
-  item.
-
-That shape matters. A streaming bridge that hands one item at a time to worker
-threads would produce much noisier reduction behavior. It would also make
-boundary-sensitive work much harder to reason about.
-
-So the `Vec` allocation is not accidental. It is the cost of buying a cleaner
-partition structure.
-
-### 3.7 `join` and `parallelism_hint` Expose the Same Boundary at Two Scales
-
-`join` handles the small case: two independent closures.
-
-- `Sequential` runs `a()` and then `b()`.
-- `Rayon` can run them in parallel with the thread pool.
-
-`parallelism_hint` handles the larger case: how wide the strategy can
-plausibly run. It is only a hint, but it is still useful upstream when a caller
-needs to choose chunk sizes or decide whether splitting is worth it.
-
-## 4. How the System Moves
-
-### 4.1 The Caller Writes Once Against `Strategy`
-
-The caller writes against `&impl Strategy` and is forced to make the reduction
-shape explicit:
-
-- an identity element,
-- a fold step,
-- and a reduction step.
-
-That is the real win. The algorithm is described in terms of meaning, not in
-terms of threads.
-
-### 4.2 The Sequential Path
-
-The sequential path is the reference fold:
-
-1. create the init state,
-2. create the identity accumulator,
-3. walk the iterator in order,
-4. apply the fold closure for every item,
-5. return the final accumulator.
-
-There are no partial reductions because there is only one partition.
-
-### 4.3 The Rayon Path
-
-The Rayon path turns one fold into local folds plus one final reduction:
-
-1. collect the items into a `Vec`,
-2. turn the vector into a parallel iterator,
-3. give each worker its own `(init_state, accumulator)` pair,
-4. fold locally inside each partition,
-5. reduce the partition outputs into the final result.
-
-That means the true shape of the algorithm is:
-
-```text
-global input
-  -> contiguous partitions
-  -> one local fold per partition
-  -> one final reduction across partition outputs
+let result: Vec<String> = strategy.fold_init(
+    &data,
+    || String::with_capacity(16),  // 1. Each worker gets a fresh, private string buffer
+    Vec::new,                      // 2. Each worker starts with an empty list
+    |mut acc, buf, &n| {           // 3. The local work!
+        buf.clear();               // Clean our private scratch pad
+        use std::fmt::Write;
+        write!(buf, "num:{}", n).unwrap(); // Write into the scratch pad
+        acc.push(buf.clone());     // Put the result on our plate
+        acc
+    },
+    |mut a, b| {                   // 4. The merge step! Combine two cooks' plates.
+        a.extend(b);
+        a
+    },
+);
 ```
 
-The property tests at the bottom of `parallel/src/lib.rs` are the contract.
-They check that parallel `fold_init` matches sequential `fold_init`, that
-`fold` matches `fold_init` when the init state is trivial, and that the helper
-methods preserve the same meaning.
+If we run this with `Sequential`, it's just one cook doing everything. But if we run it with `Rayon`, the work is partitioned automatically, the cooks are spawned, they each get their own buffers, and the results are safely glued together at the end. The brilliant part? **The code didn't change at all!**
 
-## 5. What Pressure It Is Designed To Absorb
+## The Magic Rule: Associativity
 
-### 5.1 CPU-Bound Work
+Now, I have to let you in on a secret. This whole trick only works if your algorithm obeys a fundamental law of nature: **Associativity**.
 
-If the task is large enough to benefit from multiple cores, `Rayon` gives the
-caller that option without making the algorithm itself aware of threads.
+In simple math, associativity means `(a + b) + c` gives you the exact same answer as `a + (b + c)`.
 
-### 5.2 Determinism
+When you let `Rayon` chop up the work, you are giving up control over the exact order in which the plates are combined. Maybe cook A and cook B combine their plates first, and then cook C adds his. Or maybe B and C combine theirs, and A adds his later.
 
-`Sequential` keeps the execution order fixed. That matters for tests, for
-debugging, and for environments where threads are unavailable.
+If your `reduce_op` cares about the grouping—if combining B and C first gives a fundamentally different answer than doing it left-to-right—then you simply cannot run it in parallel like this. You've written an algorithm that is inherently order-sensitive!
 
-### 5.3 Private Per-Partition State
+A great example is merging overlapping ranges. If you have `[1, 4]` and `[3, 5]`, they should merge together to become `[1, 5]`. If you just naively glue lists of ranges together in a parallel reduce without checking the edges, you might end up with `[[1, 4], [3, 5]]`, which is wrong!
 
-Many algorithms need mutable scratch space, but only within one partition of
-the work. `fold_init` exists so that state can stay local instead of becoming a
-shared bottleneck.
+To make an algorithm associative, your `fold_op` needs to keep things neat and tidy *locally*, so that your `reduce_op` only has to worry about the edges where two chunks meet. If you can make each chunk a canonical, perfect summary, the merge step is just snapping the edges together. That is the real trick to parallel programming.
 
-### 5.4 Reuse Across Execution Environments
+## Sequential is Not a "Fallback"
 
-Because `Sequential` works without `std`, the same algorithm can often be
-reused in both threaded and non-threaded builds. The policy changes. The code
-stays the same.
+You might look at the `Sequential` strategy and think, "Oh, that's just a dumb fallback for when I don't have threads." No!
 
-## 6. Failure Modes and Limits
+`Sequential` is the **reference semantics**. It is the absolute truth of what your algorithm means. It's wonderfully boring. It creates exactly one scratch space, walks the items in order, folds them up, and completely ignores the merge step—because there is only one worker, there's nothing to merge!
 
-### 6.1 Order-Sensitive Effects Do Not Magically Parallelize
+When you write a new algorithm, you should always test it with `Sequential`. Because it's perfectly deterministic, if it works there, you know your fundamental logic is sound. And because `Sequential` works without the Rust standard library (`no_std`), you can take your exact same algorithm and run it in tiny embedded systems or smart contracts where threads don't even exist.
 
-If an algorithm depends on a strict left-to-right side effect, parallelism may
-change its meaning. That is not a bug in the crate. It is a sign that the
-algorithm needs a different shape.
+## Rayon and the Cost of Partitioning
 
-### 6.2 Trait Bounds Are Part of the Contract
+When you *do* use `Rayon`, how does it actually divide up the physical work?
 
-Items, closures, and results need to satisfy `Send`, and some pieces need
-`Sync`, because the strategy may move work across threads. If a caller cannot
-meet those bounds, that is useful feedback: the algorithm is not shaped for
-this style of execution.
+It doesn't just hand out items one by one to threads as they arrive. That would cause chaos and terrible performance! Instead, it collects the input into a `Vec` first.
 
-### 6.3 Parallelism Has Overhead
+Why allocate a vector? Because it gives us **contiguous partitions**. We chop the vector into solid, continuous blocks. A worker gets a solid block of items that are right next to each other in the original order. They can do their local fold cleanly, and produce exactly one summary for that entire block.
 
-For small inputs, `Sequential` is often better.
+If we just streamed items randomly, we'd have to merge millions of tiny, individual results. By blocking them up, we do a bunch of fast local work, and only merge a few large results at the very end. That vector allocation is a deliberate, calculated price we pay for cleaner, much faster reductions.
 
-The Rayon path allocates, partitions, schedules, and reduces. That overhead is
-worth paying only when the local fold work is large enough to amortize it.
+## Convenience Methods
 
-### 6.4 The Abstraction Preserves Results, Not Performance Guarantees
+You don't always need the full, heavy machinery of `fold_init`. `Strategy` gives you some handy shortcuts that are built right on top of it:
 
-`parallelism_hint` is only a hint. The crate promises that the same algorithm
-can run under different policies. It does not promise that the parallel policy
-always wins.
+- **`fold`**: Just like `fold_init`, but without the private scratch space. Great for simple sums or counting where you don't need a buffer.
+- **`map_collect_vec`**: Transform each item one-by-one and collect them all into a vector.
+- **`map_init_collect_vec`**: Transform items, but you get a private scratch space for the transformation.
+- **`map_partition_collect_vec`**: Transform items, and keep the successful ones in one pile (vector) and the failures or filtered ones in another pile.
+- **`join`**: Run two completely different closures at the exact same time and get both results back!
 
-## 7. How to Read the Source
+## Summary
 
-Start with `parallel/src/lib.rs` and read `Strategy` first so the policy
-boundary is clear before either implementation. Then read `Sequential` as the
-reference meaning, `Rayon` as the same meaning under partitioning, and the
-tests as the proof that the two policies still compute the same result.
+The `commonware-parallel` crate absorbs a very specific, very annoying pressure: the temptation to write your code twice.
 
-## 8. Glossary and Further Reading
+It forces you to write the *meaning* of your algorithm—the fold, the reduction, the scratch space—against the `Strategy` trait. Once you do that, the environment gets to decide the policy. `Sequential` gives you fixed order, zero overhead, and `no_std` support. `Rayon` gives you raw speed on multicore CPUs.
 
-- **execution policy**: the rule that decides how work is scheduled.
-- **fold**: an operation that accumulates a collection into one result.
-- **partition-local state**: mutable scratch state owned by one worker.
-- **reduce**: the operation that combines partial results into one final
-  answer.
-- **contiguous partitioning**: splitting collected items into stable chunks
-  instead of streaming them one by one to workers.
-
-Further reading:
-
-- `parallel/src/lib.rs`
-- `parallel/README.md`
-- `commonware-runtime` for other places where execution policy matters
+So don't write two loops. Write one reduction, and let the kitchen handle the rest!

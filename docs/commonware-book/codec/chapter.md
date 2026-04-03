@@ -6,684 +6,400 @@
 
 ## Backgrounder: Bytes, Grammars, and Canonical Forms
 
-Before a value becomes protocol data, it has to leave the comfortable world of
-language-level types and enter the rough world of bytes. That transition is
-where many systems get into trouble.
+Let's think about something fundamental. Before a value—say, the number 300, or a list of public keys—can leave the comfortable, safe world of your program's memory and go out onto the network, it has to become bytes. It has to leave the world of "types" and enter the rough, unforgiving world of wire formats. And that transition is exactly where almost everyone gets into trouble.
 
-At the representation level, one logical value can often be written in several
-ways. Endianness can flip the byte order. Variable-length encodings can spell
-the same number with different lengths. Collection encodings can ignore or keep
-ordering, padding, and trailing bytes. If the decoder is casual about any of
-those choices, two machines may disagree about what the same wire data means.
+You see, at the physical representation level, one logical value can often be written down in several different ways. Endianness can flip the byte order. Variable-length encodings can spell the exact same number using a different number of bytes. Collection encodings might keep or ignore ordering, or throw in padding and trailing bytes. If the computer on the receiving end is casual about any of those choices, two machines might look at the exact same data and disagree about what it means.
 
-The naive approach is to say, "just serialize it" and trust the library. That
-works only if all sides already agree on the exact spelling rules, the parser
-rejects ambiguity, and the input cannot make the decoder do unbounded work. In
-practice, those assumptions break quickly:
+The naive approach is to say, "Ah, just serialize it and trust the library." But that only works if both sides already agree perfectly on the exact spelling rules, the parser never gets confused by ambiguity, and the incoming bytes can't make the decoder do an unbounded amount of work. In the real world, those assumptions fall apart fast:
 
-- a permissive parser may accept multiple byte strings for one value,
-- a length prefix may be trusted too early,
-- a trailing blob may be ignored instead of rejected,
-- and an attacker can turn decoding into a memory or CPU drain.
+- A permissive parser might accept multiple byte strings for one single value.
+- A length prefix might be trusted blindly before the memory is even allocated.
+- A trailing blob of junk might be ignored instead of rejected.
+- An attacker can craft a tiny message that tricks the decoder into exhausting all its memory or CPU.
 
-That is why byte formats need to be thought of as grammars, not just blobs.
-Each format says what sequences are legal, how one value is delimited from the
-next, and which spelling is the canonical one. Canonical form matters because it
-lets the rest of the protocol use bytes as stable names rather than as fuzzy
-suggestions.
+That is why you have to stop thinking of byte formats as just "blobs." You have to think of them as *grammars*. Each format must state exactly what sequences are legal, how one value is separated from the next, and—most importantly—which spelling is the *canonical* one. Canonical form matters because it lets the rest of the protocol use those bytes as stable names, rather than fuzzy suggestions.
 
-There is also a tradeoff between flexibility and safety. A format that accepts
-many spellings is easy to evolve in the short term, but it becomes hard to
-compare, hash, sign, or store deterministically. A format that is too rigid may
-be less convenient, but it gives the rest of the system one consistent story.
+There is a tradeoff between flexibility and safety. If a format accepts many different spellings, it's easy to evolve in the short term. But it becomes incredibly hard to compare, hash, sign, or store deterministically. If the format is rigid, it might be a bit less convenient, but it gives the entire system one consistent story to tell.
 
-`commonware-codec` stands on that stricter side of the line. It treats bytes as
-a public contract with exact spelling rules and exact bounds, because protocol
-code cannot afford to guess what the sender meant.
+`commonware-codec` stands firmly on that stricter side of the line. It treats bytes as a public contract with exact spelling rules and exact bounds. Why? Because when you are writing protocol code, you cannot afford to guess what the sender meant. You have to know.
 
 ## 1. What Problem Does This Solve?
 
-When a protocol crosses a machine boundary, a value stops being a Rust type and
-becomes bytes. At that moment, "it serialized" is not a meaningful guarantee.
-The real questions are harsher:
+When a protocol crosses a machine boundary, a value stops being a Rust type and becomes a sequence of bytes. At that exact moment, saying "it serialized" is not a meaningful guarantee. The real questions are much harsher:
 
-- Do these bytes mean exactly one value?
-- Will every machine encode that value the same way?
-- Can the decoder bound how much memory and work it will spend?
-- Will the boundary reject trailing junk instead of quietly ignoring it?
+- Do these bytes mean *exactly one* value?
+- Will every machine out there encode that value the exact same way?
+- Can the decoder limit how much memory and work it's going to spend?
+- Will the boundary reject trailing junk, instead of quietly ignoring it?
 
 `commonware-codec` exists to answer those questions with a contract.
 
-That contract has three parts.
+The contract has three parts:
 
-1. **Stable bytes**: a value must have a predictable wire form.
-2. **Canonical representation**: one logical value gets one accepted encoding.
-3. **Bounded decoding**: untrusted input does not get to choose unlimited work.
+1. **Stable bytes**: A value must have a predictable, unchanging wire form.
+2. **Canonical representation**: One logical value gets exactly one accepted encoding. No synonyms.
+3. **Bounded decoding**: Untrusted input does not get to dictate an unlimited amount of work for the receiver.
 
-That is why the crate is built around `Write`, `EncodeSize`, `Read`, and
-`Decode`.
+That is why the crate is built around four core ideas: `Write`, `EncodeSize`, `Read`, and `Decode`.
 
-- `Write` says how a value becomes bytes.
-- `EncodeSize` says exactly how many bytes that write will need.
-- `Read` says how to reconstruct the value, with caller-supplied policy.
-- `Decode` adds the last protocol rule: consume the whole buffer, or fail.
+- `Write` is simply how a value becomes bytes.
+- `EncodeSize` tells you exactly how many bytes that write operation will need. No guessing.
+- `Read` is how to reconstruct the value, but it requires a policy supplied by the caller.
+- `Decode` adds the final, crucial protocol rule: consume the whole buffer, or fail.
 
-Many libraries can turn values into bytes. Fewer treat the wire format as a
-discipline. `commonware-codec` does. It assumes the sender may be careless,
-malicious, or simply running on a different machine. The crate's job is to make
-those differences irrelevant at the byte boundary.
+Many libraries out there can turn values into bytes. Far fewer treat the wire format as a strict discipline. `commonware-codec` does. It assumes the sender might be careless, malicious, or simply running on a totally different architecture. The crate's job is to make those differences completely irrelevant at the byte boundary.
 
-That is the right way to read the rest of the chapter. This is not a tour of a
-serializer. It is a lecture about how to make bytes safe enough to carry
-meaning.
+That is the right way to read the rest of this chapter. We are not taking a tour of a serializer. This is a lecture about how to make bytes safe enough to carry meaning.
 
 ---
 
 ## 2. Mental Model: The Customs Office and the Contract
 
-The most useful mental model is a customs office.
+If you want to really understand this, the most useful mental model is a customs office at a national border.
 
-A package arrives at the border with paperwork attached. The paperwork says what
-the package is, how large it may be, and what shape the contents should have.
-The officer does not trust the label. The officer opens the box, counts what is
-inside, compares the contents against the declared limits, and refuses entry if
-anything is off.
+Imagine a package arrives at the border. It has paperwork attached. The paperwork says what the package is, how large it is, and what shape the contents should have. The customs officer doesn't just trust the label! The officer opens the box, counts what is inside, compares the contents against the declared limits, and absolutely refuses entry if anything is off.
 
-That is what `commonware-codec` does for protocol bytes.
+That is exactly what `commonware-codec` does for protocol bytes.
 
-Keep that border picture in mind through the rest of the crate:
+Keep that border crossing picture in your head through the rest of the crate:
 
 - `Write` is the packing procedure.
-- `EncodeSize` is the declared shipment size.
-- `Read` is the inspection process.
-- `RangeCfg` is the import policy.
-- `Decode` is the clearance stamp that says, "nothing else was hidden in the
-  box."
+- `EncodeSize` is the declared size on the shipping label.
+- `Read` is the physical inspection process.
+- `RangeCfg` is the import policy. (e.g., "No liquids over 100ml.")
+- `Decode` is the final clearance stamp that says, "I checked, and nothing else was hidden in the box."
 
-The contract behind that office is simple:
+The contract behind this customs office is simple:
 
-1. the sender must present a stable byte layout,
-2. the wire format must not admit multiple spellings for the same value,
-3. and the receiver must stay within a caller-chosen budget while decoding.
+1. The sender must present a stable byte layout.
+2. The wire format must not allow multiple spellings for the same value.
+3. The receiver must stay within a strict budget (chosen by the caller) while decoding.
 
-Once you adopt that model, the crate becomes easier to reason about. Every
-trait and concrete impl either defines the paperwork, checks it, or enforces
-the budget.
+Once you adopt this model, the code makes complete sense. Every trait, every implementation either defines the paperwork, checks the paperwork, or enforces the budget.
 
-That is also why later sections keep returning to the same theme. Stable bytes,
-canonical form, and bounded decoding are not three separate features. They are
-three faces of the same border policy.
+That's why we keep returning to the same themes. Stable bytes, canonical form, and bounded decoding aren't three separate features. They are three faces of the exact same border policy.
 
 ---
 
 ## 3. The Core Ideas
 
-With the customs office in view, the core traits divide cleanly by job.
+With the customs office in view, let's look at how the core traits divide up the work.
 
 ### `Write` and `EncodeSize` define the outgoing contract
 
-`Write` knows how to put a value into a `BufMut`. `EncodeSize` knows how many
-bytes that operation must consume.
+`Write` knows how to put a value into a `BufMut`. `EncodeSize` knows exactly how many bytes that operation will take.
 
-Those traits are separate on purpose. Writing and counting are different
-obligations, and a codec becomes unreliable as soon as it treats them as a
-fuzzy estimate. `Encode` joins the two together and checks its own work after
-the write. That is how the outgoing path produces stable bytes instead of
-"roughly the right layout."
+Why are these separate? Because writing and counting are different obligations! A codec becomes unreliable the moment it treats the size as a "fuzzy estimate." `Encode` joins the two together, and it checks its own work after writing. That is how the outgoing path produces perfectly stable bytes instead of "roughly the right layout."
 
-In the customs model, the package and the paperwork must match exactly.
+In our customs model, the physical package and the paperwork have to match exactly.
 
-If they do not, `Encode` panics. That is not framed as recoverable input
-failure. It is a bug in the codec implementation.
+If they don't, `Encode` panics. Notice that this isn't framed as some recoverable error. If `EncodeSize` says "4 bytes" and `Write` writes 5, that's a bug in the codec. The machine must stop.
 
 ### `Read` makes decoding a policy decision
 
-`Read` reconstructs a value from a `Buf`, but it also takes a `Cfg` parameter.
-That small design choice is what turns decoding into a controlled operation.
+`Read` reconstructs a value from a buffer, but it does something very special: it takes a `Cfg` (config) parameter. That tiny design choice is what turns decoding into a controlled, safe operation.
 
-The config lets the caller say, "I will accept a vector up to this length," or
-"this field may occupy only this range." Without that hook, the decoder would
-be forced to trust the sender's declared shape. With it, the caller sets the
-budget, and the decoder enforces it.
+The config lets the caller say, "I will accept a vector, but only up to this length," or "This field must fit in this specific range." Without that hook, the decoder would have to blindly trust whatever shape the sender declared. With it, the receiver sets the budget, and the decoder enforces it.
 
-That is bounded decoding in one sentence: the receiver decides how much work a
-piece of untrusted input is allowed to cause.
+That is bounded decoding in a nutshell: the receiver decides how much work a piece of untrusted input is allowed to cause.
 
 ### `RangeCfg` is policy, not data
 
-`RangeCfg` is the simplest expression of that idea. It is not a value carried on
-the wire. It is a value supplied by the reader.
+`RangeCfg` is the simplest expression of that idea. It is not a value carried over the network. It's a rule supplied by the reader.
 
-That distinction matters because it decides who is in charge.
+This distinction is vital because it decides who is in charge.
 
-- The sender may declare a length.
-- The receiver decides whether that length is admissible.
+- The sender gets to declare a length.
+- The receiver gets to decide if that length is allowed.
 
-`RangeCfg` is deliberately small. It stores a start bound and an end bound and
-implements `RangeBounds<T>`, so callers can construct policy from ordinary Rust
-ranges: `0..=1024`, `1..`, `..=32`, `..`, or `RangeCfg::exact(7)`.
+`RangeCfg` is deliberately small. It holds a start bound and an end bound, and it implements Rust's `RangeBounds<T>`, so you can build your policies using ordinary Rust syntax: `0..=1024`, `1..`, `..=32`, `..`, or even `RangeCfg::exact(7)`.
 
-The design gets stronger when you notice what is *not* there. `RangeCfg` does
-not know anything about `Vec`, `Bytes`, or `HashMap`. It is generic over `T`.
-That makes it portable policy rather than container-specific policy.
+The design is brilliant because of what it *doesn't* know. `RangeCfg` doesn't know anything about `Vec` or `HashMap`. It is generic over `T`. It is a portable policy.
 
-The conversion impls in `config.rs` sharpen that point. A range over
-`NonZeroU32` can become a range over `u32` or `usize`. That means higher layers
-can express the most specific local invariant they know, and lower layers can
-still consume the policy in the integer type they need.
+Because of the conversion implementations in `config.rs`, a range over `NonZeroU32` can seamlessly become a range over `usize`. Higher layers of your protocol can express the tightest local rule they know, and the lower layers can still consume that policy using the integer type they need.
 
-So `RangeCfg` is not just a guardrail. It is where authority changes hands from
-the sender to the receiver.
+So `RangeCfg` isn't just a guardrail. It's the exact moment where authority shifts from the sender to the receiver.
 
 ### `Decode` seals the border
 
-`Read` can successfully parse one value from the front of a buffer. Protocol
-boundaries usually need something stricter: they need proof that the buffer held
-exactly one value and nothing else.
+`Read` can successfully parse one value off the front of a buffer. But protocol boundaries usually need something stricter: they need proof that the buffer held *exactly* one value and nothing else.
 
-`Decode` adds that rule. If bytes remain, decoding fails with `ExtraData`.
+`Decode` adds that rule. It calls `Read`, and then it checks the buffer. If any bytes remain, it fails with `ExtraData`.
 
-This is the part that makes the customs-office model feel complete. It is not
-enough to inspect the declared item. The officer must also confirm that the box
-contains no hidden compartment.
+This completes our customs-office model. It's not enough for the officer to inspect the declared item; the officer has to check the bottom of the box to make sure there's no hidden compartment.
 
 ### `FixedSize` marks the easy cases
 
-Some values always occupy the same number of bytes. For those types, size is not
-a computation. It is part of the type's identity.
+Some values always take up the same number of bytes. A `u32` is always 4 bytes. For these types, size isn't something you have to compute; it's a fundamental property of the type's identity.
 
-That matters because fixed-size values are the simplest proof that stable bytes
-are possible. A `u32`, `bool`, `Ipv4Addr`, or fixed-size array does not need a
-length prefix, and it does not need negotiation with the caller. The contract is
-short and exact.
+This matters because fixed-size values are the simplest proof that stable bytes are possible! A `bool`, an `Ipv4Addr`, or a fixed array doesn't need a length prefix, and it doesn't need a complex negotiation with the caller. The contract is absolute.
 
-It also explains a later design choice: `Lazy<T>` can only implement `Read` when
-`T: FixedSize`. If the outer decoder does not know where `T` ends, it cannot
-defer parsing safely. A lazy boundary still needs a precise byte window.
+This also explains a rule you'll see later: `Lazy<T>` can only implement `Read` when `T: FixedSize`. If the outer decoder doesn't know where `T` ends without parsing it, it can't safely set it aside for later. A lazy boundary still needs a precise physical size.
 
 ### `usize` is variable-size by policy, not by accident
 
-Most primitive types in `types/primitives.rs` are fixed-width and big-endian.
-`usize` is the exception.
+Most primitive numbers in `types/primitives.rs` are fixed-width and big-endian. But `usize` is the exception.
 
-It is varint-encoded because lengths and counts are often small, but it is also
-restricted to values that fit in `u32`. That is the portability rule that keeps
-the same logical length from acquiring different wire forms on 32-bit and 64-bit
-machines.
+It is varint-encoded because lengths are usually small numbers. But crucially, it is restricted to values that fit in a `u32`. Why? Because `usize` changes size depending on the machine's architecture! That restriction is the portability rule that keeps the same logical length from magically changing its wire form just because you moved from a 32-bit machine to a 64-bit machine.
 
-So the `usize` story has three layers:
+So the story for `usize` has three layers:
 
-1. use a compact representation for small counts,
-2. reject architecture-dependent magnitudes,
-3. run the result through `RangeCfg` before trusting it.
+1. Use a compact representation for small counts.
+2. Reject any magnitude that depends on the architecture.
+3. Run the final result through `RangeCfg` before trusting it to allocate anything.
 
-That is a good example of the crate's style. A convenience choice is accepted
-only after it has been fenced by stability and policy.
+This is the crate's style in a nutshell: we allow a convenience, but only after we've fenced it in with stability and policy.
 
 ### Varint is a grammar, not a byte trick
 
-Varint is easy to describe loosely and dangerous to implement loosely.
+Varint (variable-length integers) is very easy to describe loosely, and incredibly dangerous to implement loosely.
 
-In this crate, varint is treated as a language with syntax rules:
+In this crate, we treat varint like a language with strict syntax rules:
 
-- each byte contributes 7 data bits,
-- the top bit says whether another byte must follow,
-- the final byte must be the first byte whose continuation bit is clear,
-- and the encoding must stop as soon as the value is fully spelled.
+- Each byte contributes 7 bits of data.
+- The top bit of the byte says whether another byte is coming (the continuation bit).
+- The final byte *must* be the first byte where that continuation bit is a zero.
+- The encoding must stop the moment the value is fully spelled out.
 
-That last rule is what turns compactness into canonicality.
+That last rule is the magic one. It turns compactness into canonicality.
 
 For example:
 
-- `0` is accepted as `[0x00]`,
-- `300` is accepted as `[0xAC, 0x02]`,
-- but overlong zero such as `[0x80, 0x00]` is rejected.
+- `0` is accepted as `[0x00]`.
+- `300` is accepted as `[0xAC, 0x02]`.
+- But an overlong zero, like `[0x80, 0x00]`, is aggressively rejected.
 
-The incremental `Decoder<U>::feed` in `varint.rs` makes the grammar explicit.
-Once decoding has progressed beyond the first byte, a later all-zero byte is
-illegal because it proves the sender kept talking after the value was already
-finished. On the last possible byte, any set bits beyond the target width are
-illegal because they would overflow the type or imply an impossible extra
-continuation.
+If you look at the incremental `Decoder<U>::feed` in `varint.rs`, you see the grammar in action. Once you move past the first byte, an all-zero byte is illegal—it proves the sender kept talking after they had nothing left to say. And on the final byte, any bits set beyond the target width are illegal, because they would overflow the type.
 
-That is why `InvalidVarint` means more than "could not parse." It means the byte
-sequence violated the unique spelling rules for this integer width.
+That's why `InvalidVarint` doesn't just mean "could not parse." It means the byte sequence violated the unique spelling rules for this integer.
 
-`SInt` adds ZigZag encoding on top of the same grammar. Negative numbers are not
-given a separate varint language. They are mapped into the unsigned one.
+`SInt` adds ZigZag encoding on top of this. Negative numbers aren't given a separate language; they are cleverly folded into the unsigned one.
 
 ### Canonical collections are part of correctness
 
-Stable bytes are not enough if the same logical value can appear on the wire in
-many different forms. Canonical representation closes that gap.
+Stable bytes aren't enough if the same logical dictionary can be sent in six different byte orders. We need canonical representation to close that gap.
 
-The crate handles ordered and unordered collections differently.
+The crate handles ordered and unordered collections differently:
 
-- `BTreeMap` and `BTreeSet` already have a defined iteration order, so the wire
-  form can follow it directly.
-- `HashMap` and `HashSet` do not, so the writer sorts entries before emitting
-  them.
+- `BTreeMap` and `BTreeSet` already have a defined, sorted order. We just follow it.
+- `HashMap` and `HashSet` do not. So the writer must sort the entries before emitting them.
 
-The important part is the read path. `read_ordered_map` and `read_ordered_set`
-do not merely deserialize items and then sort them in memory. They require the
-incoming bytes to already be in ascending order and to be duplicate-free.
+But pay attention to the read path! `read_ordered_map` and `read_ordered_set` do not just deserialize items and throw them into a map. They *require* the incoming bytes to already be in strictly ascending order, with no duplicates.
 
-So the decoder is not saying, "I can recover a valid map from this mess." It is
-saying, "I will only accept the one wire spelling this logical map is supposed to
-have."
+The decoder isn't saying, "I can recover a valid map from this jumbled mess." It's saying, "I will only accept the *one true spelling* this logical map is supposed to have."
 
-That difference is what makes the encoded bytes safe to hash, sign, compare, and
-pin in conformance fixtures.
+That rule makes the encoded bytes safe to hash, safe to sign, safe to compare, and safe to use in conformance tests.
 
 ### `Lazy<T>` defers work without changing truth
 
-`Lazy<T>` is the crate's most instructive "advanced" type because it looks like
-an optimization and turns out to be a policy statement.
+`Lazy<T>` is a fascinating type because it looks like a performance trick, but it's actually a policy statement.
 
 `Lazy<T>` stores either:
 
-- an already available `T`, or
-- pending bytes plus the `Cfg` needed to decode `T` later.
+- An already available `T`, or
+- Pending bytes plus the `Cfg` needed to decode `T` later.
 
-That means laziness here is not "skip validation forever." It is "capture the
-same future decode that would have happened now, but move the cost."
+Laziness here doesn't mean "skip validation." It means "capture the exact same future decode operation that would have happened now, and move the cost."
 
-Two details in `types/lazy.rs` are worth noticing.
+Two beautiful details in `types/lazy.rs`:
 
-First, on `std`, the actual decode is protected by a `OnceLock<Option<T>>`. The
-first `get()` performs the work and caches either success or failure. Later
-calls do not decode again.
+First, on `std`, the decode is hidden behind a `OnceLock`. The first time you ask for it, it does the work and caches the result (success or failure). It never decodes twice.
 
-Second, `Write` and `EncodeSize` prefer the pending raw bytes when they exist.
-That lets `Lazy<T>` round-trip the original accepted encoding without forcing a
-decode and re-encode cycle first.
+Second, `Write` and `EncodeSize` will prefer the raw pending bytes if they exist. That lets `Lazy<T>` round-trip a message perfectly without forcing a pointless decode and re-encode cycle!
 
-`Lazy<T>` is also intentionally narrow. The `Read` impl exists only when
-`T: FixedSize`. A lazy reader can safely take exactly `T::SIZE` bytes from the
-buffer and hold them for later. Without a fixed width, the codec would need some
-other framing story before deferral would be sound.
+But remember, `Lazy<T>` is intentionally narrow. It only works if `T: FixedSize`. Without a fixed width, the codec wouldn't know exactly how many bytes to scoop up and freeze.
 
 ### Extension traits improve ergonomics, not semantics
 
-`ReadExt`, `DecodeExt`, `ReadRangeExt`, and `DecodeRangeExt` do not weaken the
-contract. They only compress recurring call patterns.
+You'll see `ReadExt`, `DecodeExt`, `ReadRangeExt`, and `DecodeRangeExt`. They don't weaken the contract. They just save typing.
 
-The config shapes in real implementations make the point concrete:
+Think about the configs in real code:
 
-- primitives usually use `Cfg = ()`,
-- a `Vec<T>` uses `(RangeCfg<usize>, T::Cfg)`,
-- a `HashMap<K, V>` uses `(RangeCfg<usize>, (K::Cfg, V::Cfg))`.
+- Primitives usually use `Cfg = ()`.
+- A `Vec<T>` needs a config for its length, and a config for its items: `(RangeCfg<usize>, T::Cfg)`.
+- A `HashMap<K, V>` needs even more: `(RangeCfg<usize>, (K::Cfg, V::Cfg))`.
 
-The extension traits exist so callers can keep using the real policy while
-writing shorter code.
+The extension traits let callers use the real policy while writing less code. `ReadExt` means "this type's config is `()`." `DecodeRangeExt` means "this type starts with a length policy, and the rest can be defaulted."
 
-`ReadExt` means "this type needs no config." `DecodeExt` means "this type's
-config is unit-like and can be defaulted." `ReadRangeExt` and `DecodeRangeExt`
-mean "this type starts with a length policy, and the rest of the config can be
-defaulted."
-
-They are shorthand for the same policy. The law does not change; the call site
-gets shorter.
+It's just shorthand. The law doesn't change; the code just gets easier to read.
 
 ### Conformance turns the contract into a regression boundary
 
-The last core idea lives slightly outside the encode and decode path, but it is
-where the chapter's promises become operational.
+Here is where all the theory pays off.
 
-`codec/src/conformance.rs` defines `CodecConformance<T>`, a tiny wrapper that
-adapts any `T: Encode + Arbitrary` to the `commonware_conformance::Conformance`
-trait. Its `commit(seed)` implementation does two things:
+In `codec/src/conformance.rs`, there's a wrapper called `CodecConformance<T>`. It takes any encodable type, generates a deterministic version of it from a random seed, encodes it, and hashes the resulting bytes. The conformance test compares that hash against a checked-in fixture.
 
-1. generate a deterministic `T` from `arbitrary` using a seeded `ChaCha8Rng`,
-2. encode that value and return the bytes.
-
-The conformance crate hashes those committed bytes and compares the digest
-against the checked-in fixture.
-
-So conformance is not "some tests exist." It is the place where stable bytes
-become a versioned promise. If canonical collection ordering, varint grammar, or
-primitive layout changes, the digest moves. The crate has to treat that as a
-real event.
+This isn't just a test. This is where stable bytes become a promise across time. If someone changes the varint grammar, or alters how a map is sorted, the hash changes. The test fails. The project notices. Canonicality is verified.
 
 ---
 
 ## 4. How Bytes Move Through the Machine
 
-The encode path is intentionally dull in the best way. A predictable codec
-should feel procedural.
+The encode path is wonderfully boring. A predictable codec should feel like a simple procedure:
 
-1. Ask the value for its encoded size.
+1. Ask the value: "What is your encoded size?"
 2. Allocate exactly that many bytes.
 3. Write the value into the buffer.
-4. Assert that the observed count matches the declared count.
+4. Assert that the number of bytes written matches the number promised.
 
-That is the outgoing half of the contract. The sender does not guess, append,
-and hope. It commits to an exact layout up front.
+The sender doesn't guess, append, and cross its fingers. It commits to a layout up front.
 
-The decode path mirrors that discipline.
+The decode path mirrors this exactly:
 
-1. Read the next fixed-width field or declared length.
-2. Apply the caller's config and bounds.
+1. Read the fixed-width field or the declared length.
+2. Apply the caller's config (the budget!).
 3. Reconstruct the value.
-4. If the boundary asked for `Decode`, confirm that no bytes remain.
+4. If asked to `Decode`, confirm no bytes are left over.
 
-The sequence matters. First inspect the paperwork, then enforce the budget, then
-admit the value, then check that nothing else came with it.
+The sequence is everything. Inspect the paperwork. Enforce the budget. Admit the value. Check for hidden compartments.
 
-That abstract path becomes concrete in the type impls.
+### Primitives: The Baseline
 
-### Primitives: fixed-width values establish the baseline
+In `types/primitives.rs`, integers and floats use big-endian encoding. It doesn't matter what your CPU uses; the wire form is always the same.
 
-In `types/primitives.rs`, fixed-width integers and floats use big-endian
-encoding. That makes the wire form independent of host architecture, which is
-the simplest possible example of stable bytes.
+Look at `bool`. It's one byte wide. But the decoder will only accept `0` or `1`. Fixed-width doesn't mean "accept any garbage in that width." It gets structural validation.
 
-`bool` is also instructive. It is one byte wide, but the decoder accepts only
-`0` and `1`. That means fixed-width does not imply permissive. Even simple
-primitive layouts still get structural validation.
+`Option<T>` is similar: a boolean tag, followed by the payload *only* if the tag is true. No magic null values. The bytes say exactly which branch to take.
 
-`Option<T>` shows the same style one layer up: a boolean tag first, then the
-payload only when the tag is true. The crate does not use out-of-band nullability
-or magic values. The wire form says what branch is present.
+### `RangeCfg` in motion
 
-### `RangeCfg` in motion: the length is a claim, not an order
+Whenever you see a `Vec<T>`, `Bytes`, or `HashMap`, the very first move is:
 
-Length-bearing values such as `Vec<T>`, `Bytes`, `HashMap<K, V>`, and
-`HashSet<K>` all share the same first move:
+1. Decode a `usize`.
+2. Check it against the `RangeCfg`.
+3. *Only then* allocate memory or iterate.
 
-1. decode a `usize`,
-2. check it against `RangeCfg`,
-3. only then allocate or iterate.
+The length prefix is a claim. `RangeCfg` verifies the claim. If the caller says "Max length is 64," and the sender sends a length of 10,000, we don't try to parse it. We instantly return `InvalidLength(10000)`.
 
-That is why `usize::read_cfg` is so central. The length prefix does not directly
-control memory allocation. It first passes through a local policy gate.
+Who gets to choose the work budget? In this crate, the answer is always the receiver.
 
-If the caller says "this field may be at most 64 bytes," then a sender-declared
-length of 10,000 is not an expensive parse. It is `InvalidLength(10000)`.
+### Varint Worked Example
 
-Seen this way, `RangeCfg` is the codec's answer to a classic adversarial
-question: who gets to choose the work budget? In this crate, the answer is
-always the receiver.
+Let's look at the varint spellings to make it concrete.
 
-### Varint worked example: accepted and rejected spellings
-
-The varint grammar becomes clearer with concrete cases.
-
-Accepted spellings:
-
+Accepted:
 - `0` -> `[0x00]`
 - `1` -> `[0x01]`
 - `127` -> `[0x7F]`
-- `128` -> `[0x80, 0x01]`
-- `300` -> `[0xAC, 0x02]`
+- `128` -> `[0x80, 0x01]` (The first byte's top bit is set, meaning "more to come". The 7 data bits are 0. The next byte is 1. `1 << 7 + 0 = 128`)
 
-Rejected spellings:
+Rejected:
+- `[0x80, 0x00]` for zero. Why? Because the second byte says the first byte shouldn't have had its continuation bit set!
+- Any spelling where the final byte sets bits that would overflow the target integer.
+- Any spelling that just keeps going past the maximum possible length.
 
-- `[0x80, 0x00]` for zero
-  because the second byte proves the first byte should not have continued.
-- any spelling whose final byte sets bits outside the target width
-  because the value would overflow the chosen integer type.
-- any spelling that continues past the last possible byte
-  because the continuation bit itself becomes impossible at that point.
+This strictness is why we have `UInt` wrappers and the incremental `Decoder<U>`. They enforce the grammar perfectly.
 
-This is why the crate has both `UInt` and the incremental `Decoder<U>`. The
-wrappers give ordinary encode and decode. The decoder exposes the grammar one
-byte at a time for stream-oriented code without weakening the same rules.
+### Canonical Collections: Accepted vs. "Recoverable"
 
-### Canonical collections: accepted bytes versus "recoverable" bytes
-
-Hash collections are where the distinction between "recoverable" and
-"acceptable" matters most.
-
-Suppose a `HashSet<u32>` logically contains `{1, 5}`.
+Let's say a `HashSet<u32>` contains `{1, 5}`.
 
 Accepted encoding:
-
-- length `2`,
-- item `1`,
-- item `5`.
+- Length `2`, item `1`, item `5`.
 
 Rejected encodings:
+- Length `2`, item `5`, item `1`. (Items must be ascending!)
+- Length `2`, item `1`, item `1`. (No duplicates allowed!)
 
-- length `2`, item `5`, item `1`
-  because items do not ascend.
-- length `2`, item `1`, item `1`
-  because duplicate items are not canonical.
+The code in `types/mod.rs` makes this mechanical. It remembers the last item read, reads the next, ensures it is strictly greater, and then inserts it. Canonical representation is not an afterthought; it is an absolute admission rule.
 
-The same pattern holds for maps, with key order driving canonicality.
+### `Lazy<T>` Worked Example
 
-The loops in `types/mod.rs` make the check mechanical. They keep the previous
-item in hand, read the next item, compare adjacency, and only then insert the
-previous item into the target collection. The reader validates the local
-ordering proof before committing each step.
+Imagine a fixed-size type `T` that takes a long time to validate after reading its bytes.
 
-That is a small algorithmic detail, but it reveals the crate's attitude. Canonical
-representation is not a cosmetic post-processing pass. It is an admission rule.
+With `Lazy<T>`, the decoder can:
+1. Slice off exactly `T::SIZE` bytes.
+2. Store those bytes and the `Cfg`.
+3. Keep parsing the rest of the message.
+4. Only decode `T` if the application actually needs it later.
 
-### `Lazy<T>` worked example: defer the parse, keep the contract
-
-Imagine a fixed-size type `T` whose decode is expensive because it performs extra
-validation after reading its bytes.
-
-With `Lazy<T>`, the outer decoder can:
-
-1. carve out exactly `T::SIZE` bytes from the buffer,
-2. store those bytes and the `Cfg`,
-3. continue parsing the rest of the enclosing message,
-4. decode `T` only if some later code actually asks for it.
-
-That is useful for large message trees where only a subset of fields are needed
-on every path.
-
-The important point is what does *not* change:
-
-- the bytes must still be structurally valid when `get()` runs,
-- the same config is still used,
-- and re-encoding can still emit the original stored bytes.
-
-So `Lazy<T>` is not "maybe decode later if convenient." It is "freeze a future
-decode with all of its original rules intact."
-
-### Extensions: shorter calls to the same policy
-
-The extension traits sit close to the API boundary because that is where config
-noise is most visible.
-
-Without them, callers often have to spell nested tuples just to say something
-simple. A bounded vector of `u8` wants `(RangeCfg<usize>, ())`.
-With `DecodeRangeExt`, the caller can instead say `Vec::<u8>::decode_range(buf,
-0..=1024)`.
-
-That is not a new decoding mode. It is the same `Read::Cfg`, assembled for you.
-
-### Conformance linkage: why canonicality pays off
-
-The conformance wrapper is where all of the chapter's local rules line up.
-
-If `HashMap` encoding depended on hash iteration order, a deterministic seed
-would still generate the same logical map, but the committed bytes could drift.
-If varint accepted overlong spellings, two encoders could both be "compatible"
-while disagreeing on the bytes that conformance is supposed to pin down.
-
-Canonical collections and strict varint grammar are what make codec conformance
-worth having. They make `encode()` behave like a proof artifact rather than a
-mere transport convenience.
+What *doesn't* change? The bytes still have to be structurally valid when you eventually parse them. The original config still applies. And you can re-encode the original bytes perfectly. Laziness doesn't change the truth; it just reschedules the work.
 
 ---
 
-## 5. What Pressure This Design Is Built To Absorb
+## 5. What Pressure This Design Absorbs
 
-The answer is adversarial pressure.
+Why build something this strict? Because of adversarial pressure.
 
-A codec at a protocol boundary gets pushed on at every seam. Attackers lie about
-lengths. Honest peers send truncated buffers. Different platforms disagree about
-native representation. Unordered containers try to drift into many byte
-spellings. Performance shortcuts tempt the decoder to trust the sender more than
-it should.
+A codec at a protocol boundary is under constant attack. Attackers lie about lengths. Honest nodes send truncated data. CPUs disagree about memory layouts. Maps sort themselves randomly. Performance shortcuts tempt you to skip validation.
 
-`commonware-codec` is shaped by those pressures.
+`commonware-codec` is designed to absorb all of it.
 
-### Pressure 1: hostile length prefixes
+- **Hostile Lengths:** Senders don't get to choose the budget. `RangeCfg` stops memory exhaustion before allocation happens.
+- **Ambiguous Integers:** The strict varint grammar prevents tiny numbers from having infinite valid representations.
+- **Truncated/Padded Buffers:** `EndOfBuffer` and `ExtraData` mean the boundary is perfectly tight on both sides.
+- **Cross-Platform Drift:** Big-endian layouts and `u32` limits on `usize` guarantee the bytes stay exactly the same on any architecture.
+- **Non-Canonical Collections:** Ascending-order enforcement guarantees that equal maps have equal bytes.
+- **Lazy Parsing Risks:** `Lazy<T>` only defers cost, never the rules.
+- **Stability over Time:** The `conformance` wrapper turns the whole system into a testable proof that "stable" means "stable forever."
 
-If the sender chooses the work budget, the receiver loses. That is why lengths
-flow through `RangeCfg` and why `usize` decoding is constrained. A length prefix
-is treated as a claim to verify, not a command to obey.
-
-### Pressure 2: ambiguous compact integers
-
-Varint buys smaller length prefixes, but only if the grammar is tight. The crate
-rejects overlong and impossible spellings because ambiguity in "small" integers
-would infect every length-bearing type built on top of them.
-
-### Pressure 3: truncated or padded buffers
-
-If the buffer ends early, the crate returns `EndOfBuffer`. If extra bytes remain
-after `Decode`, it returns `ExtraData`.
-
-Those are two versions of the same principle: the border is exact at both ends.
-The value must be complete, and it must be alone.
-
-### Pressure 4: cross-platform drift
-
-Big-endian fixed-width encoding and the `u32` cap on `usize` keep a value from
-quietly changing its wire form when the architecture changes. Stable bytes have
-to mean stable across machines, not just stable on the machine that wrote them.
-
-### Pressure 5: non-canonical collection encodings
-
-If the same logical map can appear in several byte orders, higher layers cannot
-rely on the wire form. Canonical sorting on write and strict ordering checks on
-read remove that ambiguity.
-
-This is how the crate protects not just round-tripping, but byte-level identity.
-
-### Pressure 6: deferred work without deferred rules
-
-`Lazy<T>` exists because some protocols need to postpone cost. But it postpones
-only cost. The bytes, the config, and the eventual decode obligations stay the
-same. That is what keeps laziness from turning into a hidden side channel for
-"parse this field differently later."
-
-### Pressure 7: stability over time
-
-Conformance is the time dimension of the same problem. A codec can look strict
-today and still drift tomorrow. The conformance layer turns encoded bytes into a
-checked regression boundary so the project can notice when "stable" has changed.
-
-Once you see the crate as a response to those pressures, its strictness stops
-looking ornamental. It looks like engineering.
+When you see it this way, the strictness isn't pedantic. It's excellent engineering.
 
 ---
 
 ## 6. Failure Modes and Limits
 
-A strict customs office still has boundaries. This section matters because it
-separates what the crate guarantees from what it intentionally refuses to guess.
+Even a strict customs office has a defined scope. It's important to know what the crate guarantees, and what it explicitly ignores.
 
-If `EncodeSize` and `Write` disagree, `Encode` panics. That is not a recoverable
-decode error. It is a bug in the implementation.
+First, bugs: If `EncodeSize` and `Write` disagree, or if a `usize` is too big for a `u32`, the code panics. Those aren't data errors; those are programmer errors. The program stops.
 
-If a `usize` does not fit in `u32`, encoding panics as well. That is the price
-of portable wire stability. The crate would rather fail loudly than let the same
-logical value acquire architecture-dependent bytes.
-
-On the incoming side, the error vocabulary is the border report:
+For incoming data, the errors are a precise report of the border inspection:
 
 | Error | What invariant failed |
 | --- | --- |
-| `EndOfBuffer` | Completeness: the declared structure ran past the available bytes. |
-| `ExtraData(n)` | Singularity: one value parsed, but `n` trailing bytes remained. |
-| `InvalidLength(len)` | Policy: a decoded length violated the caller's `RangeCfg`. |
-| `InvalidVarint(width)` | Syntax or canonicality: the varint spelling was malformed, overlong, or impossible for that width. |
-| `InvalidUsize` | Portability: a decoded `u32` length could not be represented as `usize` on this target. |
-| `InvalidBool` | Domain of representation: a boolean byte was not `0` or `1`. |
-| `InvalidEnum(tag)` | Tag validity: the variant byte did not identify any allowed case. |
-| `Invalid(ctx, msg)` | Type-local structural rule: bytes had the right general shape but violated a stricter invariant such as ascending keys or non-zero values. |
-| `Wrapped(ctx, err)` | Delegated validation failed and was preserved with source context. |
+| `EndOfBuffer` | Completeness: The buffer ran out before the declared structure finished. |
+| `ExtraData(n)` | Singularity: The value parsed perfectly, but `n` bytes were left in the box! |
+| `InvalidLength(len)` | Policy: The declared length violated the caller's `RangeCfg`. |
+| `InvalidVarint(width)` | Syntax: The varint was malformed, overlong, or impossible. |
+| `InvalidUsize` | Portability: A length didn't fit in the target's `usize`. |
+| `InvalidBool` | Domain: A boolean byte wasn't exactly `0` or `1`. |
+| `InvalidEnum(tag)` | Tag validity: The byte didn't match any known enum variant. |
+| `Invalid(ctx, msg)` | Structural rule: Bytes looked right but failed a local rule (like ascending keys). |
+| `Wrapped(ctx, err)` | Delegated error: An inner validation failed. |
 
-Two small helpers in `util.rs` keep the error surface crisp.
+Two neat helpers in `util.rs` keep this clean:
+- `at_least` safely checks for bytes before you read them.
+- `ensure_zeros` makes sure padding bytes are actually zeros, rather than ignoring them.
 
-- `at_least` turns underfilled fixed-width reads into `EndOfBuffer`.
-- `ensure_zeros` lets reserved padding bytes be checked rather than ignored.
+Here is the vital limit: The crate tells you if the bytes are structurally correct. **It does not tell you if they make sense for your application.**
 
-Those errors tell you what went wrong structurally. They do not tell you whether
-the decoded value is semantically acceptable for the protocol above.
+The crate verifies the paperwork. It ensures canonical form. It bounds decoding. But it cannot tell you if that decoded public key is authorized, or if the timestamp is fresh.
 
-That final point is important. The crate can verify paperwork. It can enforce
-stable bytes, canonical representation, and bounded decoding. It cannot decide
-whether a decoded public key belongs to the right peer, whether a message is
-timely, or whether a range makes business sense for the application. Those are
-questions for the next layer.
-
-So the line is clean:
-
-- below the line, the crate governs byte truth;
-- above the line, the application governs domain truth.
+The line is crystal clear:
+- Below the line, the codec governs the truth of the *bytes*.
+- Above the line, the application governs the truth of the *domain*.
 
 ---
 
 ## 7. How to Read the Source
 
-The source is easiest to read in the same order as the contract.
+If you want to read the code, follow the contract.
 
-Start with `codec/src/codec.rs`. It names the grammar of the crate: `Write`,
-`Read`, `EncodeSize`, `Encode`, `Decode`, and the convenience wrapper traits
-built on top of them.
+1. Start in `codec/src/codec.rs`. Look at `Write`, `Read`, `EncodeSize`, and `Decode`. That is the grammar.
+2. Go to `codec/src/config.rs`. Look at `RangeCfg`. See how policy is injected into the read path without touching the wire.
+3. Read `codec/src/varint.rs`. Look at `UInt`, `SInt`, and especially `Decoder<U>::feed` to see how the varint grammar rejects ambiguity.
+4. Move to `codec/src/types/primitives.rs`. See the baseline: big-endian fixed-width numbers, strict booleans, and the portable handling of `usize`.
+5. Now the rest of `codec/src/types/` will read like a breeze. Look at `vec.rs` for length limits, and `hash_map.rs` / `mod.rs` for the brilliant sorted-iteration logic. Look at `lazy.rs` for deferred parsing.
+6. Check out `codec/src/extensions.rs` to see how the API makes the rules ergonomic.
+7. Finally, look at `codec/src/error.rs` and `codec/src/conformance.rs` together. One defines failure, the other pins success across time.
 
-Then read `codec/src/config.rs`. `RangeCfg` is the compact statement of bounded
-decoding, and it shows how caller policy enters the read path without being put
-on the wire.
-
-Then read `codec/src/varint.rs`. Focus on two things:
-
-- `UInt` and `SInt` as the public wrappers,
-- `Decoder<U>::feed` as the place where canonical varint syntax is enforced.
-
-After that, move to `codec/src/types/primitives.rs`. This is where the baseline
-rules become tangible: big-endian numbers, `bool`, `Option`, unit, fixed-size
-arrays, and the special handling of `usize`.
-
-Once those foundations are clear, the rest of `codec/src/types/` reads naturally
-as applications of the same contract:
-
-- `vec.rs` and `bytes.rs` show bounded, length-prefixed payloads,
-- `btree_map.rs`, `btree_set.rs`, `hash_map.rs`, and `hash_set.rs` show
-  canonical representation for collections,
-- `range.rs` and `net.rs` show stable structured encodings for ordinary types,
-- `tuple.rs` shows product types,
-- and `lazy.rs` shows deferred decoding without weaker guarantees.
-
-If ordered collection decoding still feels magical, read `codec/src/types/mod.rs`
-alongside the map and set impls. The loops there are where duplicate rejection
-and ascending-order enforcement become mechanical.
-
-Keep `codec/src/extensions.rs` nearby as well. It shows how the public API makes
-common policy shapes shorter without inventing new semantics.
-
-Finally, read `codec/src/error.rs` and `codec/src/conformance.rs` together. One
-names the failure modes. The other turns the accepted wire image into something
-the project can pin and re-check across time.
-
-That reading order mirrors the lecture you just read: define the contract, study
-the policy object, inspect the compact-length language, then watch the same
-rules play out across concrete types and across releases.
+Read it in that order, and you'll see the customs office at every step.
 
 ---
 
 ## 8. Glossary and Further Reading
 
-- `EncodeSize`: the exact number of bytes a value must write.
-- `FixedSize`: a marker for types whose encoded width never varies.
-- `Read`: the inbound trait that reconstructs a value from bytes and config.
-- `RangeCfg`: a caller-supplied policy object that bounds accepted values.
-- `Decode`: `Read` plus the requirement that the buffer be fully consumed.
-- `UInt` / `SInt`: wrappers that encode integers in varint form.
-- `Canonical representation`: one logical value, one accepted wire spelling.
-- `Lazy`: a wrapper that stores bytes now and decodes later under the same
-  config.
-- `Conformance`: the testing layer that pins encoded bytes across revisions.
+- **`EncodeSize`**: The absolute, exact number of bytes a value will write.
+- **`FixedSize`**: A marker for types that always take the exact same amount of space.
+- **`Read`**: The inbound trait that turns bytes and a config back into a value.
+- **`RangeCfg`**: The caller-supplied budget policy.
+- **`Decode`**: `Read`, plus the guarantee that no bytes are left over.
+- **`UInt` / `SInt`**: Wrappers for integers to give them varint spellings.
+- **Canonical representation**: One value, one spelling. Period.
+- **`Lazy`**: A wrapper that captures bytes now to decode later, preserving all the original rules.
+- **Conformance**: The testing layer that mathematically pins byte layouts across versions.
 
-For further reading, the most useful source paths are:
+Dive into the source:
 
 - `codec/src/codec.rs`
 - `codec/src/config.rs`

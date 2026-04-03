@@ -4,413 +4,195 @@
 
 ---
 
-## Opening Apparatus
+You know, people have this funny idea about testing software. They tend to think there are really only two ways to do it, and they are miles apart.
 
-**Promise.** This chapter shows how `commonware-invariants` makes
-invariant-driven testing cheap enough to live beside ordinary unit tests.
+The first way is to write down a few examples. You pick an input, you know exactly what the output should be, and you write a unit test. It's easy, it's fast, but it's narrow. You're only checking the exact cases you were smart enough to think of in advance. 
 
-**Crux.** The crate is not trying to replace serious fuzzing. It is trying to
-make the *first useful invariant search* so easy that authors reach for it
-before they resign themselves to a handful of examples.
+The second way is what they call "fuzzing." You build this giant, complicated machine that throws millions of random, garbage bytes at your program. It tracks which lines of code it hits, learns from it, and tries to find a path that makes the program crash. It's incredibly powerful, but it's a huge pain to set up. You have to build a separate target, manage a "corpus" of saved inputs, and wait around. Because of all this ceremony, people put it off. They say, "We'll write a real fuzzer later." And we all know "later" usually means "never."
 
-**Primary invariant.** A failure should be both discoverable by exploring many
-nearby structured inputs and replayable through one compact branch token.
+`commonware-invariants` sits right in the gap between these two extremes. We aren't trying to replace the giant fuzzing machines. What we want is to make that *first useful search* so incredibly easy that you do it right there, next to your ordinary unit tests, before you even think about giving up and just writing a couple of manual examples.
 
-**Naive failure.** The usual trap is to stand between two bad defaults: either
-write one or two example tests and hope they generalize, or postpone the whole
-effort until there is time for a full fuzz target. `minifuzz` exists in that
-gap.
-
-**Reading map.**
-
-- Start with `invariants/src/minifuzz.rs`; almost everything important lives
-  there.
-- `Builder` is the search contract: it sets the budget, the replay token, and
-  the stopping rules.
-- `Branch` and `Sampler` show how the search stays local while still moving to
-  nearby possibilities.
-- The tests at the bottom pin down the replay and termination behavior that the
-  harness must preserve.
-
-**Assumption ledger.**
-
-- The reader is comfortable with property-style testing and `arbitrary`.
-- The chapter is about local search inside unit-test territory, not
-  coverage-guided fuzzing infrastructure.
-- A good invariant still matters more than the tool.
-
-## Background
-
-Testing has three broad modes. Example tests check a few hand-picked cases.
-Property tests check a rule across many generated cases. Fuzzers explore a much
-larger input space and try to uncover unexpected states. `commonware-invariants`
-borrows the most useful idea from each one: state a rule, explore nearby
-inputs, and keep the failure reproducible.
-
-The basic vocabulary is worth naming clearly:
-
-- **Invariant**: something that should stay true across many inputs.
-- **Search space**: the family of nearby cases the harness can explore.
-- **Structured input**: raw bytes interpreted as a typed object.
-- **Mutation**: a small change that moves one case to a nearby case.
-- **Replay**: the ability to reproduce the same failing path later.
-
-The naive alternatives are both familiar. One is to stop at a few examples and
-hope the examples cover the real boundary cases. The other is to jump straight
-to a heavyweight fuzzing setup when the first useful question is still small.
-The first fails because it is too narrow. The second fails because the setup
-cost can outrun the bug hunt.
-
-This crate sits in the middle. It assumes many bugs live near the happy path,
-where small shifts in shape, length, or ordering reveal a broken assumption. It
-also assumes that a useful test must be repeatable, because a discovered bug is
-not much help if nobody can get back to it.
-
-The tradeoff is depth. A local invariant search is not coverage-guided fuzzing,
-and it does not try to be. It gives you a cheap, deterministic way to ask,
-"what if this structure is slightly different?" That is often enough to expose
-the bug that plain examples would miss.
+We want to test *rules*, not just examples. And we want to do it cheaply.
 
 ---
 
-## 1. What Problem Does This Solve?
+## 1. What Problem Are We Actually Solving?
 
-Most teams already know the two extremes. Ordinary unit tests are cheap and
-clear, but they only check the few examples we remembered to write down. Full
-fuzzing is stronger, but it often arrives with enough harnessing, build setup,
-and replay machinery that the first useful invariant never gets a fair hearing.
+If you ask the question, "What should always be true here?", the answer shouldn't be, "Hold on, let me set up a separate fuzzing project." The answer should be, "Let me write down the rule, and let a tool wiggle the inputs around to see if it holds."
 
-`commonware-invariants` exists to close that gap. Its job is to make
-invariant-driven testing cheap enough to live beside the unit test. The crate
-does not try to replace serious fuzzing. It tries to make the first useful step
-so light that people actually take it.
+That's what `minifuzz` does. It's a tool designed to live right inside your standard Rust `#[test]` modules. It assumes that a lot of bugs are hiding just a few millimeters away from your happy path. If you shift the bytes a little, change the length of a string, or rearrange the order of a message, a broken assumption will pop right out.
 
-When the question is, "what should always be true here?", the answer should not
-be, "first build a separate fuzzing project." The answer should be, "write the
-invariant, then let `minifuzz` search a small space of structured inputs."
-
-That is the habit this crate wants to teach: test the rule, not just the
-example, and make that habit easy enough to repeat.
+But there's a catch. If a tool like this finds a bug by generating a bunch of random junk, and then it just says "Hey, it broke!", that's practically useless to you. You need to be able to reproduce the bug to fix it. So, a failure has to give you a clear, compact receipt—a token—that you can use to replay that exact failure tomorrow, or next week, on any machine.
 
 ---
 
-## 2. Mental Model
+## 2. The Mental Model: A Pocket Searcher
 
-The cleanest mental model is a **pocket searcher**.
+The cleanest way to think about `minifuzz` is as a **pocket searcher**.
 
-Imagine a unit test that can get curious. You give it a rule instead of a
-single sample. It starts from a small buffer, nudges that buffer in simple
-ways, interprets the bytes as structured data, and keeps asking whether the
-rule still holds. If the answer is no, it keeps the evidence. If the answer is
-yes, it keeps trying until the search budget says stop.
+Imagine an ordinary unit test, but instead of checking one hardcoded thing, it gets curious. You hand it a rule (we call this an "invariant"). It starts with a small buffer of raw bytes, tries to interpret those bytes as your structured data, and checks if the rule holds. 
 
-That is not full fuzzing. It is smaller, local, and intentionally modest. But
-it keeps the best part of fuzzing: many related questions instead of one
-example. And it keeps the best part of unit tests: it is cheap enough to live
-next to the code it protects.
+If the rule holds, the searcher slightly nudges those bytes—adds some, flips some, copies a chunk—and asks again. It keeps doing this until it runs out of its allowed budget, which is just a time limit or a number of tries.
 
-The useful picture is this:
+If the rule *breaks*, it stops immediately and hands you a receipt.
 
-- the invariant is the promise,
-- the sampler is the curiosity,
-- the search budget is the discipline,
-- and the replay token is the receipt.
-
-If a failure appears, the test does not just say "something went wrong." It
-prints a token you can paste back in and reproduce the same path.
+Here is the picture you should keep in your head:
+- **The Invariant** is the promise your code makes.
+- **The Sampler** is the curiosity, nudging the data.
+- **The Budget** is the discipline, knowing when to stop.
+- **The Replay Token** is the receipt, so you can find the bug again.
 
 ---
 
-## 3. The Core Ideas
+## 3. Breaking Down the Code
 
-### 3.1 Invariants Are the Unit of Thought
+Let's look at how this is actually built in `invariants/src/minifuzz.rs`. It's beautifully simple once you see the parts.
 
-The crate does not ask you to organize tests around a pile of hand-picked
-examples. It asks you to state a rule that should survive many inputs.
+### 3.1 Invariants Over Examples
 
-That matters because protocol bugs are usually not "this one example string is
-wrong." They are "the system accepted a family of inputs it should have
-rejected" or "the state machine breaks when the input is slightly rearranged."
-An invariant turns that into something searchable.
+We're dealing with structured inputs. Your code doesn't usually care about an array of random `u8` bytes; it cares about a `Message`, a `Tree`, or a `Plan`. Bugs usually happen because the system accepted a family of inputs it should have rejected, or a state machine got confused by a slightly weird order. 
 
-This is why the chapter should begin from the rule, not from the harness. The
-harness only matters if the property says something wider than "this one case
-worked."
+An invariant turns a vague worry into a searchable rule. For example: *"No matter what tree we generate, following a valid path should never lead to a node with a value of 77."* That's an invariant.
 
-### 3.2 `Branch` Is the Search Identity
+### 3.2 `Branch`: The Search Identity
 
-The most distinctive type in `minifuzz.rs` is `Branch`.
+The most distinctive piece of the puzzle is a little struct called `Branch`.
 
-It stores three numbers:
-
-- `seed`,
-- `thread`,
-- `size`.
-
-Together these become the branch token printed on failure as
-`MINIFUZZ_BRANCH = 0x...`.
-
-That token is not just a debugging ornament. It is the identity of the current
-search path:
-
-- `seed` anchors the overall random family,
-- `thread` distinguishes one local branch of exploration from the next,
-- `size` tracks how far this branch has grown its input.
-
-The `Display` implementation turns that state into a 24-hex-digit receipt. The
-parser turns it back into a `Branch`. That makes failures portable. The test
-runner can rediscover the same path without the author reconstructing the seed,
-iteration count, or mutation sequence by hand.
-
-### 3.3 `Sampler` Is a Small Mutation Engine, Not a Corpus Manager
-
-The sampler is intentionally modest.
-
-It keeps:
-
-- one RNG,
-- one current buffer,
-- one remaining-count budget for the current branch,
-- and one memory of how many bytes the test body actually consumed last time.
-
-That last field, `last_bytes_used`, is more important than it first appears.
-When the test returns `IncorrectFormat`, the harness learns how much of the
-sample was actually meaningful before parsing failed. Later strategy choices can
-use that information to avoid blindly growing unused suffix bytes.
-
-The mutation strategies themselves are deliberately simple:
-
-- add more bytes,
-- modify the prefix,
-- copy a portion of the existing bytes,
-- clear non-prefix bytes,
-- apply arithmetic nudges outside the prefix.
-
-This is not trying to rival a coverage-guided engine. It is trying to explore a
-useful local neighborhood around the current structured shape.
-
-### 3.4 Result Classification Is How the Search Learns
-
-The search loop in `Builder::test` does not treat every non-success the same.
-It classifies outcomes into different search signals.
-
-If the test body panics, that is a real failure. The harness reports the branch
-token and stops.
-
-If the test returns `arbitrary::Error::NotEnoughData`, that means the current
-sample was simply too short to instantiate the structured case. The harness
-responds by forcibly growing the buffer.
-
-If the test returns `arbitrary::Error::IncorrectFormat`, that means the sample
-did become structured enough to say something about the prefix, even though it
-did not become a valid full case. The harness records how many bytes were
-actually consumed so the next mutation can be smarter.
-
-If the test succeeds, the attempt counts as a real try and advances the search
-budget.
-
-This classification is the quiet center of the crate. It is how a tiny harness
-extracts value from malformed or partial samples without needing global coverage
-feedback.
-
-### 3.5 `Builder` Keeps Search Bounded but Replayable
-
-`Builder` is the crate's control surface. It sets the seed, the search limit,
-the wall-clock limit, the minimum iteration floor, and the reproduction token.
-The important design choice is that time and count bounds are allowed to
-coexist.
-
-`with_search_limit` caps the number of successful tries directly. `with_search_time`
-caps runtime by wall-clock duration. `with_min_iterations` says the harness
-must still perform at least some minimum number of real tries even if the time
-budget is already exhausted.
-
-That last rule is what keeps a zero-time or near-zero-time search from
-degenerating into "did nothing." The test
-`min_iterations_overrides_search_time` exists precisely to nail that down.
-
-`with_reproduce` is the bridge from discovery back to development. It turns the
-printed token into the initial branch and skips all the guesswork.
-
-### 3.6 `arbitrary::Unstructured` Is the Boundary Between Bytes and Meaning
-
-The harness starts from raw bytes, but the test body almost never cares about
-raw bytes by themselves. It cares about a structure:
-
-- a plan,
-- a message,
-- a fragment,
-- a tree,
-- a set of options,
-- or some other typed object the code actually reasons about.
-
-`Unstructured` is where those bytes become a meaningful question.
-
-This is why the crate belongs in the book of a systems library. Many bugs hide
-exactly at the point where a byte stream first becomes structure. `minifuzz`
-does not search abstract entropy. It searches nearby structured cases.
-
----
-
-## 4. How the System Moves
-
-The control flow is short, which is part of the design.
-
-### 4.1 The Search Starts From Either Reproduction or Exploration
-
-`Builder::test` begins by choosing the starting branch.
-
-The priority order is:
-
-1. explicit `with_reproduce(...)`,
-2. explicit `with_seed(...)`,
-3. `MINIFUZZ_BRANCH` from the environment,
-4. otherwise a random branch seed.
-
-That ordering matters because it makes reproduction a first-class mode, not an
-afterthought. The same API handles both "go look around" and "re-run this exact
-failure."
-
-### 4.2 One Search Iteration Has a Clear Lifecycle
-
-A single iteration looks like this:
-
-```text
-branch
-  -> sampler produces bytes
-  -> bytes become Unstructured
-  -> test body interprets structure
-  -> result is classified
-  -> sampler learns or branch advances
+```rust
+#[derive(Copy, Clone)]
+struct Branch {
+    seed: u32,
+    thread: u32,
+    size: u32,
+}
 ```
 
-That lifecycle is why the crate feels light. There is no external corpus, no
-coverage engine, and no out-of-process fuzzer handshake. The whole search is a
-loop inside a test.
+What is this? It’s just three numbers. But together, they make up the absolute identity of the current search path.
+- `seed` is the starting point for the random number generator.
+- `thread` tells us which local branch of exploration we are currently on.
+- `size` keeps track of how far we've grown the input buffer.
 
-### 4.3 Search Budgets Count Successful Tries, Not Every Allocation of Bytes
+When you print a `Branch`, you get a 24-character hex string. If your test fails, the harness spits out `MINIFUZZ_BRANCH = 0x...`. 
 
-One subtle but important rule: the harness increments `tries` only on `Ok(())`.
+This isn't just debugging noise. It's the receipt! The test runner can take that exact hex string, parse it back into a `Branch`, and perfectly recreate the exact sequence of random numbers and mutations that found the bug. You don't have to guess what happened. You just paste the string into your test, and it walks right back to the crash.
 
-That means malformed inputs do not count as fully explored cases. A test that
-spends ten samples merely discovering that the current buffer is too short or
-poorly shaped has not yet consumed ten units of real search budget.
+### 3.3 The `Sampler`: Wiggling the Bytes
 
-This is another place where the tests act as a contract:
+The `Sampler` is our mutation engine. It's intentionally modest. It doesn't have a giant database of past inputs (a corpus) or a map of your code's branches. 
 
-- `incorrect_format_does_not_count_as_try`
-- `search_limit_reduces_min_iterations`
+```rust
+struct Sampler {
+    rng: ChaCha8Rng,
+    buf: Vec<u8>,
+    count: i64,
+    last_bytes_used: usize,
+}
+```
 
-Together they explain how the crate thinks about "enough search."
+Look at the strategies it uses to change the buffer:
+- `strategy_add_bytes`: Make the buffer longer.
+- `strategy_modify_prefix`: Scramble the beginning.
+- `strategy_copy_portion`: Take a chunk and paste it somewhere else.
+- `strategy_clear_non_prefix`: Zero out some bytes.
+- `strategy_arithmetic_non_prefix`: Add or subtract small numbers from some bytes.
 
-### 4.4 Branch Advancement Is the Smallest Form of Search-Tree Traversal
+It's just blindly poking the data. But notice that `last_bytes_used` field? That's where it gets clever.
 
-When one sampler path runs out of local room, the harness calls `branch.next()`
-and switches the sampler to the new branch.
+### 3.4 How the Search Learns
 
-This is not a deep search tree, but it is enough to give the harness a second
-dimension beyond "keep mutating the same bytes forever." The search can move to
-nearby branches while keeping the same overall format and replay discipline.
+The whole search runs inside a loop in `Builder::test`. It tries an input and looks at what happens. But it doesn't just see "success" or "failure". It classifies the result into different signals:
 
-### 4.5 The Tests at the Bottom Are the Real Spec
+1. **Panic!** A real failure. Your code crashed, or an `assert!` failed. The rule broke. The harness prints the branch token and stops.
+2. **`NotEnoughData`**: The test body says, "Hey, I tried to build a structure out of these bytes, but there aren't enough of them." The harness learns from this and tells the sampler to forcibly grow the buffer next time.
+3. **`IncorrectFormat`**: The bytes were long enough, but they didn't make a valid structure. *But*, the test tells the harness how many bytes it actually looked at before it gave up. The harness stores this in `last_bytes_used`. Now, the sampler knows not to bother mutating the unused garbage bytes at the end, saving time.
+4. **Success (`Ok(())`)**: The test produced a valid structure and the rule held. This counts as a "real try".
 
-The tests in `minifuzz.rs` are unusually important because they pin the
-behavior that makes the harness useful: structured searches still find real
-panics, replay tokens reproduce the same failure, malformed inputs do not fake
-progress, and time limits never erase the minimum-iteration rule. That is a
-better spec than prose alone.
+This classification is brilliant. It's how this tiny tool extracts value from malformed or partial inputs without needing a massive coverage engine to guide it.
+
+### 3.5 The `Builder`: Keeping Things Bounded
+
+You have to tell the searcher when to stop, otherwise your `cargo test` will run forever. `Builder` is the control panel.
+
+```rust
+pub struct Builder {
+    search_bound: SearchBound, // Either a Limit (count) or Time (duration)
+    min_iterations: u64,
+    seed: Option<u64>,
+    reproduce: Option<Branch>,
+}
+```
+
+You can cap the search by a fixed number of successful tries (`with_search_limit`), or by a wall-clock duration (`with_search_time`). 
+
+But here is a very important detail: time bounds and count bounds coexist. `with_min_iterations` guarantees the harness will *always* perform at least some minimum number of real, successful tries, even if the time budget is zero. This stops a fast test from just giving up immediately and falsely reporting success.
+
+And `with_reproduce` is the bridge back to debugging. You plug in the hex string you got from a failure, and it skips all the exploring and goes straight to recreating the bug.
+
+### 3.6 The Magic Boundary: `arbitrary::Unstructured`
+
+We start with raw bytes in the sampler. But as I said, your code doesn't care about raw bytes. Look at the signature of the test function:
+
+```rust
+pub fn test(
+    self,
+    mut s: impl FnMut(&mut arbitrary::Unstructured<'_>) -> Result<(), arbitrary::Error>,
+)
+```
+
+First, let's decipher the Rust syntax: `impl FnMut(...)` just means "give me a closure (a block of code) that I can call multiple times, and it's allowed to modify its own internal state."
+
+But the real magic is that `Unstructured<'_>` object. That is the boundary between chaos and order. It takes the meaningless stream of bytes generated by the sampler and provides methods to safely pull out numbers, booleans, strings, and nested structures. This is where bytes become *meaning*. `minifuzz` isn't searching abstract noise; it's searching the space of nearby structured objects.
 
 ---
 
-## 5. What Pressure It Is Designed To Absorb
+## 4. How It All Moves Together
 
-### 5.1 Low Ceremony
+The control flow is incredibly short. That's a feature, not a bug. Here is the entire lifecycle of a search iteration:
 
-If the harness is small enough to live in a test module, the invariant gets
-written sooner. That is the economic argument behind the crate.
+1. **Start**: The harness decides where to begin. It looks for an explicit `with_reproduce` token. If it doesn't find one, it checks for an environment variable `MINIFUZZ_BRANCH`. If that's empty, it just picks a random seed.
+2. **The Loop**: 
+   - The sampler produces a slice of bytes.
+   - The bytes are wrapped in `Unstructured`.
+   - Your test closure runs and tries to interpret them.
+   - The result is classified (Learn? Grow? Succeed? Fail?).
+3. **Advance**: If one path runs out of local room (based on the branch size limit), the harness calls `branch.next()` and switches the sampler to a slightly different branch of the random search.
 
-### 5.2 Deterministic Replay
+Notice what is missing: no external processes communicating over sockets, no compiling separate fuzzer targets, no global state. It's just a loop inside a unit test. 
 
-A failure must be reproducible without guesswork, and the branch token gives the
-bug a handle.
-
-### 5.3 Local Exploration
-
-Many useful bugs are not far away from the happy path, and a small mutation loop
-can find them quickly when the invariant is phrased well.
-
-### 5.4 Bounded Time
-
-Full fuzzing is valuable, but not every check deserves a long-running setup.
-This crate gives you a version of the same idea that can run as part of a
-normal test workflow.
-
-### 5.5 Habit Formation
-
-The real win is not that this harness is powerful enough to replace other
-testing. The real win is that it is simple enough to become a habit.
+And remember the rule about counting: **We only count successful tries.** If the harness spends fifty rounds generating malformed junk that returns `IncorrectFormat`, that doesn't count against your search budget. You only pay for fully explored cases.
 
 ---
 
-## 6. Failure Modes and Limits
+## 5. What Is This Good For?
 
-This crate is intentionally smaller than a full fuzzing system, so it has to be
-honest about what it cannot do.
+Why build it this way? What pressure does this absorb?
 
-### 6.1 It Is Not Coverage-Guided
+- **Low Ceremony**: If the fuzzer is small enough to be a unit test, you'll actually write the invariant today instead of putting it off until tomorrow.
+- **Deterministic Replay**: You never have to guess how a bug happened. The branch token is an absolute guarantee that you can get back to the failing state.
+- **Local Exploration**: Bugs love to hide right next to the happy path. A simple mutation loop finds them incredibly fast when the invariant is phrased well.
+- **Habit Forming**: The real victory isn't replacing heavy fuzzers. It's tricking you into forming the habit of testing *rules* instead of examples, simply because it's so easy.
 
-There is no coverage feedback loop, no corpus minimization, and no claim that
-the harness will discover the deepest state-space bugs on its own.
+---
 
-### 6.2 Weak Invariants Stay Weak
+## 6. What It Cannot Do
 
-If the property is vague, the test will be vague. If the property only
-describes the obvious happy path, the harness will only keep confirming the
-obvious happy path.
+Let's be honest about the limits. This crate is small on purpose, which means it has boundaries.
 
-### 6.3 Input Shape Matters
-
-If the structure induced by `arbitrary` is too rigid, the harness may spend much
-of its time on malformed samples. That is not always wasted work, but it can
-limit how much semantic territory the current budget explores.
-
-### 6.4 Long-Horizon Bugs Still Need Heavier Tools
-
-A protocol bug that appears only after a long execution history, or only after
-coverage-guided exploration finds a narrow branch, may still deserve a real
-fuzzing target.
-
-The right reading of these limits is not "the crate is weak." It is "the crate
-is small on purpose." It is a bridge, not the whole road.
+- **It is not coverage-guided.** It has no idea what lines of code it's hitting inside your program. It won't systematically solve complex mazes of `if` statements to reach a deep bug.
+- **Weak rules mean weak tests.** If you write a bad invariant that only describes the obvious happy path, `minifuzz` will happily just confirm the obvious happy path.
+- **Input shape matters.** If your structured data is extremely rigid, the harness might spend a lot of time generating malformed samples. It learns, but it's not a genius.
+- **Deep bugs still need heavy tools.** If a bug requires a million specific state transitions over hours of execution to manifest, `minifuzz` probably won't find it. You still need real fuzzers for the deep ocean. `minifuzz` is for the shallow water near the beach.
 
 ---
 
 ## 7. How to Read the Source
 
-Start with `invariants/src/minifuzz.rs` itself, then read `Branch` and
-`Sampler` as the mechanism for local search, `Builder` as the budget and replay
-policy, `Builder::test` as the full loop, and the tests as the contract for
-what counts as progress or failure. `invariants/README.md` is only the shortest
-external summary; the real explanation is in the source.
+If you really want to understand it, open up `invariants/src/minifuzz.rs` and read it yourself. 
+- Start with `Branch` and `Sampler` to see exactly how the local search works.
+- Look at `Builder` to understand the budgets and reproduction logic.
+- Read the main `Builder::test` loop to see the classification engine in action.
+- Finally, read the tests at the very bottom of the file. Those tests are the actual contract: they prove that time limits work, that bad formats aren't counted as real tries, and that failures reproduce perfectly. 
 
----
+## Summary
 
-## 8. Glossary and Further Reading
-
-- **invariant**: a rule the code should satisfy across many inputs.
-- **branch token**: the compact hex identity of a specific search path.
-- **sampler**: the local mutation engine that turns one buffer into many nearby
-  cases.
-- **NotEnoughData**: a signal that the current sample is too short and should be
-  grown.
-- **IncorrectFormat**: a signal that the sample had partial structure and
-  revealed how many bytes were meaningfully consumed.
-- **successful try**: a search iteration that produced a well-formed structured
-  case and therefore counts against the search budget.
-
-Further reading:
-
-- `invariants/src/minifuzz.rs`
-- `invariants/README.md`
-- `commonware-codec` and `commonware-coding` chapters for good examples of
-  invariants that become especially valuable under structured search
+Testing doesn't have to be a choice between a couple of lazy examples and a giant, scary fuzzing infrastructure. By keeping the search local, focusing on structured inputs, and insisting on reproducible receipts, `commonware-invariants` gives you a pocket searcher. It's a way to ask "what if?" a thousand times, right inside your unit tests.

@@ -1,412 +1,132 @@
-# commonware-macros
+# commonware-macros: The Language of the System
 
-## Syntax for the Repeated Parts of Protocol Code
+## The Problem With Boilerplate
 
----
+You know, when you look at a lot of protocol code, you start noticing something funny. It keeps saying the same things over and over again!
 
-## Opening Apparatus
+- "Wait for whichever future is ready first."
+- "Keep looping until the system tells us to shut down."
+- "Hide this feature if we're not at the right stability level."
+- "Run this test, but make sure it captures all our logs."
 
-**Promise.** This chapter shows how `commonware-macros` turns a few repeated
-protocol shapes into shared syntax so the rest of the workspace can speak one
-control-flow, stability, and test language.
+Now, the easy thing to do—the naive thing—is just to copy and paste those little rituals everywhere. It's just a little boilerplate, right? What's the harm?
 
-**Crux.** A macro in Commonware is not primarily a convenience feature. It is a
-way to keep repeated protocol grammar from drifting across crates.
+Well, here's the problem: if you do that enough times, the system starts speaking in dialects. One loop prioritizes shutdown differently than another. One test names its groups one way, another does it backwards. Before you know it, the code still *compiles*, but the shared meaning has completely splintered. You have to relearn how a simple loop works every time you open a new file!
 
-**Primary invariant.** When a pattern is standardized here, the call site
-should expose the important protocol decision more clearly than the hand-written
-version it replaces.
-
-**Naive failure.** The easy mistake is to say, "it is only a little boilerplate,
-I will just write it inline." Do that enough times and the workspace starts
-speaking in dialects: one actor loop treats shutdown differently, one test
-harness names groups differently, one stability gate excludes a different set of
-items than another.
-
-**Reading map.**
-
-- Start with `macros/src/lib.rs` for the vocabulary the rest of the workspace
-  is meant to speak.
-- Then read `macros/impl/src/lib.rs` for the grammar and the exclusion rules
-  that make the macros safe to use.
-- `macros/impl/src/nextest.rs` shows how grouped tests become a build-time
-  naming contract instead of a string convention.
-- `macros/tests/select.rs` and `macros/tests/stability.rs` show the edges the
-  macros must preserve.
-
-**Assumption ledger.**
-
-- The reader is comfortable with proc macros and async control flow.
-- The chapter is about preserving recurring shapes, not about macro cleverness.
-- Shared syntax is only useful if it makes the protocol easier to read.
+That's what `commonware-macros` is all about. It's not about being clever with syntax or showing off what procedural macros can do. It's about taking these repeated, fundamental protocol shapes and turning them into a shared language. It's a way to keep the grammar of our system from drifting apart.
 
 ---
 
-## Background
+## How to Think About Macros
 
-Macros matter when the same control shape keeps reappearing and humans start
-copying it by hand. A function can reuse behavior, but it cannot change syntax.
-A macro can. That makes macros useful anywhere the important thing is not just
-what code does, but how the code is spelled.
+I like to think of this crate as a tiny, highly-specialized compiler front-end. 
 
-The vocabulary here is simple:
+Instead of writing all the tedious, repetitive plumbing yourself, you write the *intent* using syntax that feels natural. The macro takes that syntax, breaks it down, and stamps out the exact, explicit Rust code that bakes in our system's rules. It’s not "doing work" in the background—it’s just translating a small protocol grammar into explicit, predictable code.
 
-- **Token trees** are the raw shapes a macro receives.
-- **Expansion** is the rewritten Rust the compiler actually checks.
-- **Hygiene** is the rule that keeps names and scopes from colliding by
-  accident.
-- **Control-flow macros** keep branch order and loop exits visible.
-- **Attribute macros** attach policy to items without repeating the policy at
-  every call site.
+There are three main ways this translation happens:
+1. **Control flow:** `select!` and `select_loop!` handle waiting and prioritization.
+2. **Visibility:** The stability macros (`#[stability]`, `stability_scope!`) control what code is visible at compile-time.
+3. **Tests:** The test macros make sure all our tests run with the same logging and naming rules.
 
-The naive alternative is copy and paste. That works until the repeated shape
-drifts. One loop remembers to prioritize shutdown. Another forgets. One test
-harness names groups one way. Another names them differently. At that point the
-workspace still compiles, but the shared meaning has started to splinter.
-
-There is also a second naive alternative: hide the pattern in a helper
-function. That is better than copy and paste when the repeated part is behavior.
-It is not enough when the repeated part is syntax. A helper function cannot
-make `else` sit beside a refutable pattern, cannot turn branch order into an
-explicit policy, and cannot make a stability gate look like a local item
-annotation.
-
-The tradeoff is indirection. Macros can make a protocol easier to read once the
-pattern is familiar, but they can also make debugging harder if the expansion is
-too clever. That is why the right macro is small, explicit, and narrowly
-focused. It should preserve a recurring shape, not invent a new language.
-
-In this chapter, the main background idea is that syntax itself can be a form
-of coordination. If several crates need the same policy, compile-time
-rewriting can keep that policy uniform without forcing every caller to spell out
-the same ceremony.
+Let's look at how these pieces actually work under the hood.
 
 ---
 
-## 1. What Problem Does This Solve?
+## 1. Controlling the Flow: `select!` and `select_loop!`
 
-Protocol code keeps saying the same things:
+### Making Priority Visible with `select!`
 
-- wait for whichever future is ready first,
-- keep looping until shutdown wins,
-- hide this item at higher stability levels,
-- run this async test like a normal test,
-- capture traces the same way everywhere,
-- rename this test so nextest can filter it predictably.
+In a protocol, you spend a lot of time waiting. A message comes in, a timer goes off, a connection drops. The real question isn't "how do I wait?" The real question is, "If two things happen at the exact same time, which one wins?"
 
-Those are not random conveniences. They are repeated protocol moves. If every
-crate hand-writes them, the workspace starts speaking in dialects. One actor
-loop handles shutdown one way, another handles it a little differently, and the
-reader has to relearn the same control flow in every file.
+`select!` answers this by generating a biased `tokio::select!` block. 
 
-`commonware-macros` exists to stop that drift. It turns the repeated parts into
-shared syntax so the call site can say the protocol directly instead of spelling
-the surrounding ceremony every time.
-
-That is why this crate belongs in the book. It is the grammar of recurring
-protocol habits.
-
----
-
-## 2. Mental Model
-
-Think of the crate as a tiny compiler front end.
-
-Each macro starts with syntax that humans already want to write, parses that
-syntax into a structured shape, and then emits ordinary Rust with one
-carefully chosen policy baked in. The important distinction is that the macro
-is not "doing work" so much as lowering a small protocol grammar into explicit
-code.
-
-That lowering happens in three distinct ways:
-
-- `select!` is a thin reexport around `tokio::select!` in biased mode.
-- `select_loop!` parses a mini language, then expands it into a loop with a
-  persistent shutdown future and ordinary select branches.
-- the stability and test macros attach compile-time policy to items, then
-  make the generated item shape match the policy exactly.
-
-Once you read the crate this way, the interesting question stops being "what
-macro should I call?" and becomes "what expansion shape does the protocol need?"
-
----
-
-## 3. The Core Ideas
-
-### 3.1 `select!` Makes Priority Visible
-
-Protocols spend a lot of time waiting on many things at once. A message
-arrives, a timer fires, a connection closes, a cancellation signal comes in.
-The real question is not "how do I poll futures?" It is "which event should
-win if two are ready?"
-
-`select!` answers that question by generating a biased `tokio::select!` block.
-The source order of the branches is therefore part of the protocol. An earlier
-branch is not merely earlier in the file. It is earlier in the scheduling
-policy.
-
-That matters because priority is often a semantic choice. If shutdown should
-win before work drains, or if a control channel should be checked before a
-bulk-data branch, the source order needs to say so directly. The macro keeps
-that choice visible instead of hiding it in a helper function or a nested
-`match`.
-
-### 3.2 `select_loop!` Turns One Choice Into an Actor Lifecycle
-
-The richer macro is `select_loop!`.
-
-Its parser is intentionally narrow. `SelectLoopInput` expects a context
-expression, an optional `on_start`, a required `on_stopped`, a sequence of
-branches, and an optional `on_end`. Each branch is parsed as `pattern = future
-[else expr] => body`, with `Pat::parse_single` ensuring the pattern is already
-in a form the compiler understands.
-
-That grammar exists so the expansion can be honest. The emitted code is not a
-magical runtime. It is a `let mut shutdown = context.stopped();` binding, a
-plain `loop`, a biased select, and a couple of lifecycle hooks placed at exact
-points in that loop.
-
-Two implementation details are worth calling out.
-
-First, refutable patterns must carry an `else` clause. The macro checks that at
-parse time with a tiny irrefutability test, so `Some(msg) = rx.recv()` without
-an `else` is rejected immediately instead of becoming a confusing runtime
-branch.
-
-Second, `expr_to_tokens` inlines block contents instead of wrapping them in an
-extra block every time. That preserves lexical scope for `on_start`, the select
-arms, and `on_end`. A variable introduced in `on_start` is supposed to be
-visible in the rest of the iteration, and the expansion keeps that promise.
-
-The resulting shape is roughly:
-
-```text
-let mut shutdown = context.stopped();
-loop {
-    on_start
-    select! {
-        _ = &mut shutdown => { on_stopped; break; }
-        branches...
-    }
-    on_end
+```rust
+commonware_macros::select! {
+    _ = &mut shutdown => { ... } // This will ALWAYS be checked first!
+    msg = rx.recv() => { ... }
 }
 ```
 
-That is a lifecycle, not just a convenience wrapper.
+What does "biased" mean? It simply means the order in which you write the code *is* the priority! An earlier branch isn't just earlier on the page; it's earlier in the scheduling policy. If shutdown should win before anything else, you put it at the top. The macro makes that choice visible and undeniable, rather than hiding it in some helper function.
 
-### 3.3 The Stability Macros Encode an Exclusion Ladder
+### The Actor Lifecycle: `select_loop!`
 
-The stability family looks simple from the outside:
+Now, `select_loop!` is where things get really interesting. It takes that simple idea of prioritization and builds an entire lifecycle around it.
 
-- `#[stability(LEVEL)]`
-- `stability_mod!(LEVEL, pub mod name)`
-- `stability_scope!(LEVEL { ... })`
+Instead of hand-rolling a `loop`, setting up a shutdown future, and writing a `select!` every single time, you write this little mini-language:
 
-The interesting part is how the proc macro lowers the level into cfg guards.
-`StabilityLevel` accepts either the integer levels `0..4` or the named levels
-`ALPHA` through `EPSILON`. `exclusion_cfg_names(level)` then constructs every
-higher stability cfg plus `commonware_stability_RESERVED`.
-
-That reserved cfg is the key systems detail. It gives CI a way to hide every
-annotated public item at once and then inspect rustdoc output for stragglers.
-Any public item that still appears under the reserved cfg is an unmarked item,
-which is exactly the sort of omission the stability checks are meant to catch.
-
-`stability_scope!` makes the same rule local to a block of items. If the caller
-provides `cfg(feature = "std")`, the macro emits `#[cfg(all(feature = "std",
-not(any(...))))]` on every item. The macro is therefore not "just" adding
-attributes. It is making one visibility policy apply to a whole scope without
-letting the items drift apart.
-
-### 3.4 `stability_scope!` Shows That Compile-Time Control Flow Can Also Be Local
-`stability_scope!` deserves separate attention because it teaches the same idea
-as `select_loop!`, but at compile time.
-
-A module can say, in one place, "these items are all the same stability level,
-and they also all share the same `cfg` predicate." The macro then rewrites each
-item with the same exclusion guard. That makes the scope itself the unit of
-policy instead of each item becoming a tiny snowflake of `#[cfg]` logic.
-
-The tests in `macros/tests/stability.rs` are valuable because they show that
-the grouped form is not a different meaning. It is the same exclusion ladder
-applied to a block instead of repeated per item.
-
-### 3.5 The Test Macros Standardize Harness Semantics
-
-The test macros are best understood as harness shims.
-
-`test_async` strips the `async` from the function signature, keeps the original
-item shape, and wraps the body in `futures::executor::block_on`. The point is
-not just convenience. It keeps async tests in the same class as ordinary
-tests, which matters when a suite needs to mix both styles.
-
-`test_traced` validates the requested log level, builds a subscriber with
-`FmtSpan::CLOSE`, and runs the test under that dispatcher. `test_collect_traces`
-goes one step further: it creates a `TraceStorage`, builds both a formatting
-layer and a collecting layer, and uses `crate_name("commonware-runtime")` to
-find the right path to the runtime crate even if the workspace renamed it.
-
-`test_group` is the smallest macro with the sharpest policy. It sanitizes the
-group name, checks it against `.config/nextest.toml` when that file exists, and
-then rewrites the function name so the group is part of the binary-level test
-identity. That makes nextest filters a build-time contract instead of a string
-convention.
-
-### 3.6 `test_group` Treats Nextest Names as Build-Time Policy
-The smallest-seeming macro may be the one that matters most.
-
-`test_group("...")` turns test naming into a build-time contract. Group names
-are normalized, validated against `.config/nextest.toml`, and rejected early if
-they are unknown. Only when the config file is absent entirely does the macro
-fall back quietly.
-
-That is the Commonware pattern in miniature: keep policy close to the call
-site, but make the policy visible to the compiler.
-
----
-
-## 4. How the System Moves
-
-The easiest way to understand the crate is to follow one repeated pattern from
-call site to expansion to tests.
-
-### 4.1 Control-Flow Syntax Starts as a Small Local Claim
-
-A protocol actor says:
-
-```text
-wait on these futures,
-prefer shutdown,
-prefer higher-priority branches,
-loop until a refutable pattern or shutdown says stop.
+```rust
+commonware_macros::select_loop! {
+    context,
+    on_start => { 
+        // We prepare our state here
+        let start_time = std::time::Instant::now(); 
+    },
+    on_stopped => { 
+        // What to do when the music stops
+        println!("Shutting down...");
+        drop(shutdown);
+    },
+    Some(msg) = rx.recv() else break => {
+        // Handle the message
+    },
+    on_end => {
+        // This runs after a successful iteration
+        println!("That loop took {:?}", start_time.elapsed());
+    },
+}
 ```
 
-At the call site that becomes `select!` or `select_loop!`, which keeps the
-policy visible in source order and branch structure.
+The macro takes this and expands it into something beautiful and explicit. It creates a `let mut shutdown = context.stopped();` binding right up front. Then it starts a `loop`. It runs your `on_start` code, drops into a biased `select!` (where `shutdown` is always checked first), and finishes with `on_end`. 
 
-### 4.2 The Proc Macro Expands That Claim Into Explicit Runtime Machinery
+Notice that `else break`? The macro is smart! If you give it a pattern that might fail (like `Some(msg)` when a channel closes and returns `None`), it *forces* you to say what happens if it fails. It uses Rust's `let else` syntax to safely unwrap the value or execute your fallback, preventing confusing runtime bugs.
 
-Inside `macros/impl/src/lib.rs`, the parser converts the branch syntax into
-structured inputs, then expands them into real `tokio::select!` code with the
-appropriate lifecycle around it.
-
-The result is not a hidden runtime. It is ordinary Rust generated from a shared
-grammar.
-
-### 4.3 The Tests Then Nail Down the Semantic Edges
-
-`macros/tests/select.rs` proves the details that matter:
-
-- priority is source-order biased,
-- lifecycle hooks run at the documented times,
-- shutdown wins when it should,
-- and refutable patterns plus `else` clauses behave like explicit actor-exit
-  edges.
-
-`macros/tests/stability.rs` does the same thing for compile-time visibility:
-
-- level-gated items compile or disappear together,
-- scoped gating behaves like repeated per-item gating,
-- and cfg predicates compose with stability levels.
-
-### 4.4 The Test Harness Macros Repeat the Same Pattern
-
-The call site says:
-
-- this test is async,
-- or this test wants tracing,
-- or this test wants trace storage,
-- or this test belongs to a nextest group.
-
-The proc macro expands the harness shape, and the small unit tests confirm the
-edge behavior.
-
-That is the repeated lesson of the whole crate:
-
-> the macro should preserve a recurring protocol shape, and the tests should
-> prove the preserved edges.
+It's not magic. It's just generating the exact, robust actor lifecycle you *should* be writing, every single time.
 
 ---
 
-## 5. What Pressure It Is Designed To Absorb
+## 2. The Stability Fences
 
-The first pressure is **cancellation and shutdown**. Protocol actors spend most
-of their lives waiting, so the shutdown path must be boring and uniform.
+When you are building a big system, you don't want every piece of code available to everyone all at once. You have things that are experimental (ALPHA), things getting solid (BETA), and things that are rock solid (EPSILON).
 
-The second pressure is **boilerplate drift**. Without macros, each crate
-invents its own small ritual for loops, tests, trace capture, and stability
-gates. Those rituals diverge.
+You might see an annotation like this:
 
-The third pressure is **release discipline**. Stability levels are part of the
-API story, so the visibility rule needs to be visible in the source and
-inspectable by CI.
+```rust
+#[stability(BETA)]
+pub struct StableApi {}
+```
 
-The fourth pressure is **observability**. Tests need consistent tracing and
-predictable names, or debugging becomes a scavenger hunt.
+What is this actually doing? Well, the macro looks at `BETA` (which is level 1) and generates a ladder of `#[cfg]` attributes. It basically says, "Include this code *unless* the compiler is told we are building for GAMMA, DELTA, or EPSILON." 
 
-The fifth pressure is **cross-crate composability**. Shared syntax keeps the
-workspace sounding like one system instead of many similar but slightly
-different ones.
+It builds an *exclusion ladder*.
 
----
+Even better, we have `stability_scope!`. Instead of making every single item in a file its own little snowflake with a dozen `#[cfg]` tags, you wrap the whole block! 
 
-## 6. Failure Modes and Limits
+```rust
+stability_scope!(BETA {
+    pub mod stable_module;
+    pub use crate::stable_module::Item;
+});
+```
 
-This crate is powerful, but it is not magic.
-
-### 6.1 Biased Selection Can Starve Later Branches
-
-`select!` is biased on purpose. That is useful when priority matters and
-dangerous when an earlier branch is almost always ready.
-
-### 6.2 `select_loop!` Does Not Make the Body Correct
-
-The macro standardizes the loop shape. It does not decide when the protocol
-should `break`, `continue`, or persist state.
-
-### 6.3 Stability Macros Enforce Visibility, Not Semantic Stability
-
-The macros can make API fences consistent. They cannot prove that the behavior
-behind a visible item stayed compatible.
-
-### 6.4 A Clean Harness Still Needs a Good Test
-
-`test_traced` and `test_collect_traces` standardize observability. They do not
-make a weak assertion strong.
-
-The limit is therefore the same in every family: the syntax can protect the
-pattern, but not the truth of the protocol using that pattern.
+The macro simply runs through and stamps the exact same visibility rule onto every item inside the block. It keeps the policy local and easy to read, but makes sure the items don't accidentally drift apart in how they are compiled.
 
 ---
 
-## 7. How to Read the Source
+## 3. Standardizing the Tests
 
-Start with `macros/src/lib.rs` to see the public surface. Then read
-`macros/impl/src/lib.rs` for the grammar that preserves control-flow and
-stability rules, `macros/impl/src/nextest.rs` for the naming contract, and the
-tests for the cases where the abstraction must stay honest.
+Finally, let's talk about testing. If you don't have consistent observability in your tests, debugging becomes a scavenger hunt in the dark!
+
+The test macros act like little shims that wrap your test functions:
+
+- `#[test_async]` strips the `async` keyword and wraps your code in `futures::executor::block_on`. Simple, clean, and keeps async tests looking like normal tests.
+- `#[test_traced("INFO")]` sets up a tracing subscriber with the exact log level you want, just for that test's scope.
+- `#[test_group("my_group")]` is my favorite because it's so strict. It takes your test name, say `test_behavior`, validates "my_group" against a configuration file (`nextest.toml`), and literally renames the function to `test_behavior_my_group_`. It turns a convention into a *build-time contract*. If you typo the group name, it doesn't compile!
 
 ---
 
-## 8. Glossary and Further Reading
+## The Takeaway
 
-- **biased selection**: source-order priority among simultaneously ready
-  branches.
-- **refutable pattern**: a pattern that may fail to match and therefore needs an
-  `else` path.
-- **stability exclusion ladder**: the cfg sequence that hides lower-stability
-  items at higher stability levels.
-- **reserved stability cfg**: the synthetic `commonware_stability_RESERVED`
-  level used to exclude all annotated items during CI visibility checks.
-- **nextest group**: a validated suffix that keeps nextest filtering
-  predictable.
-- **TraceStorage**: the runtime trace collector handed into
-  `test_collect_traces`.
+When you are reading or writing code in Commonware, remember what these macros are here for. They absorb the pressure of boilerplate drift. They give us a shared vocabulary for cancellation, priority, stability, and testing.
 
-Further reading:
-
-- `macros/src/lib.rs`
-- `macros/impl/src/lib.rs`
-- `macros/impl/src/nextest.rs`
-- `macros/tests/select.rs`
-- `macros/tests/stability.rs`
+They don't magically make the logic of your protocol correct. But by stripping away the noise and the repetitive ceremonies, they make it much, much easier for you to see the logic that *actually* matters.

@@ -2,574 +2,231 @@
 
 ## The Missing-Piece Coordinator
 
-A persistent search that stays alive until the consumer accepts the answer.
+Imagine you’re trying to find a very specific piece of a jigsaw puzzle, and the only way to find it is to ask a room full of people. Now, some of these people might have it, some might not, some might be incredibly slow to answer, and some might even hand you a piece from a completely different puzzle just to mess with you.
+
+How do you organize this search without completely losing your mind?
+
+That’s exactly the problem `commonware-resolver` solves. It is a persistent, coordinated search that stays alive until you—the consumer—look at the piece and say, "Yes, this is exactly what I needed."
 
 ---
 
 ## 0. Opening Apparatus
 
-**Promise.** This chapter shows how `commonware-resolver` keeps one keyed
-search alive until the consumer accepts the bytes, without mistaking a reply
-for a solution.
+**The Promise.** By the end of this chapter, you’ll understand how `commonware-resolver` keeps a search for a missing piece alive without accidentally multiplying the work, and why it absolutely insists on separating *finding* a piece from *validating* it.
 
-**Crux.** The resolver is a coordinator for missing pieces. It preserves one
-search per key, retries without duplicating work, and keeps validation separate
-from retrieval.
+**The Crux.** The resolver is a coordinator. It keeps one search per key. It remembers who it has already asked so it doesn't do the same work twice. And most importantly, it never assumes a reply is the correct answer.
 
-**Primary invariant.** A key never becomes two searches. A search ends only
-when the consumer accepts the value, the caller cancels it, or the key is
-retained away.
+**The Primary Invariant.** A key never turns into two independent searches. A search only ends when one of three things happens: the consumer accepts the value, the caller cancels the search, or the caller decides to trim the search away.
 
-**Naive failure.** If every reply counts as success, every miss becomes
-fan-out, every invalid response looks useful, and the network burns time
-rediscovering the same absence.
+**The Naive Failure.** If you just treat every reply as a success, you're in trouble. Every time someone doesn't have the piece, you spawn more searches. Every time someone hands you a piece of junk, you think you're done. You end up burning the network down just rediscovering the same absences.
 
-**Reading map.** Start with `resolver/src/lib.rs` for the public contract,
-then `resolver/src/p2p/fetcher.rs` for the search state machine, then
-`resolver/src/p2p/engine.rs` for the actor loop, then `resolver/src/p2p/wire.rs`
-for the request IDs and payload grammar. Finish with the tests in
-`resolver/src/p2p/mod.rs` and `resolver/src/p2p/fetcher.rs`, because they
-document the cases the prose must not gloss over.
-
-**Assumption ledger.**
-
-- The reader is comfortable with asynchronous message passing.
-- The reader wants the resolver as a distributed-systems primitive, not a
-  storage API.
-- The chapter reads the code as BETA behavior: stable wire and API, not a
-  sketch.
+**Reading Map:**
+1. Start with `resolver/src/lib.rs` to see the boundary between the resolver and the rest of the world.
+2. Look at `resolver/src/p2p/fetcher.rs` to see the "memory" of the search.
+3. Check `resolver/src/p2p/engine.rs` to see the beating heart—the actor loop that drives everything forward.
+4. Don't skip the tests in `resolver/src/p2p/mod.rs` and `resolver/src/p2p/fetcher.rs`. They are the real documentation of how the edge cases are handled.
 
 ---
 
 ## 1. Background: Why Missing Data Turns Into Coordination
 
-Distributed lookup is not just a request-response loop. It is a search problem
-in a network that can lie by omission, delay, duplication, or disagreement.
+Let’s think about distributed lookup. It sounds simple, right? It's just a request and a response. But it’s not! It's a search problem in a network that is fundamentally unreliable. The network can lie to you by omitting things, delaying things, duplicating things, or just flat-out disagreeing.
 
-The first useful terms are straightforward:
+Let’s get our terms straight so we know what we're talking about:
+- A **candidate** is a piece of data that *might* be the answer.
+- A **consumer** is the judge. It looks at the candidate and decides if it’s actually right.
+- A **producer** is someone who has pieces and serves them to others.
+- A **targeted search** means you only want to ask a specific group of people. "Only ask the people in the front row."
+- An **untargeted search** means you'll take the piece from anybody who has it.
 
-- a candidate is a value that might solve the lookup,
-- a consumer decides whether that candidate is actually acceptable,
-- a producer serves values to other peers,
-- a targeted search restricts which peers may answer,
-- an untargeted search asks the system to try any eligible peer.
+The naive way to build this is to say, "Hey, if someone replies, we're done!" But think about what happens. If someone replies with garbage, you stop searching, and you still don't have your piece. Or, if three different parts of your program need the same piece, they might all send out separate searches, doing three times the work!
 
-The naive approach is to treat any reply as success. That collapses search and
-validation into one step, which means invalid values can look useful and the
-same missing piece can be searched for repeatedly by different callers. A more
-careful design keeps one live search per key, remembers which peers have
-already been tried, and only stops when the returned value passes the caller's
-own test.
-
-The tradeoff is familiar: a broader search is often faster, but a narrower one
-can express stronger trust. Parallel retries reduce latency, but they also
-increase duplicate work. Timeouts keep the system honest, but they also make it
-possible to give up before the network has truly failed. The resolver's job is
-to manage those tensions without confusing a reply with an answer.
+A smart design—which is what we have here—keeps *one* live search per key. It remembers who it asked. It only stops when the judge (the consumer) looks at the piece and gives the thumbs up.
 
 ---
 
 ## 2. What Problem Does This Solve?
 
-At the edge of a distributed system, you often know what you need before you
-know who has it. That is the resolver's job: carry a search across an
-unreliable network without confusing "someone replied" with "the answer is
-valid."
+At the edge of a distributed system, you frequently know *what* you need long before you know *who* has it. The resolver’s job is to carry that search across an unreliable network.
 
-If you try to solve that with brute force, every miss becomes fan-out, every
-timeout becomes duplicate work, and every invalid response looks too much like
-success. `commonware-resolver` exists to prevent that collapse. It keeps one
-search alive per key, remembers what has already been tried, and keeps the
-network from spending the same effort twice.
+If you brute-force this, every timeout means you do the work again. Every invalid response looks like a success. `commonware-resolver` prevents this collapse by strictly dividing the labor into two separate steps:
 
-The crate divides the work into two separate judgments:
+1. **Fetch:** Find a candidate value.
+2. **Validate:** Decide if that value is the truth.
 
-- fetch finds a candidate value,
-- validate decides whether that value is fit to keep.
+This split isn't just a neat trick; it is the entire discipline of the crate. If the resolver tried to validate the data itself, it would blur the line between moving data around and deciding what is true. By keeping them separate, the edge stays sharp.
 
-That split is not an implementation detail. It is the discipline. A resolver
-that validates while it fetches would blur the edge between transport and
-truth. This resolver keeps that edge sharp.
+Look at the API:
+- `Resolver` controls the searches (start, target, cancel).
+- `Consumer` judges the bytes (`deliver`).
+- `Producer` serves bytes to others (`produce`).
 
-The public API reflects the split directly:
-
-- `Resolver` starts, targets, cancels, and trims searches.
-- `Consumer` judges the returned bytes.
-- `Producer` serves bytes to other peers when they search here.
-
-So the crate does not own truth. It owns the persistent search for truth.
+The crate doesn't own the truth. It just owns the *search* for the truth.
 
 ---
 
 ## 3. The Public Contract
 
-`resolver/src/lib.rs` gives the smallest useful surface:
+Let's look at `resolver/src/lib.rs`. It's the smallest useful surface area you could ask for.
 
-- `Resolver` is the control plane for searches.
-- `Consumer::deliver(key, value)` is the validation boundary.
-- `Producer::produce(key)` is the mirror image on the serving side.
+```rust
+pub trait Consumer: Clone + Send + 'static {
+    // ...
+    fn deliver(&mut self, key: Self::Key, value: Self::Value) -> impl Future<Output = bool> + Send;
+}
+```
 
-That split is easy to state and easy to underestimate. The resolver never
-claims a value is good. It only delivers candidates. The consumer decides
-whether the bytes are acceptable and whether the search can stop.
+This is beautiful. The resolver never says, "Here is the good value." It says, "Here are some bytes I found." The `Consumer::deliver` method returns a `bool`. If it returns `true`, the consumer is happy, and the search stops. If it returns `false`, the consumer is saying, "This is garbage," and the resolver knows it has to keep looking (and block the guy who sent the garbage!).
 
-That matters because different applications need different kinds of truth.
-One application might accept any syntactically valid value. Another might
-require a cryptographic proof. Another might reject a value that is valid in
-the abstract but stale for the application. The resolver is intentionally not
-the place where those judgments live.
+Why does this matter? Because different applications have completely different ideas of what "truth" is. One app might just want anything that parses. Another might need a cryptographic signature. The resolver doesn't care. It leaves the thinking to the consumer.
 
-The API also distinguishes between ordinary and targeted searches:
+The API also gives you control over *who* to ask:
+- `fetch` says, "Ask anyone."
+- `fetch_targeted` says, "Only ask these specific peers."
 
-- `fetch` and `fetch_all` say "try any eligible peer."
-- `fetch_targeted` and `fetch_all_targeted` say "stay inside this boundary."
-
-That boundary is not a hint. It is part of the request. A targeted search is a
-promise to the caller that the resolver will not silently widen the search to
-save itself work.
+And a targeted search is a *hard promise*. The resolver won't suddenly decide to ask someone else just because your targets are being slow. It stays within the boundary you gave it.
 
 ---
 
 ## 4. The Fetcher as Memory
 
-`resolver/src/p2p/fetcher.rs` is the memory of the search.
+If you look in `resolver/src/p2p/fetcher.rs`, you'll find the `Fetcher` struct. This is the memory of the search.
 
-The fetcher has to remember a surprising amount of state for something that
-looks, at first glance, like "ask peers until one answers."
+At first glance, you might think, "Why is this so complicated? Just ask peers until one answers!" But let's look at what it actually has to remember:
+- The next request ID to use.
+- Which requests are actively waiting for a response.
+- Which keys are pending a retry.
+- Which peers are blocked for lying to us.
+- The performance score of each peer, so we ask the fast ones first.
+- Which keys have a strict target list.
 
-It tracks:
-
-- the next request ID,
-- which requests are active,
-- which keys are pending retries,
-- which peers are blocked,
-- which peers are allowed for a given key,
-- which peer performed well enough to try first next time,
-- and which keys are being searched freely versus under a hard target set.
-
-Once those facts are visible, the fetcher stops looking ornamental. It is the
-minimum memory required to keep a search alive in an adversarial network.
+Once you see this list, you realize the `Fetcher` isn't complicated; it's doing exactly the minimum amount of work necessary to keep a search alive in a hostile environment.
 
 ### 4.1 One Key, One Search
 
-The resolver does not create a fresh search every time the application asks
-for the same key.
+If you ask the resolver for the same key twice, it doesn't create two searches. It edits the existing one. If you spawn duplicate searches, you multiply the network traffic for no reason. The engine uses a map of `fetch_timers` to know if a search is already running. If it is, great! You just hitch a ride on the existing search.
 
-That sounds obvious until you think through the alternative. If duplicate
-fetches spawned duplicate searches, then a retry, a re-target, or a caller
-repetition would multiply network work and produce confusing late responses.
-Instead, the resolver treats a key as one durable story.
+### 4.2 Pending vs. Active Waiting
 
-The engine uses `fetch_timers` to make that story visible. If a key already has
-a timer, it is already in flight. If it does not, the key is new and should be
-inserted into the fetcher. Duplicate calls therefore edit the same search
-instead of creating new work.
+There are two ways a search can be "waiting":
+- **Pending:** The request hasn't been sent yet, or we're waiting to try again.
+- **Active:** We've actually fired the request over the network to a specific peer, and we are staring at the clock, waiting for them to reply.
 
-### 4.2 Pending and Active Are Different Kinds of Waiting
+The `Fetcher` exposes these two different deadlines: `get_pending_deadline()` and `get_active_deadline()`. This ensures we don't spam the network, but we also don't wait forever if a peer goes silent.
 
-The fetcher has two live states:
+### 4.3 Request IDs: Tying the Answer to the Question
 
-- `pending` means the key is waiting to be tried or retried.
-- `active` means the request has already been sent and is waiting on a peer.
+When you send a message over the wire, how do you know what question the answer belongs to? The network doesn't remember for you. 
 
-That distinction is not cosmetic. Pending requests are still choosing where to
-go. Active requests have already committed to one peer and are waiting for the
-network to answer. The engine drives both states with different deadlines.
+```rust
+pub type ID = u64;
 
-The fetcher exposes that split through two deadlines:
+struct ActiveRequest<P, Key> {
+    key: Key,
+    peer: P,
+    start: SystemTime,
+}
+```
 
-- `get_pending_deadline()` tells the engine when the next retry attempt can
-  happen.
-- `get_active_deadline()` tells the engine when an in-flight request should be
-  treated as timed out.
+Every outbound request gets a unique `ID`. When the response comes back, it brings that `ID` with it. The resolver looks up the `ID` to figure out which `Key` we were asking for, and crucially, *which peer we asked*. If peer B answers a question we asked peer A, we throw it away!
 
-The state machine is doing exactly the minimum useful thing: it keeps the key
-alive, but it does not let the same attempt run forever.
+The wire format itself is delightfully simple:
+- `Request(key)`: "Do you have this?"
+- `Response(bytes)`: "Yes, here it is."
+- `Error`: "Nope, don't have it."
 
-### 4.3 Targeted Search Is a Hard Constraint
-
-Targets are not a scoring signal. They are a search boundary.
-
-If a key has targets, only those peers may answer it. The fetcher does not
-silently widen the search to the rest of the network when the targets are
-slow. That is deliberate. It allows the caller to express a stronger claim:
-"this key should come from these peers, and not from anywhere else."
-
-That is why the fetcher preserves targets through empty responses, send
-failures, and timeouts. Those events tell us that the current attempt failed.
-They do not tell us the target set was wrong. The target set is removed only
-when the search ends successfully, when the caller cancels it, or when a peer
-is blocked for sending invalid data.
-
-### 4.4 Request IDs Match Responses to Questions
-
-The wire does not carry memory by itself, so the fetcher and engine create it.
-
-Every outbound request gets an ID. That ID is copied into the response.
-`wire::Message` therefore ties the response back to the question that caused
-it. The engine uses that ID together with the peer identity, because a response
-that came from the wrong peer is still not the right answer.
-
-That matching rule is what lets the system tolerate reordered or stale
-traffic. A late response can arrive after a cancel, after a timeout, or after
-the resolver has already moved on. The response is only meaningful if the
-request still exists and the peer matches the active request record.
-
-The wire format stays small on purpose:
-
-- `Payload::Request(key)` asks for a value,
-- `Payload::Response(bytes)` returns the bytes,
-- `Payload::Error` says "I do not have it" without pretending to be a value.
-
-That last case matters because it lets the requester retry quickly without
-conflating "no data" with "bad data."
-
-### 4.5 Self-Exclusion Is Not Optional
-
-The resolver never sends a fetch to itself.
-
-That sounds trivial until you consider that the local node can absolutely have
-the data. The fetcher still excludes `me` from the eligible set. This keeps the
-network path honest and avoids turning the resolver into a local shortcut that
-never exercised the distributed path.
-
-The `test_self_exclusion` case exists because this edge is easy to miss and
-hard to recover later. If a resolver can satisfy itself, it can accidentally
-hide topology mistakes and make the system look healthier than it is.
-
-### 4.6 Peer Reputation Is Simple on Purpose
-
-The fetcher keeps a performance score per peer and uses it to bias the next
-choice.
-
-The score is not a proof of goodness. It is just memory about whether a peer
-has been fast, slow, or useless recently. Peers that respond quickly drift
-toward the front. Peers that time out or fail drift backward. That is enough to
-stop the resolver from repeatedly starting with the worst available option.
-
-The code deliberately keeps the model simple. A more elaborate ranking system
-would take more state and more explanation, and it would not change the
-fundamental contract: prefer the peers that have been working lately, but keep
-trying if they stop working.
+Notice that `Error` is its own thing. It's not a fake value. It's a clear signal that lets the resolver quickly retry somewhere else without confusing "I don't have it" with "Here is bad data."
 
 ---
 
 ## 5. Walk One Key Through the Engine
 
-It is easier to understand the resolver if you follow one key all the way
-through the loop.
+Let's trace a single key's journey to see how it all comes together.
 
-### Step 1: The application asks for a key
+**Step 1: You ask for a key.**
+You call `Resolver::fetch(key)`. The engine records it. If it's a new key, it starts a timer and puts the key in the `Fetcher`'s pending queue. 
 
-The application calls `Resolver::fetch(key)` or one of the targeted variants.
-The mailbox records the request. If the key is new, the engine starts a timer
-for the whole search and moves the key into the fetcher. If the key is already
-in flight, the engine updates the existing search instead of creating another
-one.
+**Step 2: The Fetcher picks a peer.**
+The `Fetcher` looks at the eligible peers, removes anyone who is blocked, removes *yourself* (because you shouldn't ask yourself for something you're trying to find on the network!), and sorts them by performance. It picks the best candidate.
 
-That timer exists for the whole key, not for one specific peer attempt. If the
-search completes, the timer is canceled. If the search is removed by cancel,
-retain, or clear, the timer is canceled too. That is why the engine keeps
-`fetch_timers` in lockstep with the fetcher.
+**Step 3: The question goes out.**
+The resolver fires off a `Request(key)` over the wire with a fresh `ID`. The key moves from "pending" to "active."
 
-### Step 2: The fetcher chooses a peer
+**Step 4: The network answers (or doesn't).**
+- **If they send an `Error` (or timeout):** They didn't have it. The key goes back to the pending queue to try someone else. We don't block them; they just didn't have it.
+- **If they send `Response(bytes)`:** The resolver hands the bytes to the `Consumer`.
+  - If the consumer says `true` (it's good!): The search is over. The timer is canceled, the targets are cleared. Success!
+  - If the consumer says `false` (it's garbage!): The resolver *blocks* that peer so they can't poison future searches, and puts the key back in the pending queue to try someone else.
 
-The fetcher looks at the current peer set, removes blocked peers, removes
-self, and applies any target restriction for that key.
-
-From there it tries peers in performance order. Good peers stay near the front.
-Poorly performing peers drift backward. Retries can shuffle the order so the
-search does not keep hitting the same peer first.
-
-This is where the search becomes a real distributed-system choice rather than a
-queue of random retries. The resolver is not asking "who exists?" It is asking
-"who should I try next, given what I have already learned?"
-
-### Step 3: The resolver sends a keyed request
-
-Every outbound message carries a request ID and the key being requested.
-
-That request ID matters because the network is not a single clean line. A
-response can arrive late, after a cancel, or after a retry started a fresh
-request elsewhere. The resolver must know which question a response answers.
-The ID is how it keeps those questions apart.
-
-The wire is deliberately small:
-
-- `Request(key)` asks for a value,
-- `Response(bytes)` returns the bytes,
-- `Error` says "I do not have it" or "I am not ready," without pretending to
-  be a value.
-
-The difference between `Response` and `Error` matters. The resolver can make a
-fast retry decision on `Error`, but it must still pass `Response(bytes)` to the
-consumer for validation.
-
-### Step 4: The peer responds
-
-There are three useful responses:
-
-- the peer returns bytes,
-- the peer returns an explicit error,
-- or the peer never responds at all.
-
-The first case is not automatically success. The bytes go to the consumer.
-Only the consumer can say whether the value is valid.
-
-If the consumer accepts the data, the resolver cancels the timer, clears the
-targets for that key, and stops.
-
-If the consumer rejects the data, the resolver blocks that peer and retries
-the key elsewhere.
-
-If the peer returns an error or the request times out, the resolver keeps the
-search alive and tries again later.
-
-That retry behavior is selective. An empty response does not prove malice, so
-it does not trigger blocking. Invalid data does. This distinction is visible in
-the tests: the "no data" cases keep trying, while the invalid-data case removes
-the peer from future searches.
-
-### Step 5: Work stops when the answer is good
-
-That is the point. A resolver should not keep searching after it already has
-the right answer. The crate prevents that in two ways:
-
-- the successful key is removed from the fetcher,
-- and the consumer timer is canceled so no stale timeout can wake up later and
-  do useless work.
-
-The search ends when the application accepts the value, not when the first
-peer replies.
-
-### Step 6: Serving mirrors fetching
-
-The inbound path is the mirror image.
-
-When another peer asks this node for a key, the peer actor forwards the key to
-the `Producer`. The producer returns bytes or fails. The actor then sends a
-response with the original request ID so the remote side can match the answer
-to the question.
-
-That symmetry matters. The same actor is both a client and a server. It asks
-questions for local consumers and answers them for remote peers. The protocol
-is easiest to understand when you realize both directions use the same
-request/response grammar and the same timing discipline.
+Notice the profound difference there? An empty response means "keep looking." Bad data means "punish the peer, *then* keep looking."
 
 ---
 
-## 6. The Engine as a Single Loop
+## 6. The Engine Loop
 
-`resolver/src/p2p/engine.rs` is where the system becomes concrete.
+If you open `resolver/src/p2p/engine.rs`, you'll see the heart of the beast. It's a single massive `select_loop!`.
 
-The engine is one loop with several sources of truth:
+Why one loop? Because it has to coordinate several different realities at the same time:
+- Commands coming from the application (the mailbox).
+- Updates to the list of connected peers.
+- Deadlines for retries and timeouts.
+- Network messages arriving from the outside world.
 
-- mailbox commands from the application,
-- peer-set updates from the provider,
-- deadlines from the fetcher,
-- completed producer futures,
-- and network messages from remote peers.
+By putting it all in one loop, the engine avoids race conditions. It doesn't have to guess which state is the "real" one; it synchronizes them all in lockstep.
 
-The loop does not privilege one of those sources as "the real one." It keeps
-them synchronized.
-
-### 6.1 Mailbox commands change the shape of the search
-
-`fetch`, `fetch_all`, `fetch_targeted`, and `fetch_all_targeted` all enter
-through the mailbox.
-
-The engine distinguishes between a new search and an update to an existing
-search. If the key is new, it starts the timer and adds the key to the ready
-queue. If the key already exists, it adjusts targets instead of duplicating
-work. That is why the tests around duplicate fetches and target clearing are so
-important. They prove that the mailbox is editing an existing search, not
-creating one per call.
-
-`cancel`, `retain`, and `clear` all follow the same pattern:
-
-- update the fetcher,
-- remove the matching timer or timers,
-- notify the consumer that the search ended without success.
-
-The engine keeps the fetcher and timer map aligned so that no key survives in
-one structure after it has been removed from the other.
-
-### 6.2 Peer-set changes are not the same as application updates
-
-The peer provider can change over time.
-
-When that happens, the engine reconciles the fetcher's participant set with the
-current tracked peers. This is how the resolver learns that a peer has become
-eligible or ineligible for future searches.
-
-The fetcher therefore uses the current peer set as a living constraint, not a
-static list. That is why the tests around changing peer sets matter: they show
-that the resolver adapts without losing the searches that are already in
-flight.
-
-### 6.3 Timeouts keep the loop honest
-
-The engine uses two timer classes.
-
-One timer belongs to the whole search and is tracked in `fetch_timers`. That
-timer ends when the consumer accepts the value or when the search is canceled
-or trimmed away.
-
-The other timer belongs to the fetcher and controls when a key should be tried
-again or when an in-flight request should be considered overdue.
-
-Those timers are deliberately separate. The first one says "how long has this
-search existed?" The second says "when should this attempt move again?"
-
-That separation is the easiest way to understand why the engine needs both the
-fetcher and the timer map. One tracks the search's existence. The other tracks
-its current attempt.
-
-### 6.4 The inbound response path is a proof obligation
-
-When a response arrives, the engine does not trust it blindly.
-
-It matches the request ID and peer against the fetcher. If that key no longer
-exists, the message is stale and is ignored. If the peer does not match, the
-message is also ignored. Only a live request from the correct peer can advance
-the search.
-
-If the response contains bytes, those bytes are handed to the consumer. If the
-consumer accepts them, the timer is removed and the search ends. If the
-consumer rejects them, the peer is blocked and the key is retried.
-
-If the response is `Error`, the peer simply did not have the data. The search
-continues, but the peer is not blocked.
-
-The key code path is short enough to describe almost as pseudocode:
+Here's the essence of how it handles an incoming network message:
 
 ```rust
 match msg.payload {
-    Request(key) => handle_network_request(peer, id, key),
-    Response(bytes) => handle_network_response(peer, id, bytes).await,
-    Error => handle_network_error_response(peer, id),
-}
+    wire::Payload::Request(key) => self.handle_network_request(peer, msg.id, key),
+    wire::Payload::Response(response) => {
+        self.handle_network_response(peer, msg.id, response).await
+    }
+    wire::Payload::Error => self.handle_network_error_response(peer, msg.id),
+};
 ```
 
-That compactness is the point. Most of the complexity lives in the state the
-engine is preserving, not in the branch structure itself.
+It's incredibly clean. All the complexity of the distributed search is contained in the *state* (the `Fetcher`), not in deeply nested `if` statements.
 
 ---
 
 ## 7. What the Tests Prove
 
-The tests in `resolver/src/p2p/mod.rs` and `resolver/src/p2p/fetcher.rs` are
-the closest thing the crate has to a behavioral proof.
+The tests aren't just there to make sure the code compiles; they are the executable proof of the resolver's promises. If you want to know what the resolver actually guarantees, read the test names in `resolver/src/p2p/mod.rs` and `resolver/src/p2p/fetcher.rs`:
 
-The important cases are easy to name because the tests already do the naming:
+- `test_peer_no_data`: Proves that if a peer says "I don't have it," we don't give up.
+- `test_blocking_peer`: Proves that if a peer gives us bad data, they get blocked and we spill over to the next peer.
+- `test_duplicate_fetch_request`: Proves we don't do double the network work if you ask for the same thing twice.
+- `test_fetch_targeted_no_fallback`: Proves that a targeted search *really* means "only these targets," even if it means waiting forever.
 
-- `test_fetch_success` shows the ordinary happy path.
-- `test_peer_no_data` shows that empty responses do not end the search.
-- `test_blocking_peer` shows that invalid data causes blocking and future
-  spillover.
-- `test_duplicate_fetch_request` shows that duplicate calls do not create
-  duplicate work.
-- `test_fetch_targeted` shows that targets stay in force through invalid
-  responses until a valid target answers.
-- `test_fetch_targeted_no_fallback` shows that a hard target set really means
-  "do not fall back."
-- `test_fetch_all_targeted` shows that batching can mix targeted and
-  unrestricted searches without confusing them.
-- `test_fetch_clears_targets` shows that a later unrestricted fetch can widen
-  an existing targeted search again.
-- `test_self_exclusion` shows that the local node never becomes its own fetch
-  target.
-- `test_rate_limit_spillover` shows that rate limits create peer spillover
-  instead of serializing the whole system behind one peer.
-- `test_rate_limit_retry_after_reset` shows that the search resumes once rate
-  limits lift.
-- `test_retain` and `test_clear` show that trimming and clearing searches also
-  clean up timers and notifications.
-
-The fetcher unit tests carry the same weight at a lower level. They prove the
-state machine itself:
-
-- `add_ready` and `add_retry` put keys into the right queue,
-- `get_pending_deadline` and `get_active_deadline` return the right next
-  action,
-- `pop_by_id` only succeeds for the right `(peer, id)` pair,
-- `reconcile` updates the eligible peer set,
-- `block` removes a peer from future target sets,
-- `add_targets` and `clear_targets` edit hard constraints correctly,
-- and the waiter logic prevents the engine from spinning when no peer can be
-  used yet.
-
-That is the real value of the tests: they describe the promises in executable
-form. If the prose and the tests ever disagree, the tests win.
+If the documentation ever disagrees with these tests, the tests are right.
 
 ---
 
 ## 8. Failure Modes and Limits
 
-The resolver is strong, but it does not do magic.
+Let's be honest about what the resolver *can't* do. It's not magic.
 
-It cannot invent data that no peer has. If every eligible peer is empty, the
-search can only wait, retry, or be canceled. The resolver can reduce waste,
-but it cannot create a value from nothing.
+If nobody in the network has the data, the resolver can't invent it out of thin air. It will just keep trying (or waiting for targets) until you cancel it. 
 
-It also cannot validate the data on its own. The consumer must do that work.
-That is a feature, not a gap. Different applications need different notions of
-correctness, so the resolver leaves the judgment at the boundary.
+It also can't tell if data is correct. That is solely the burden of the `Consumer`. If your consumer is lazy and accepts garbage, the resolver will happily stop searching and hand you garbage.
 
-Targeted fetches have a hard edge. If you restrict a search to a specific set
-of peers, the resolver will stay inside that set. It will not fall back to a
-broader search just because the targets are slow. That is exactly what the API
-promises, but it also means the caller must choose targets carefully.
-
-Blocked peers are removed for a reason. Once a peer has been caught sending
-invalid data, keeping it in future search paths would only add noise. By
-contrast, empty responses and send failures are not proof of malice. The
-resolver treats them as retry conditions, not as evidence.
-
-The crate also depends on the rest of the system being honest about time and
-peer sets. If the peer set changes, the fetcher must reconcile with the current
-set. If the runtime is not driving timers correctly, retries can happen too
-early or too late. The resolver handles the state, but it relies on the runtime
-to move the world forward.
+And if you use a targeted fetch, you have to know what you're doing. If you target a peer that is offline or just painfully slow, the resolver will patiently wait for them. It won't fall back to a broader search to save you. It does exactly what you told it to do.
 
 ---
 
-## 9. How to Read the Source
+## 9. Glossary
 
-Read the source in this order:
+Let's review the vocabulary so you can read the code like a pro:
 
-1. Start with `resolver/src/lib.rs` to see the public split between
-   `Resolver`, `Consumer`, and `Producer`.
-2. Move to `resolver/src/p2p/mod.rs` for the peer actor as both fetcher and
-   server.
-3. Read `resolver/src/p2p/fetcher.rs` next. This is the search memory, and it
-   explains how requests persist, retry, and stop.
-4. Then read `resolver/src/p2p/engine.rs` to see how mailbox commands,
-   peer-set changes, network responses, and producer completions keep that
-   memory coherent.
-5. Finish with `resolver/src/p2p/wire.rs` and the tests in
-   `resolver/src/p2p/mod.rs` and `resolver/src/p2p/fetcher.rs` so the wire
-   format, invariants, and edge cases line up.
+- **Fetch:** Asking the network to find a key.
+- **Validate:** The consumer's job of looking at the bytes and deciding if they are the real deal.
+- **Targeted fetch:** A strict constraint to only ask a specific set of peers. No fallbacks.
+- **Pending request:** A key that is sitting around, waiting to be sent to a peer or retried.
+- **Active request:** A key that has been shot over the wire, and we are staring at the clock waiting for a reply.
+- **Blocked peer:** Someone who gave us bad data. They are dead to us.
+- **Request ID:** The little tag we attach to a question so we know what the answer corresponds to.
+- **Producer:** The local code that digs up data when someone else asks *us* for a key.
+- **Consumer:** The local code that judges data when we fetch it.
 
-If you keep the fetcher state machine in your head while reading, the rest of
-the crate becomes much easier to follow. If you start from the mailbox and
-work inward, the search logic can feel larger than it is.
-
----
-
-## 10. Glossary
-
-- Fetch - Ask the network for a key.
-- Validate - Let the consumer decide whether the bytes are good.
-- Targeted fetch - Restrict the search to a known set of candidate peers.
-- Pending request - A key waiting to be sent or retried.
-- Active request - A key already sent and waiting for a response.
-- Blocked peer - A peer removed from search paths after sending invalid data.
-- Request ID - The token that matches a response to the question that caused
-  it.
-- Producer - The local role that serves data to remote peers.
-- Consumer - The local role that judges fetched data.
-
-If you want the sharpest reading of the crate, keep asking the same question
-while you read every file: "At this point, what does the resolver know, what is
-it still unsure about, and what is it doing to avoid wasting work?"
+Keep asking yourself this question as you read the source: *"What does the resolver know right now, what is it waiting to find out, and how is it making sure it doesn't do the same work twice?"* Keep that mental model, and the code will unfold for you perfectly.

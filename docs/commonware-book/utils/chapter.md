@@ -1,419 +1,222 @@
 # commonware-utils
 
-*Small, sharp tools for canonical shapes, coordination lifecycles, and
-replayable state.*
+*Small, sharp tools for canonical shapes, coordination lifecycles, and replayable state.*
 
 ---
 
 ## Opening Apparatus
 
-**Promise.** This chapter shows how `commonware-utils` keeps recurring
-invariants in one canonical place instead of letting every crate rediscover
-them locally.
+**Promise.** You see, people often look at a `utils` crate and think, "Ah, here's the junk drawer! This is where we throw all the random ten-line functions we couldn't figure out where else to put." But that's exactly what this chapter is *not* about. This chapter shows how `commonware-utils` is actually a very carefully curated belt of tools. It keeps recurring invariants—the promises our code makes to itself—in one canonical place, so the rest of the workspace doesn't have to constantly rediscover them.
 
-**Crux.** The crate is not a junk drawer. It is the place where Commonware
-names small but important facts:
+**Crux.** This crate is where Commonware names small, but absolutely vital, facts of nature:
+- What does a committee set actually look like?
+- What does it mean for a value to be mathematically non-empty?
+- How do we know when a job is truly complete, versus just canceled?
+- How do we put a firm boundary on concurrency so the machine doesn't choke?
+- And how on earth do you keep a historical record of a mutable bitmap without cloning the whole darn thing every time a bit flips?
 
-- what a committee set looks like,
-- what it means for a value to be non-empty,
-- how completion and cancellation should behave,
-- how bounded concurrency should unwind,
-- and how a mutable bitmap can keep history without cloning itself on every
-  commit.
+**Primary invariant.** Once we give a recurring shape a trusted home, the rest of the workspace needs to use that shape directly. We stop re-inventing the wheel in slightly different, subtly broken ways.
 
-**Primary invariant.** Once a recurring shape gets a trusted home, the rest of
-the workspace should talk about that shape directly instead of re-encoding it
-in slightly different helpers.
-
-**Naive failure.** The easy mistake is to say, "this helper is only ten lines,
-I will just write it here." Enough of those decisions and the workspace starts
-to disagree with itself:
-
-- one crate sorts and deduplicates,
-- another preserves insertion order,
-- another forgets to reject emptiness,
-- another invents its own cancellation rule.
+**Naive failure.** The easy trap to fall into is saying, "Oh, I just need to sort and deduplicate this list. It's only a few lines, I'll just write it right here." But if you make enough of those decisions, the workspace starts to argue with itself:
+- One crate sorts and deduplicates.
+- Another accidentally preserves the insertion order.
+- Another forgets to check if the list is empty.
+- Yet another invents its own chaotic rule for what "canceled" means.
 
 **Reading map.**
-
-- `utils/src/ordered.rs` explains canonical collections.
-- `utils/src/acknowledgement.rs`, `futures.rs`, `concurrency.rs`, and
-  `sync/mod.rs` explain lifecycle and coordination.
-- `utils/src/bitmap/historical/` is the richest state machine in the crate.
-- `utils/src/vec.rs` shows how a small structural promise changes downstream
-  code.
+- `utils/src/ordered.rs` is where we define what a canonical collection is.
+- `utils/src/acknowledgement.rs`, `futures.rs`, `concurrency.rs`, and `sync/mod.rs` explain how to coordinate tasks without pulling your hair out.
+- `utils/src/bitmap/historical/` contains the most fascinating state machine in the crate.
+- `utils/src/vec.rs` shows how a tiny structural promise changes everything downstream.
 
 **Assumption ledger.**
-
-- The reader is comfortable with ordinary Rust collections and async control
-  flow.
-- The chapter is about cross-cutting infrastructure, not domain logic.
-- The goal is not to catalog every helper. It is to explain the few shapes
-  that matter most.
+- We assume you are comfortable with ordinary Rust collections and async control flow.
+- We're talking about cross-cutting infrastructure here, not specific domain logic like consensus or crypto.
+- The goal isn't to list every single helper function. We just want to explain the few fundamental shapes that matter.
 
 ## Background
 
-Systems code keeps running into the same small facts:
+When you write systems code long enough, you realize you keep bumping into the exact same physical realities over and over:
+- You have a list, but it really needs to be sorted and have no duplicates.
+- You have a vector, and you want to ask for its first item, but you don't want to deal with `Option` because you *know* it shouldn't be empty.
+- You fan out a task to five workers, and you need to know when all five have checked back in—not just one, not just a boolean flag, but all of them.
+- You want to enforce a limit on how much work happens at once, but you want to enforce it *once*, right at the gate.
+- You have a massive bitmap of state, and you need to remember its history, but if you copy the whole thing on every commit, you'll run out of memory!
 
-- a collection should really be sorted and deduplicated,
-- a vector should not be empty if callers are going to ask for its first item,
-- a task should count as complete only when every participant has
-  acknowledged it,
-- a limit should be enforced once instead of rechecked everywhere,
-- and a stateful bitmap should be able to remember history without cloning the
-  whole thing every time it changes.
+These aren't just "helpers." These are shared assumptions about how our universe operates. If these assumptions only live in comments and defensive `if` statements scattered across the code, they drift. One part of the code handles an edge case one way, another handles it differently, and soon, nobody knows what anything means anymore.
 
-Those are not "just helpers." They are shared assumptions. If the assumptions
-live only in comments and call-site checks, they drift. One caller handles an
-edge case one way, another caller handles it differently, and the workspace
-starts to lose a single shared meaning.
-
-The tradeoff is that the code gets more explicit. Callers may need a
-constructor, a conversion, or a small amount of ceremony before they get the
-value they want. That is usually the right price to pay. Up-front structure is
-cheaper than repeated defensive checks everywhere else.
+The tradeoff we make in this crate is that the code gets more explicit. You might have to jump through a small hoop—call a constructor, do a conversion—before you get the value you want. But that's a bargain! Up-front structure is infinitely cheaper than repeating defensive checks everywhere else.
 
 ## 1. What Problem Does This Solve?
 
-Across the monorepo, the same questions keep returning in different clothes:
+If you look across the monorepo, the same questions keep coming up, just wearing different hats:
+- How do we prove a committee is the *canonical* committee, and not just some random `Vec`?
+- How do we guarantee a collection is non-empty so we can stop wrapping every single access in an `Option`?
+- How do we tell the difference between "everybody finished" and "somebody gave up"?
+- How do we throttle tasks without inventing another ad-hoc, buggy counter?
+- How do we rewind a bitmap's history efficiently?
 
-- How do we say a committee is canonical rather than merely stored in a `Vec`?
-- How do we guarantee a collection is non-empty so callers stop wrapping every
-  access in `Option`?
-- How do we distinguish completion from cancellation?
-- How do we keep a fixed number of tasks in flight without inventing another
-  ad hoc counter?
-- How do we retain historical bitmap state without cloning the full bitmap on
-  every commit?
-
-`commonware-utils` exists to answer those questions once.
-
-The crate is a consistency layer. It turns recurring tiny invariants into
-named, reusable contracts.
+`commonware-utils` exists to answer those questions definitively, once and for all. It's a consistency layer. It takes these recurring, tiny invariants and turns them into named, reusable, ironclad contracts.
 
 ## 2. Mental Model
 
-The cleanest mental model is a belt of small sharp tools. That image matters
-because a belt is organized around recurring work, not taxonomy. You do not
-carry every possible helper. You carry the few tools that solve the same class
-of problem every time it appears.
+I want you to imagine a toolbelt. Not a sprawling taxonomy of every possible gadget, but a tight belt of sharp, specific tools for recurring work. You don't carry every tool; you carry the ones that solve the problems you face every day.
 
-That is how this crate behaves:
+That's how this crate works:
+- `ordered::Set` gives us a canonical shape for collections.
+- `Participant` and `Faults` let us do committee math with real types instead of ad-hoc integers.
+- `NonEmptyVec` makes a tiny, unbreakable structural promise.
+- `Exact`, `Pool`, `AbortablePool`, `Limiter`, `KeyedLimiter`, and `UpgradableAsyncRwLock` give us a common language for lifecycle and coordination.
+- `bitmap::historical` is the crown jewel on the belt: a state machine that handles snapshots and diffs with explicit commit, abort, and prune boundaries.
 
-- `ordered::Set` gives the workspace a canonical collection shape.
-- `Participant` and `Faults` let committee math stay typed instead of ad hoc.
-- `NonEmptyVec` makes a tiny structural promise that downstream code can rely
-  on.
-- `Exact`, `Pool`, `AbortablePool`, `Limiter`, `KeyedLimiter`, and
-  `UpgradableAsyncRwLock` give lifecycle and coordination a common vocabulary.
-- `bitmap::historical` is the richest tool on the belt: a snapshot-plus-diff
-  state machine with explicit commit, abort, and prune boundaries.
-
-The important part is not that these tools are fancy. The important part is
-that they let the rest of the monorepo stop improvising the same semantics.
+The beauty isn't that these tools are particularly fancy or complex. The beauty is that they allow the rest of the monorepo to stop improvising.
 
 ## 3. The Core Ideas
 
 ### 3.1 Canonical Collections Are a Type, Not a Convention
 
-`utils/src/ordered.rs` is the clearest example of what this crate means by a
-canonical collection.
+Take a look at `utils/src/ordered.rs`. This is the clearest example of what we mean by a canonical collection.
 
-`Set<T>` is not just a wrapper around `Vec<T>`. It promises:
+When you see `Set<T>`, it is *not* just a wrapper around `Vec<T>`. It is a promise. It promises:
+- The items are sorted.
+- Every item is unique.
+- The indexing is stable.
+- You can do binary-search lookups.
 
-- sorted order,
-- uniqueness,
-- stable indexing,
-- and binary-search lookup by value.
+The collection has one agreed-upon shape. It's not "whatever order happened to be convenient when I created it." 
 
-That means the collection has one agreed shape. It is not "whatever order was
-convenient locally."
+And the constructors make this policy totally transparent:
+- `from_iter_dedup` is the friendly one: it silently removes duplicates.
+- `TryFromIterator` is the strict one: if it sees a duplicate, it yells at you with an error.
+- The codec decoding is the strictest of all: it outright rejects any encoded set if the items aren't already sorted and unique.
 
-The constructors make the policy visible:
-
-- `from_iter_dedup` is tolerant and silently removes duplicates,
-- `TryFromIterator` is strict and returns an error when duplicates appear,
-- codec decoding is stricter still and rejects any encoded set whose items are
-  not already sorted and unique.
-
-That last detail matters. The decoder does not sort for the caller. The sender
-must already have emitted the canonical form. Canonicalization happens at the
-boundary, not lazily after the fact.
-
-`Participant` and `Faults` connect that canonical set back to committee math.
-`Participant` gives a stable, codec-friendly committee index. The `Quorum`
-extension trait turns a `Set` into explicit threshold math. The path from
-"these keys form a committee" to "this committee tolerates `f` faults and
-requires quorum `q`" stays typed and shared.
+That last part is crucial. Think about it! The decoder doesn't politely sort the data for you. The sender is supposed to have emitted the canonical form. We enforce canonicalization at the boundary, not lazily after the fact. If the data comes in messy, we reject it. 
 
 ### 3.2 Structural Promises Belong in Types
 
-`NonEmptyVec` in `utils/src/vec.rs` is a smaller example with the same idea.
+`NonEmptyVec` (in `utils/src/vec.rs`) does the exact same thing, just on a smaller scale.
 
-Once a value is a `NonEmptyVec<T>`, callers may:
+Once you hold a `NonEmptyVec<T>`, you are mathematically guaranteed certain things. You can:
+- Ask for `first()` and `last()` and you get the item directly—no `Option`, no unwrapping.
+- Map, resize, and convert it, knowing it will preserve its non-emptiness.
+- Use mutation helpers that absolutely refuse to leave the structure empty.
 
-- ask for `first()` and `last()` without `Option`,
-- preserve non-emptiness across `map`, `resize`, and `into_vec`,
-- and rely on mutation helpers that will not quietly leave the structure
-  empty.
-
-The important move is not convenience. It is removing a whole category of
-local "this should probably never be empty" reasoning from downstream code.
-
-This is one of the crate's recurring design moves: if the same precondition
-would otherwise appear in many call sites, make it part of the value's
-identity.
+Why do we do this? Not just for convenience! We do it to completely eliminate a whole category of mental overhead. We remove all those local comments that say `// this should probably never be empty`. If a precondition is going to appear in fifty different call sites, we take that precondition and bake it directly into the identity of the type.
 
 ### 3.3 Lifecycle and Coordination Objects Make Control Flow Explicit
 
-Several of the crate's most useful helpers are about lifecycle rather than raw
-data shape.
+Now, let's look at control flow. How do things start, coordinate, and stop?
 
-`Exact` in `acknowledgement.rs` is a tiny protocol for completion. It creates a
-handle plus a waiter, counts clones as additional required acknowledgements,
-and resolves only when every clone acknowledges. If any outstanding handle is
-dropped unacknowledged, the waiter resolves to cancellation instead.
+Take `Exact` in `acknowledgement.rs`. It's a tiny protocol for completion. Imagine you're organizing a hike. You create a handle and a waiter. Every time a friend joins the hike, you clone the handle. The waiter sits there and waits. It only resolves to "success" when *every single clone* has explicitly acknowledged they are done. But here's the clever bit: if any friend drops their handle without acknowledging—if they just walk off the trail—the waiter immediately resolves to cancellation.
 
-That is stronger than a boolean flag. It lets the code distinguish:
+This is infinitely stronger than a boolean flag. It lets the code distinguish between two very different states: "All parties finished successfully" versus "Someone stopped participating."
 
-- "all parties finished",
-- from "someone stopped participating."
+`Pool<T>` and `AbortablePool<T>` in `futures.rs` do something similar for async tasks. They say:
+- Keep an unordered set of in-flight futures.
+- Always provide a safe `next_completed()` method, even if the pool is currently empty.
+- Optionally give each task an `Aborter` so you can kill one specific task when you drop it.
 
-`Pool<T>` and `AbortablePool<T>` in `futures.rs` do something similar for
-collections of asynchronous work. They say:
+`Limiter` and `KeyedLimiter` in `concurrency.rs` take the nebulous concept of "backpressure" and turn it into a physical law. 
+- A `Limiter` hands out a reservation. When you drop the reservation, the slot opens up.
+- A `KeyedLimiter` adds a rule: you can't acquire the same key twice concurrently, and the total number of active keys is bounded.
 
-- keep an unordered set of in-flight futures,
-- always have a safe `next_completed()` even when the logical pool is empty,
-- optionally give each task an `Aborter` whose drop aborts only that task.
-
-The dummy future inside each pool looks odd the first time you read it, but it
-exists for a clean reason: `select_next_some()` should not collapse instantly
-just because the current pool is empty. The abstraction is trying to give the
-rest of the code a stable control-flow shape.
-
-`Limiter` and `KeyedLimiter` in `concurrency.rs` make another common pattern
-explicit: some work is allowed to proceed only up to a global bound, and some
-work is allowed at most once per key.
-
-- `Limiter` hands out a reservation if capacity remains, and the reservation
-  releases on drop.
-- `KeyedLimiter` adds a second rule: a key may not be acquired twice
-  concurrently, and the total number of active keys is also bounded.
-
-That is often the difference between "backpressure" as a comment and
-backpressure as a protocol rule.
-
-`UpgradableAsyncRwLock` in `sync/mod.rs` is the same idea at the lock level.
-It uses a gate so that an upgradable read can later become a writer without
-letting another writer slip in between. The point is not to prefer async locks
-everywhere. The point is to make the rare upgradable path honest about its
-invariant.
+You see, we don't just put `// TODO: add backpressure` in a comment. We make backpressure a protocol rule enforced by the compiler.
 
 ### 3.4 The Historical Bitmap Is a Real State Machine
 
-`utils/src/bitmap/historical/mod.rs` is where the crate stops looking like a
-collection of wrappers and starts looking like a compact systems component.
+Now we get to `utils/src/bitmap/historical/bitmap.rs`. This is where the crate stops looking like a collection of handy wrappers and starts looking like a piece of finely-machined systems infrastructure.
 
-The historical bitmap maintains:
+The historical bitmap has to do two conflicting things:
+1. Keep one full, prunable bitmap as the current "head" state so we can read it fast.
+2. Keep a history of past commits so we can roll back, but without copying the entire universe.
 
-- one full prunable bitmap as the current head state,
-- and historical commits as reverse diffs rather than full clones.
+How does it do it? By keeping historical commits as *reverse diffs*. 
 
-Its clean/dirty split is the key conceptual move:
+The conceptual breakthrough is the clean/dirty split using Rust's type system (`BitMap<N, Clean>` vs `BitMap<N, Dirty>`):
+- `Clean` means nothing is currently being mutated.
+- `Dirty` means mutations are happening right now, but they aren't committed.
 
-- `CleanBitMap` means there are no pending mutations,
-- `DirtyBitMap` means mutations are in progress and not yet committed.
+This split makes the lifecycle entirely visible and impossible to mess up:
+1. You call `into_dirty()` to open a mutable batch. The type changes!
+2. You make your edits through the dirty view.
+3. You call `commit(height)` to seal the batch into history, OR you call `abort()` to throw it away.
+4. You get back to a clean state.
 
-That split makes the lifecycle explicit:
+And while it's dirty, it's not just a vague overlay. It tracks the physical reality of the future: `modified_bits` for edits, `appended_bits` for the tail, and `chunks_to_prune` for data we still need to recover later. If you read the bitmap while it's dirty, it projects the future state perfectly: it looks at appended bits first, then modified bits, and finally falls back to the base bitmap.
 
-1. `into_dirty()` opens a mutable batch,
-2. mutate through the dirty view,
-3. `commit(height)` seals the batch into history,
-4. `abort()` discards uncommitted edits,
-5. return to a clean state.
-
-The dirty state is not a vague overlay. It tracks concrete pieces of future
-state:
-
-- `modified_bits` for edits to existing bits,
-- `appended_bits` for new tail bits,
-- `chunks_to_prune` for data that must remain recoverable after pruning.
-
-Read-through semantics make the current projected state visible before commit:
-
-- appended bits win first,
-- then modified bits,
-- then the base bitmap.
-
-That priority order is why the type can answer "what would this look like if we
-committed now?" without actually committing yet.
-
-The edge cases are part of the design, not afterthoughts:
-
-- commit numbers must be strictly monotonic,
-- `u64::MAX` is reserved,
-- no-op batches still record a commit if the caller asked for one,
-- `prune_commits_before` drops old history without changing the current head.
-
-The whole point is to keep current state cheap, history compact, and lifecycle
-boundaries visible.
+It answers the question, "What would this look like if we committed right now?" without actually having to commit! It's a beautiful, compact way to handle state boundaries.
 
 ## 4. How the System Moves
 
+Let's look at the mechanics in motion.
+
 ### 4.1 Canonical Committee Data Arrives From the Outside
+Suppose some bytes come over the wire, claiming to be a committee. 
 
-Suppose a protocol decodes a committee from bytes.
+If our protocol uses `Set<T>`, the very act of decoding forces a check: are these items sorted and unique? If the sender messed up and sent duplicates, or sent them out of order, the decoder just says "No." It fails immediately. Only if the bytes are perfect does the rest of the code get to use the committee. 
 
-If it uses `Set<T>`, the decoder checks that the items are already sorted and
-unique. If the sender emitted duplicates or arbitrary order, decoding fails.
-Only after that does the rest of the code gain access to indexing, `position`,
-and quorum helpers.
-
-That is the first large pattern of the crate:
-
-> canonicalization happens at the boundary, not after the fact.
+The rule is: *Canonicalization happens at the boundary, not after the fact.*
 
 ### 4.2 Completion Is Represented as an Object, Not a Comment
+Suppose a task fans out work to three sub-tasks and needs to know when they're all done. 
 
-Suppose one task fans out work to several children and wants to know when all
-of them are finished.
+Instead of juggling shared counters or raw channels, it creates an `Exact` acknowledgement handle, clones it three times, and awaits the waiter. 
 
-Instead of passing around a raw channel or shared counter, it can create an
-`Exact` acknowledgement handle, clone it for each required participant, and
-await the paired waiter.
-
-The resulting state machine is precise:
-
-- every clone increases the remaining count,
-- every `acknowledge()` decrements it,
-- any unacknowledged drop cancels the whole acknowledgement,
-- the waiter wakes only on success or cancellation.
-
-That turns "everyone should eventually signal completion" into something the
-type system and tests can observe directly.
+The state machine is utterly precise: every clone increases the count, every `acknowledge()` decreases it, and if any clone is dropped unacknowledged, the whole thing cancels. We've taken the vague idea of "everyone should eventually signal completion" and turned it into an object you can hold in your hand and test.
 
 ### 4.3 Bounded Concurrency Becomes Declarative
+Suppose we can only handle 10 simultaneous operations. 
 
-Suppose a subsystem should allow at most `N` simultaneous operations, or at
-most one operation per key.
-
-The limiter types make that rule a value:
-
-- a slot is acquired or not,
-- a reservation exists or not,
-- and dropping the reservation is the release.
-
-No extra cleanup call is required. The capacity rule is bound to lifetime.
+We use a limiter. A slot is either acquired or it's not. A reservation exists or it doesn't. When the reservation is dropped, the capacity is released. There's no separate `cleanup()` function you have to remember to call. The capacity rule is physically bound to the lifetime of the object in memory. Nature takes its course.
 
 ### 4.4 The Historical Bitmap Is the Full Lifecycle
+The historical bitmap is one explicit cycle:
+`Clean` -> `into_dirty()` -> mutate -> `commit()` or `abort()` -> `Clean`.
 
-The historical bitmap is easiest to understand as one explicit mutation cycle:
-
-```text
-clean state
-  -> into_dirty()
-  -> mutate through dirty view
-  -> commit(height) or abort()
-  -> clean state again
-```
-
-The important part is what does *not* happen:
-
-- uncommitted mutations do not silently become history,
-- and aborted mutations do not leak into the clean view.
-
-That makes the bitmap a strong example of how this crate likes to model state:
-through named transitions with narrow responsibilities.
-
-### 4.5 The Fuzz Targets Show Where the Crate Thinks It Is Fragile
-
-The fuzz surface under `utils/fuzz/` clusters around the boundaries where a
-small mistake spreads quickly: canonical sets, sequencing helpers,
-acknowledgement state, future pools, channel behavior, historical bitmaps, and
-time math. That is the right place to spend fuzzing effort because those
-helpers are small and widely reused.
+What's important is what *doesn't* happen. Uncommitted mutations don't silently leak into history. Aborted mutations don't leave ghosts in the clean view. The transitions are named, narrow, and absolute.
 
 ## 5. What Pressure It Is Designed To Absorb
 
-### 5.1 Duplication Pressure
+Why did we build this? To absorb specific forces that constantly push against a growing codebase:
 
-The monorepo has many places where the same tiny concept could be
-reimplemented locally. This crate keeps that from happening.
-
-### 5.2 Validation Pressure
-
-If a value is only valid in one shape, the shape should be encoded in the
-type, not rechecked by every caller.
-
-### 5.3 Shutdown and Overflow Pressure
-
-Channels and task pools often fail at the edges: a receiver disappears, a task
-must be aborted, or the newest state matters more than the oldest. The crate's
-coordination helpers turn those edge behaviors into explicit choices.
-
-### 5.4 Canonicalization Pressure
-
-When a shape recurs across crates, the system benefits from one stable answer
-instead of many almost-right ones.
-
-### 5.5 History Pressure
-
-The historical bitmap shows how the crate handles the problem of preserving
-current state plus reversible mutation history without cloning full structures
-every time.
+- **Duplication Pressure**: The urge to rewrite the same tiny concept locally. This crate gives it one home.
+- **Validation Pressure**: The exhaustion of re-checking if a value is valid everywhere it's used. We encode the shape in the type.
+- **Shutdown and Overflow Pressure**: Channels and task pools always break down at the edges—when receivers vanish, tasks abort, or queues fill up. Our coordination tools turn these edge cases into explicit choices.
+- **Canonicalization Pressure**: When a shape is used across many crates, having one true, stable answer is vastly better than five "almost right" ones.
+- **History Pressure**: The problem of keeping the current state fast and the historical state compact, which the historical bitmap solves elegantly.
 
 ## 6. Failure Modes and Limits
 
-The first limit is scope. `commonware-utils` is not where domain logic lives.
-It should not grow into a second place for consensus algorithms, codec policy,
-or application-specific workflows.
+Now, let's talk about what this crate *isn't*. 
 
-The second limit is strictness. Several helpers intentionally fail or panic on
-misuse:
+First, its scope is strictly limited. `commonware-utils` is not for domain logic. You won't find consensus algorithms or application workflows here. 
 
-- `Set` decoding rejects non-canonical order,
-- `NonEmptyVec::mutate` panics if the closure empties the vector,
-- `NonZeroDuration::new_panic` rejects zero,
-- `Exact` treats an unacknowledged drop as cancellation,
-- `ring` channels intentionally drop the oldest buffered item when capacity is
-  exhausted.
+Second, it is intentionally strict. In fact, several tools will gladly panic or fail if you misuse them:
+- `Set` decoding rejects bad data.
+- `NonEmptyVec::mutate` panics if your closure accidentally empties it.
+- `NonZeroDuration::new_panic` refuses a zero duration.
+- `Exact` treats an unacknowledged drop as a hard cancellation.
 
-Those are not accidents. In this crate, many bad inputs are better treated as
-programmer errors or explicit cancellation states than as values that deserve
-quiet repair.
+This is not an accident! In this crate, we believe that bad inputs are programmer errors. We prefer a loud, explicit failure over quietly repairing bad data and pretending everything is fine.
 
-The third limit is that these are support tools, not full domain abstractions.
-`KeyedLimiter` does not decide what keys mean. `HistoricalBitMap` does not
-know why a commit matters. The surrounding crates still provide the application
-semantics.
+Third, these are building blocks, not the whole building. `KeyedLimiter` limits keys, but it doesn't know what the keys *mean*. `HistoricalBitMap` stores history, but it doesn't know *why* a commit is important. The crates around it provide the meaning.
 
 ## 7. How to Read the Source
 
-Start with `utils/src/lib.rs` to see the crate's public shape and stability
-split. Then read the canonical collection files, the coordination files, and
-finish with the historical bitmap. That order keeps the recurring invariants
-grouped by the problem they solve instead of by file name.
+If you want to read the code—and you should!—start with `utils/src/lib.rs` to see the public interface. Then, look at the canonical collections (`ordered.rs`, `vec.rs`), move on to the coordination tools, and finish with the historical bitmap (`bitmap/historical/bitmap.rs`). 
 
-If you keep the belt-of-tools model in mind, the files stop feeling like an
-assortment and start feeling like a carefully selected kit.
+Read it with the "belt of tools" model in your mind. The files aren't just a random assortment of stuff; they are a carefully selected, highly polished kit designed to solve the physical realities of systems programming.
 
 ## 8. Glossary and Further Reading
 
-- **canonical collection**: a collection whose order and uniqueness rules are
-  part of its contract.
-- **receiver-owned policy**: the idea that a decoder should reject non-
-  canonical input rather than silently normalize it.
-- **acknowledgement**: a handle-plus-waiter pair that models task completion
-  or cancellation explicitly.
-- **reservation**: a lifetime-bound claim on limited concurrency.
-- **upgradable read**: a read lock that may later become a write lock without
-  letting another writer slip in.
-- **dirty bitmap**: a projected future state that has not yet been committed.
-- **reverse diff**: history data that lets the current state be rolled back to
-  an earlier commit.
+- **canonical collection**: A collection where the rules of order and uniqueness are strictly enforced by the type itself.
+- **receiver-owned policy**: The principle that a decoder should reject non-canonical data instead of trying to silently fix it.
+- **acknowledgement**: An object (handle + waiter) that physically models task completion or cancellation.
+- **reservation**: A claim on limited concurrency that is bound to the lifetime of the object.
+- **dirty bitmap**: A projected view of future state that exists only while mutations are occurring, before they are committed or aborted.
+- **reverse diff**: A clever way to store history by recording how to undo a commit, rather than copying the entire state.
 
 Further reading:
-
 - `utils/src/ordered.rs`
 - `utils/src/acknowledgement.rs`
 - `utils/src/futures.rs`

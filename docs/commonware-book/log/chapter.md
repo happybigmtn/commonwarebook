@@ -2,255 +2,173 @@
 
 ## A Secret Log With a Public Commitment
 
----
+Imagine you have a secret. You want to prove to everyone that you *had* this exact secret at a specific moment in time, but—and here is the trick—you absolutely refuse to tell them what the secret is! 
 
-## Commitments, Secrecy, and Order
+How in the world do you get a whole network of computers to agree on a secret they aren't allowed to see?
 
-This example sits at the intersection of two ideas that are easy to confuse:
-secrecy and commitment. Secrecy says who may know a value. Commitment says how
-everyone can agree that a value existed without revealing it. A hash is one of
-the simplest commitment tools because it is short, stable, and easy to
-verify.
+This example sits right at the fascinating intersection of two ideas that people often mix up: **secrecy** and **commitment**. 
+- **Secrecy** is about *who* is allowed to know a value. 
+- **Commitment** is about how everyone can agree that a value existed, in a specific order, without actually revealing it. 
 
-The important vocabulary is payload, digest, and transcript. The payload is
-the private message. The digest is the public fingerprint of that message. The
-transcript is the ordered public record that consensus is willing to preserve.
-If you put the payload directly into the transcript, you make consensus carry
-data it does not need. If you hide the payload without a commitment, you make
-agreement impossible. The example chooses the middle path: keep the secret
-local and publish only the digest.
+To pull this off, we use a hash. A hash is one of the simplest, most beautiful commitment tools we have. It’s short, it’s stable, and it’s incredibly easy for anyone to verify.
 
-The naive approach is to let the protocol order raw secrets and hope
-encryption solves the rest. That mixes privacy with agreement and makes the
-system do more work than necessary. Another naive approach is to keep the
-secret entirely out of the system and rely on ad hoc logs or side channels.
-That protects privacy, but it destroys the public fact that lets the network
-agree on what was proposed.
+There are three words we need to get straight before we go any further: **payload**, **digest**, and **transcript**.
+1. The **payload** is your private message (the secret).
+2. The **digest** is the public fingerprint of that message (the hash).
+3. The **transcript** is the ordered, public record that the whole network agrees to preserve forever.
 
-The tradeoff is simple but important. Commitments give you public
-verifiability and compact state, but they do not give you the secret back.
-That means the application must own the secret, consensus must own the order,
-and persistence must keep the ordered commitment from being rewritten after
-restart.
+If you put the payload directly into the transcript, you're forcing the consensus protocol to carry around secret data it has no business knowing! But if you hide the payload *without* a commitment, nobody can agree on what happened. So, `commonware-log` takes the clever middle path: keep the secret local, and publish *only* the digest.
 
-## 1. What Problem Does This Solve?
-
-This chapter is not about hashing for its own sake. It is about deciding what
-belongs inside the protocol and what must stay outside it.
-
-`commonware-log` shows one clean answer: keep the payload private, publish only
-the commitment, and let consensus order the commitment instead of the secret
-itself. Each turn, a participant creates a 16-byte message, hashes it, and
-gives consensus the digest. The raw message never becomes a protocol artifact.
-
-That distinction matters. If the application pushed the full payload through
-consensus, the protocol would have to carry secret data it does not need, know
-more about payload handling than it should, and expose more of the system than
-the example intends. Here, the application owns the secret. Consensus owns the
-ordering of the commitment.
-
-Persistence reinforces the same lesson. Consensus state is written to
-`storage-dir`, so restart does not invent a new history. It resumes the same
-one.
+The tradeoff is simple but profound. Commitments give you public verifiability and a tiny, compact state, but they do *not* magically give you your secret back later. The application has to own the secret. Consensus just owns the order. And the persistence layer just makes sure the ordered commitment doesn't vanish if you turn the computer off.
 
 ---
 
-## 2. Mental Model
+## 1. What Problem Does This Actually Solve?
 
-Think of each proposal as two separate objects.
+Now, you might think this chapter is just about hashing bytes. It’s not. It is really about figuring out **what belongs inside the protocol and what must stay outside of it**. 
 
-The first is a sealed envelope. That is the private payload. The second is the
-receipt. That is the public commitment.
+`commonware-log` gives us a wonderfully clean answer: keep the payload private, publish only the commitment, and let the consensus algorithm order the commitments instead of the secrets themselves. Every turn, a participant cooks up a random 16-byte message, hashes it, and hands *only the digest* to consensus. The raw message never even touches the protocol!
 
-The sender keeps the envelope. The network sees the receipt. Everyone can agree
-on the receipt without ever opening the envelope. That is why the example uses a
-hash instead of the raw message. The hash is short, stable, and easy to compare.
-More importantly, it gives consensus the only thing it actually needs: a public
-fact that names a private value without revealing it.
-
-The genesis step uses the same pattern. Before the first real proposal, the
-example hashes the fixed message `commonware is neat` to seed the protocol with
-a known starting point. After that, each view is just another envelope and
-another receipt.
-
-The simplest way to remember the example is this:
-
-> consensus is the receipt book, not the post office.
+Why does that matter? Well, if the application shoved the full, raw payload through consensus, the protocol would have to carry around secret data it doesn't need, it would have to know way too much about handling payloads, and the system would be exposed to a whole host of complexities. Here, the application is the boss of the secret. Consensus is just the boss of ordering the commitments.
 
 ---
 
-## 3. The Boundary
+## 2. The Mental Model: Envelopes and Receipts
 
-The whole example rests on one invariant:
+Think of each proposal in the system as two separate objects.
 
+The first object is a **sealed envelope**. That’s your private payload.
+The second object is the **receipt**. That’s your public commitment (the hash).
+
+You, the sender, keep the envelope. The network only ever sees the receipt. Everyone can perfectly agree on the receipt without ever opening your envelope. This is why we use a hash instead of the raw message! The hash is small, it never changes, and it’s a breeze to compare. Most importantly, it gives consensus exactly what it needs: a public fact that points to a private value without spilling the beans.
+
+When the system boots up, it does something neat for the very first step (the genesis step). Before making any real proposals, the application hashes a fixed message—literally the string `b"commonware is neat"`—just to seed the protocol with a known starting point. After that, every single view is just another envelope, and another receipt.
+
+If you want to remember how this example works, just remember this rule:
+> **Consensus is the receipt book, not the post office.**
+
+---
+
+## 3. The Boundary (Where the Magic Happens)
+
+The entire example balances on one incredibly important invariant:
 **Consensus only needs the digest of the secret, never the secret itself.**
 
-That invariant is enforced at the application boundary in
-`examples/log/src/application/mod.rs` and
-`examples/log/src/application/ingress.rs`. The application owns the hasher, the
-secret generation loop, and the local logging. The mailbox exposes only the
-digest to consensus.
+Let's look at how this is enforced in the code. The boundary between the application (which knows the secret) and consensus (which only knows the hash) is beautifully clear. The application owns the hasher, the random number generator, and the local log. It only exposes the digest to the consensus engine via a `Mailbox`.
 
-Three pieces make that boundary work:
+There are three main pieces of code making this boundary work:
 
-1. **`Application`** in `examples/log/src/application/actor.rs` owns the secret
-   generation loop. On `Propose`, it fills a 16-byte buffer, hashes it, logs the
-   secret locally, and sends the digest back.
-2. **`Mailbox`** in `examples/log/src/application/ingress.rs` implements the
-   consensus-facing traits. It translates consensus requests into actor
-   messages and returns the digest or verification result on a one-shot
-   channel.
-3. **`Reporter`** in `examples/log/src/application/reporter.rs` records what
-   consensus has already decided. It reports notarization, finalization, and
-   nullification as observable events.
+### `Application` (`examples/log/src/application/actor.rs`)
+This is where the secrets are born. It runs an asynchronous loop, waiting for messages. When it's told to `Propose`, it generates a random 16-byte buffer, hashes it, logs the secret locally, and then sends *only* the digest back to consensus:
 
-The `Scheme` alias is part of the same lesson. It ties the example to the
-`ed25519` signing scheme used by simplex consensus. The example is not inventing
-its own agreement mechanism. It is showing how an application plugs into the one
-it already has.
+```rust
+Message::Propose { response } => {
+    // Generate a random message (secret to us)
+    let mut msg = vec![0; 16];
+    self.context.fill(&mut msg[..]);
 
-The last piece is what the example refuses to do. `Mailbox::broadcast` stays
-empty so the protocol cannot drift into transporting secrets it should only
-commit to. The example is about agreeing on a public fact, not distributing
-the private value behind it.
+    // Hash the message
+    self.hasher.update(&msg);
+    let digest = self.hasher.finalize();
+    info!(msg = hex(&msg), payload = ?digest, "proposed");
 
----
+    // Send digest to consensus
+    let _ = response.send(digest);
+}
+```
+Notice how `msg` stays right there in the application, and only `digest` goes through the channel!
 
-## 4. How The System Moves
+### `Mailbox` (`examples/log/src/application/ingress.rs`)
+This is the boundary guard. It implements the traits that consensus expects (like `Automaton` and `Relay`). When consensus says "Hey, it's your turn to propose," the Mailbox sends a message to the Application actor and waits for the digest. 
 
-The system has a simple rhythm, but the lecture is in the boundary crossing.
+And here is the kicker—look at the `Relay` implementation:
+```rust
+impl<D: Digest> Re for Mailbox<D> {
+    // ...
+    async fn broadcast(&mut self, _: Self::Digest, _: Self::Plan) {
+        // We don't broadcast our raw messages to other peers.
+    }
+}
+```
+The `broadcast` method is completely empty! It refuses to do it. The protocol cannot drift into transporting secrets because the application literally won't let it. We are agreeing on a public fact, not distributing private data.
 
-First, `main.rs` parses identities, builds the authorized peer set, configures
-the network, and initializes the application plus consensus engine. That wiring
-matters because it shows the example as a full distributed system, not a toy
-function that happens to hash bytes.
-
-Then the loop begins:
-
-1. Consensus asks the application for a genesis digest.
-2. The application hashes the fixed genesis message and returns the result.
-3. When a participant's turn comes, consensus asks for a proposal.
-4. The application generates a secret 16-byte message, hashes it, and returns
-   the digest.
-5. Consensus runs its normal validation and ordering logic on that digest.
-6. The reporter emits progress when the digest is notarized or finalized.
-7. The GUI renders those events so a human can watch the protocol breathe.
-
-Two details are worth slowing down on.
-
-The first is that the application does not hand consensus a message and ask it
-to decide what to do with it. It hands consensus a digest. That keeps the
-public protocol surface small and makes the payload opaque.
-
-The second is that the application keeps the raw secret local. The digest moves
-across the boundary; the secret does not. That is the heart of the example. A
-private value becomes a public fact by being hashed, not by being exposed.
+### `Reporter` (`examples/log/src/application/reporter.rs`)
+This file is the observer. It watches what consensus has decided and records it. It reports when a proposal is notarized (agreed upon by a quorum), finalized, or nullified. 
 
 ---
 
-## 5. Why The Example Is Small
+## 4. The Rhythm of the System
 
-The example is deliberately narrow because its job is to teach a boundary, not
-to solve every related problem.
+The system moves with a very simple rhythm, but the real lesson is in watching data cross that boundary.
 
-It absorbs privacy pressure by keeping the raw payload out of the protocol.
-The network does not need the secret to agree on the commitment.
+If you look at `main.rs`, you'll see the system being wired together. It parses identities, configures the network, and sets up the storage directory. It’s not just a toy script; it’s a full distributed system!
 
-It absorbs restart pressure because consensus state is persisted in
-`storage-dir`. If the process dies and comes back, the example resumes the old
-story instead of inventing a new one.
+Here is how the loop plays out:
+1. Consensus asks the application for the genesis digest.
+2. The application hashes `b"commonware is neat"` and hands back the result.
+3. When it is a participant's turn, consensus asks for a new proposal.
+4. The application generates 16 bytes of secret nonsense, hashes it, and gives consensus the digest.
+5. Consensus runs its normal machinery—voting, ordering, and validating—on that digest.
+6. The `Reporter` fires off events when the digest is notarized or finalized.
+7. A GUI catches those events and renders them on your screen, letting you watch the heartbeat of the protocol.
 
-It absorbs observability pressure by separating protocol from presentation. The
-reporter and GUI help a reader understand the run, but they do not shape the
-protocol itself.
+There are two things you should slow down and appreciate here. First, the application doesn't hand consensus a message and ask, "Hey, figure out what to do with this." It hands consensus a *digest*. That keeps the protocol's surface area tiny and keeps the payload completely opaque. Second, the secret never crosses the boundary. A private value becomes a public fact by being hashed, not by being exposed.
 
-It also leaves work on the table on purpose. The example does not broadcast raw
-messages, backfill missing payloads, support multiple epochs, or build a durable
-archive of every secret ever proposed. Those problems belong to other layers.
-Leaving them out keeps the lesson focused on the commitment boundary.
+---
 
-The most important omission is `Mailbox::broadcast`. The example does not use
-consensus as a transport for private data. It uses consensus to agree on the
-fact that some private data exists.
+## 5. Why the Example is So Small
+
+You'll notice this example is deliberately narrow. That’s because its job is to teach you about boundaries, not to solve every problem in distributed systems.
+
+- **Privacy:** It handles privacy by just... keeping the payload out of the protocol entirely!
+- **Restarting:** It handles restarts cleanly because consensus state is dumped into `storage-dir`. If you kill the process and spin it back up, it picks up exactly where it left off instead of rewriting history.
+- **Observability:** It separates the protocol from the presentation. The GUI and reporter are just lenses to look through; they don't change how the gears turn.
+
+We also left out a lot of things on purpose. We aren't broadcasting raw messages. We aren't backfilling missing payloads if a node goes offline. We aren't dealing with multiple epochs. Those are complex problems that belong to other layers. By leaving them out, we keep the spotlight right where it belongs: on the commitment boundary.
 
 ---
 
 ## 6. Failure Modes and Limits
 
-The example is honest about its limits.
+Let’s be honest about what this code *doesn’t* do.
 
-It does not support multiple epochs. `Application::genesis` asserts that the
-epoch is zero. That keeps the example focused on the first commitment path.
+It doesn't support multiple epochs. If you look at `Application::genesis`, it explicitly asserts that the epoch is zero. 
 
-It does not verify parent linkage in the application. If payloads were linked
-to their parents, the application would need to check that relationship. This
-example does not need that complexity to make its main point.
+It doesn't verify parent links. In a real blockchain, you'd want to make sure block $N$ properly links back to block $N-1$. But here, we just want to prove we can agree on hashes, so we skip that complexity.
 
-It does not try to make `verify` clever. The example returns `true` because the
-interesting property is not cryptographic validation at that point. The
-interesting property is that consensus is already working with a digest the
-application produced.
+It doesn't try to be clever with the `verify` step. In `ingress.rs`, when consensus asks the application to verify a digest, the application just returns `true`. Why? Because consensus already did the cryptographic heavy lifting of verifying the signatures of the participants.
 
-It also does not promise recovery of the plaintext after the node forgets it.
-The digest is enough for agreement. It is not enough to reconstruct the secret
-once the node has moved on.
-
-The limit to keep in mind is simple: this is a commitment example, not a full
-secret-sharing or retrieval system.
+And finally, it makes absolutely zero promises about recovering your plaintext secret if your node forgets it. The digest is enough for the network to agree. It is *not* enough to reconstruct your secret! This is a commitment example, not a backup service.
 
 ---
 
-## 7. How To Read The Source
+## 7. How to Read the Source
 
-Read the source as a boundary diagram, from composition root to observability.
+If you want to read the code, read it like a map of a boundary. Start from the outside and work your way in.
 
-Start with `examples/log/src/main.rs`.
-
-Read it for the system shape: how identities are parsed, how peers are
-authorized, how the network is wired, and where the application meets the
-consensus engine. The point is not the CLI. The point is how the boundary is
-assembled.
-
-Next read `examples/log/src/application/actor.rs`.
-
-That file contains the core move. It shows the application generating a
-secret, hashing it, and deciding that the digest is the thing worth sharing.
-The genesis path in the same file shows the same idea before the first real
-proposal.
-
-Then read `examples/log/src/application/ingress.rs`.
-
-This is the boundary file. It shows how consensus talks to the application and
-what the application refuses to do. The empty `broadcast` method is as
-important as the implemented ones.
-
-After that, read `examples/log/src/application/reporter.rs`.
-
-This file tells you what the system thinks is worth observing: notarization,
-finalization, and nullification. It is a clean view into protocol progress.
-
-Finally, skim `examples/log/src/gui.rs`.
-
-Treat it as a lens, not as the mechanism. It makes the run easier to watch, but
-it is not the reason the example exists.
+1. **Start with `examples/log/src/main.rs`.**
+   Look at the shape of the system. See how identities are parsed, how the network is wired, and where the application actually plugs into the simplex consensus engine.
+2. **Next, check `examples/log/src/application/actor.rs`.**
+   This is the core. This is where the application generates a secret, hashes it, and decides that the digest is the only thing worth sharing.
+3. **Then read `examples/log/src/application/ingress.rs`.**
+   This is the border crossing. Notice how consensus talks to the application, and pay special attention to the empty `broadcast` method. What the application refuses to do is just as important as what it does.
+4. **After that, read `examples/log/src/application/reporter.rs`.**
+   This will show you what the system considers worth observing (notarization, finalization).
+5. **Finally, skim `examples/log/src/gui.rs`.**
+   Treat it as a lens. It makes the protocol fun to watch, but it’s not the mechanism itself.
 
 ---
 
 ## 8. Glossary and Further Reading
 
-- **Digest** - the public commitment to the secret message.
-- **Genesis** - the first agreed-upon digest that starts the story.
-- **Mailbox** - the consensus-facing boundary that turns requests into actor
-  messages.
-- **Reporter** - the observer that turns consensus activity into structured
-  logs.
-- **Persistence** - the fact that consensus state lives in `storage-dir` and
-  can be resumed after restart.
-- **Backfill** - intentionally omitted here so the chapter can stay focused on
-  commitment rather than retrieval.
+- **Digest** - The public commitment (the hash) to the secret message.
+- **Genesis** - The first agreed-upon digest that gets the whole story rolling.
+- **Mailbox** - The boundary guard that translates consensus requests into messages the application actor understands.
+- **Reporter** - The observer that takes internal consensus activity and turns it into readable logs.
+- **Persistence** - The fact that our state is safely tucked away in `storage-dir` so we can resume after a crash.
+- **Backfill** - Something we intentionally left out so you can focus on commitment instead of data retrieval!
 
-Further reading:
-
+**Further reading:**
 - `examples/log/src/main.rs`
 - `examples/log/src/application/actor.rs`
 - `examples/log/src/application/ingress.rs`
