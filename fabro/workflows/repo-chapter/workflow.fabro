@@ -1,0 +1,36 @@
+digraph RepoChapter {
+    graph [
+        goal="Create a researched interactive-book chapter for $chapter_title from $repo_display_name.",
+        model_stylesheet="
+            * { provider: anthropic; reasoning_effort: medium; backend: cli; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    brief [
+        label="Brief",
+        prompt="You are preparing one chapter of an interactive technical book about a software repository.\n\nRead at minimum:\n- $book_manifest\n- $book_readme\n- $research_dossier\n- $source_glob\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Do not edit sibling chapter directories.\n\nChapter focus:\n$chapter_focus\n\nThen create `$chapter_dir/brief.md`.\n\nThe brief must include:\n1. A one-paragraph chapter promise.\n2. The 6-10 source files or directories that matter most, each with why it matters.\n3. A chapter outline with 5-7 sections.\n4. The key system concepts to explain at senior-engineer depth.\n5. A list of 3-5 interactive visualizations to build later.\n6. A claims-to-verify checklist tied to real files or research evidence.\n7. A note about any research gaps that still need verification.\n\nKeep the brief concrete and operational."
+    ]
+
+    draft_chapter [
+        label="Draft Chapter",
+        prompt="Read `$chapter_dir/brief.md`, then inspect the referenced source files directly.\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Avoid touching sibling chapter artifacts.\n\nWrite `$chapter_dir/chapter.md`.\n\nRequirements:\n- Audience: strong software engineers who want a deep but readable system walkthrough.\n- Style: direct, technical, and explanatory.\n- Use real file paths and APIs from the repository.\n- Explain design through concrete execution flows, not just definitions.\n- Bring in AutoResearchClaw dossier findings where they sharpen the chapter, but do not trust the dossier over the source.\n- Call out invariants, failure modes, operational tradeoffs, and extension points.\n\nThe chapter must include these sections:\n1. What this part of the repository is trying to achieve.\n2. Mental model.\n3. Core abstractions and important files.\n4. Execution flow or lifecycle.\n5. Operational, correctness, or product semantics that matter most.\n6. Failure modes, caveats, and verification notes.\n7. How to read the source efficiently.\n8. Glossary and further reading.\n\nEnd with a section called `Open Questions For Interactive UI`."
+    ]
+
+    draft_visuals [
+        label="Draft Visual Specs",
+        prompt="Read `$chapter_dir/brief.md` and `$chapter_dir/chapter.md`, then create `$chapter_dir/visuals.json`.\n\nWrite valid JSON with this shape:\n{\n  \"chapter\": \"$chapter_title\",\n  \"visualizations\": [\n    {\n      \"id\": \"string\",\n      \"title\": \"string\",\n      \"learning_goal\": \"string\",\n      \"why_it_matters\": \"string\",\n      \"source_files\": [\"path\"],\n      \"default_state\": \"string\",\n      \"controls\": [{\"id\": \"string\", \"type\": \"toggle|slider|stepper\", \"label\": \"string\", \"values\": [\"string\"]}],\n      \"scenes\": [{\"id\": \"string\", \"caption\": \"string\", \"system_events\": [\"string\"], \"visual_elements\": [\"string\"]}],\n      \"checks\": [\"string\"]\n    }\n  ]\n}\n\nMake the specs detailed enough that a frontend engineer could build the first interactive version without inventing the pedagogy."
+    ]
+
+    review [
+        label="Review",
+        goal_gate=true,
+        retry_target="draft_chapter",
+        prompt="Audit `$chapter_dir/brief.md`, `$chapter_dir/chapter.md`, and `$chapter_dir/visuals.json` against the actual source under `$repo_root/`.\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Keep review edits local to the current chapter package.\n\nTasks:\n1. Check for technical inaccuracies, generic filler, or unsupported claims.\n2. Tighten the chapter where it is vague.\n3. Make sure the visuals are grounded in real repository behavior.\n4. Fix any issues directly in the files.\n5. Write `$chapter_dir/review.md` with three sections: `What is solid`, `What still needs deeper verification`, and `Recommended next workflow`.\n\nIf the files are already strong, still improve specificity where possible."
+    ]
+
+    start -> brief -> draft_chapter -> draft_visuals -> review -> exit
+}

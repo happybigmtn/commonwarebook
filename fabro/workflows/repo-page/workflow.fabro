@@ -1,0 +1,26 @@
+digraph RepoPage {
+    graph [
+        goal="Assemble a navigable HTML chapter page for $chapter_title.",
+        model_stylesheet="
+            * { provider: anthropic; reasoning_effort: medium; backend: cli; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    assemble [
+        label="Assemble Page",
+        prompt="Build a complete HTML chapter page for `$chapter_title`.\n\nRead at minimum:\n- docs/repo-book/BOOK_DESIGN.md\n- $book_manifest\n- $chapter_dir/chapter.md\n- $chapter_dir/visuals.json\n- $chapter_dir/review.md\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Do not edit sibling chapter directories.\n\nThen write `$chapter_dir/page.html`.\n\nRequirements:\n- Follow `docs/repo-book/BOOK_DESIGN.md`.\n- The page should feel like a crafted digital book chapter, not a generic docs page.\n- Use semantic HTML.\n- Include a chapter-local table of contents.\n- Include explicit figure sections for every visualization from `visuals.json`.\n- Include boxed explanatory callouts where useful.\n- Keep the page valid as a standalone local HTML file.\n- Do not invent fake URLs or external assets.\n\nConcrete editorial cues to include:\n- serif-led reading typography with mono metadata and navigation chrome\n- paper-tinted background instead of stark white\n- slim sticky reading bar with breadcrumb and chapter progression\n- narrow reading column with a right-rail table of contents on desktop\n- framed figure blocks with controls and scene scaffolds\n- visible distinction between prose, code, and side commentary"
+    ]
+
+    review [
+        label="Review Page",
+        goal_gate=true,
+        retry_target="assemble",
+        prompt="Audit `$chapter_dir/page.html` against `chapter.md`, `visuals.json`, `review.md`, and `docs/repo-book/BOOK_DESIGN.md`.\n\nWrite-scope rule:\n- Only create or modify files inside `$chapter_dir/` for this lane.\n- Keep review edits local to the current chapter package.\n\nTasks:\n1. Verify the page reflects the technical content accurately.\n2. Verify every visualization has meaningful placement and scaffolding.\n3. Verify the page follows the book design brief rather than reading like plain docs.\n4. Improve navigation, readability, chapter flow, and figure presentation.\n5. Fix any issues directly in the HTML.\n6. Append a short `Page QA` section to `$chapter_dir/review.md`.\n\nRespond with a concise final verdict."
+    ]
+
+    start -> assemble -> review -> exit
+}
