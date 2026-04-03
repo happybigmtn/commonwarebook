@@ -855,6 +855,11 @@ That same style shows up in adversarial assertions. Consensus tests do not only 
 finalization; they also inspect `oracle.blocked()` to ensure malicious or partitioned peers were
 quarantined when the protocol expected them to be.
 
+That combination is worth treating as methodology, not just testing style. A good consensus result
+in this repository is backed by an execution witness, a replayable seed, and an explicit fault
+assertion. That is how the crate avoids the common systems-writing failure mode where liveness is
+described abstractly and failure behavior is left implicit.
+
 ### Actor Message Passing
 
 All simplex actors communicate via typed channels. There is no shared mutable state between voter,

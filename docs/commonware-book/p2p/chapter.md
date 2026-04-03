@@ -981,6 +981,13 @@ not bias against slower flows.
 
 **Determinism**: `commonware_utils::test_rng_seeded(seed)` drives all randomness. Two test runs with the same seed produce identical delivery order, which is critical for reproducing distributed bugs.
 
+This is also where the p2p chapter connects back to the runtime chapter's evidence discipline. A
+serious network test in Commonware does not stop at "messages got through." It can name the actor
+topology with `with_label(...)`, replay the same link schedule under the same seed, and inspect
+`oracle.blocked()` to show which peers were quarantined as part of the outcome. That makes failure
+behavior reportable. The test can say not only that the network stalled or recovered, but also
+which adversarial condition was injected and which peer-level consequence followed.
+
 **Bandwidth limiting**: `oracle.limit_bandwidth(pk, egress_cap, ingress_cap)` sets bytes-per-second limits per peer.
 
 **Ordering and queueing**: messages between the same ordered pair of peers remain in order. The

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -523,18 +524,19 @@ def chapter_page(chapter: Chapter, chapters: dict[str, Chapter]) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
   <title>{html.escape(chapter.title)} — commonware-book</title>
   <meta name="description" content="{html.escape(chapter.summary[:200])}">
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="../favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="../style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/commonware-book/book.css">
+  <link rel="stylesheet" href="../book.css">
+  <link rel="stylesheet" href="../book-interactive.css">
 </head>
 <body>
   <header class="reading-bar" role="banner">
     <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
       <span class="crumb">
-        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / {html.escape(chapter.slug)}
+        <a href="../index.html">commonware</a> / <a href="../index.html">book</a> / {html.escape(chapter.slug)}
       </span>
       <span class="chapter-title">{html.escape(chapter.title)}</span>
       <div class="prog">
@@ -628,7 +630,7 @@ def chapter_page(chapter: Chapter, chapters: dict[str, Chapter]) -> str:
       const button = document.getElementById('theme-toggle');
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
       const saved = localStorage.getItem(key);
-      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      const initial = saved || 'dark';
       root.dataset.theme = initial;
       const syncButton = () => {{
         if (!button) return;
@@ -686,9 +688,9 @@ def index_page(chapters: dict[str, Chapter]) -> str:
         deck = teaser(chapter.subtitle or chapter.summary, 140)
         return f"""
             <li class="chapter-row">
-                <a class="chapter-row__link" href="/commonware-book/{slug}/page.html">
+                <a class="chapter-row__link" href="{slug}/page.html">
+                    <div class="chapter-row__number">{number:02d}</div>
                     <div>
-                        <div class="chapter-row__number">{number:02d}</div>
                         <div class="chapter-row__meta">
                             <span class="chapter-row__pill">{chapter.word_count:,} words</span>
                             <span class="chapter-row__pill">{chapter.read_minutes} min</span>
@@ -731,12 +733,13 @@ def index_page(chapters: dict[str, Chapter]) -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
     <title>Commonware</title>
     <meta name="description" content="Commonware chapters in recommended reading order.">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/commonware-book/book.css">
+    <link rel="stylesheet" href="book.css">
+    <link rel="stylesheet" href="book-interactive.css">
     <style>
       .reading-bar__inner {{ width:min(100%, 92rem); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; font-family:var(--mono); font-size:0.68rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-muted); }}
       .reading-bar__crumbs a {{ color:var(--accent); text-decoration:none; }}
@@ -762,7 +765,7 @@ def index_page(chapters: dict[str, Chapter]) -> str:
 <body>
   <header class="reading-bar" role="banner">
     <div class="reading-bar__inner">
-      <div class="reading-bar__crumbs"><a href="/index.html">commonware</a> / <span>book</span></div>
+      <div class="reading-bar__crumbs"><a href="index.html">commonware</a> / <span>book</span></div>
       <div>{total_count} chapters · {total_minutes} min</div>
       <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
     </div>
@@ -787,7 +790,7 @@ def index_page(chapters: dict[str, Chapter]) -> str:
       const button = document.getElementById('theme-toggle');
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
       const saved = localStorage.getItem(key);
-      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      const initial = saved || 'dark';
       root.dataset.theme = initial;
       const syncButton = () => {{
         if (!button) return;
@@ -812,6 +815,10 @@ def index_page(chapters: dict[str, Chapter]) -> str:
 def write_pages() -> None:
     chapter_paths = {p.parent.name: p for p in ROOT.glob("*/chapter.md")}
     chapters = {slug: parse_chapter(path) for slug, path in chapter_paths.items()}
+
+    shutil.copyfile(SITE_ROOT / "style.css", ROOT / "style.css")
+    shutil.copyfile(SITE_ROOT / "favicon.ico", ROOT / "favicon.ico")
+    shutil.copyfile(SITE_ROOT / "shared.js", ROOT / "shared.js")
 
     for slug, chapter in chapters.items():
         out_path = ROOT / slug / "page.html"

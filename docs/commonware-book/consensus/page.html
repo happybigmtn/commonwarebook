@@ -7,10 +7,10 @@
     <title>commonware-consensus &mdash; Ordering in an Adversarial World</title>
     <meta name="description" content="A deep technical treatment of commonware-consensus: the three-phase simplex protocol, quorum certificates, leader election, ordered broadcast, and marshal block delivery.">
 
-    <link rel="preload" href="/shared.js" as="script">
-    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="preload" href="../shared.js" as="script">
+    <link rel="icon" href="../favicon.ico" type="image/x-icon">
 
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="../style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -733,7 +733,8 @@
             .visual-body { padding: 1rem 0.8rem; }
         }
     </style>
-    <link rel="stylesheet" href="/commonware-book/book.css">
+    <link rel="stylesheet" href="../book.css">
+    <link rel="stylesheet" href="../book-interactive.css">
 </head>
 
 <body>
@@ -741,14 +742,14 @@
     <!-- ── Sticky reading bar ─────────────────────────── -->
     <div class="reading-bar" role="navigation" aria-label="Chapter navigation">
         <span class="crumb">
-            <a href="/index.html">commonware</a> &rsaquo; <a href="/commonware-book/index.html">book</a> &rsaquo; consensus
+            <a href="../index.html">commonware</a> &rsaquo; <a href="../index.html">book</a> &rsaquo; consensus
         </span>
         <span class="chapter-title">commonware-consensus</span>
         <div class="prog">
             <button class="prev theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
-            <a href="/commonware-book/p2p/page.html" class="prev" aria-label="Previous chapter">&#8592; prev</a>
-            <a href="/commonware-book/index.html" style="color:var(--ink-faint);text-decoration:none;font-size:0.68rem;">contents</a>
-            <a href="/commonware-book/index.html" class="next" aria-label="Return to book index">index &#8594;</a>
+            <a href="../p2p/page.html" class="prev" aria-label="Previous chapter">&#8592; prev</a>
+            <a href="../index.html" style="color:var(--ink-faint);text-decoration:none;font-size:0.68rem;">contents</a>
+            <a href="../index.html" class="next" aria-label="Return to book index">index &#8594;</a>
         </div>
     </div>
 
@@ -2112,7 +2113,7 @@ const FINALIZE_SUFFIX: &amp;[u8] = b"_FINALIZE";</code></pre>
             <!-- ── Next chapter ────────────────────── -->
             <nav class="ch-next" aria-label="Next chapter">
                 <div class="ch-next-label">End of current volume</div>
-                <a href="/commonware-book/index.html" class="ch-next-title">Return to book index</a>
+                <a href="../index.html" class="ch-next-title">Return to book index</a>
                 <p class="ch-next-desc">Review the published chapter map and jump to another section of the book.</p>
             </nav>
 
@@ -2145,7 +2146,7 @@ const FINALIZE_SUFFIX: &amp;[u8] = b"_FINALIZE";</code></pre>
             const button = document.getElementById('theme-toggle');
             const media = window.matchMedia('(prefers-color-scheme: dark)');
             const saved = localStorage.getItem(key);
-            root.dataset.theme = saved || (media.matches ? 'dark' : 'light');
+            root.dataset.theme = saved || 'dark';
             const syncButton = () => {
                 if (!button) return;
                 const current = root.dataset.theme || 'light';
@@ -2161,6 +2162,6 @@ const FINALIZE_SUFFIX: &amp;[u8] = b"_FINALIZE";</code></pre>
             });
         })();
     </script>
-    <script src="/shared.js"></script>
+    <script src="../shared.js"></script>
 </body>
 </html>

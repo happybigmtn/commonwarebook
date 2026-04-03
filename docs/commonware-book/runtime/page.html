@@ -7,7 +7,7 @@
     <title>commonware-runtime &mdash; Chapter</title>
     <meta name="description" content="A deep technical essay on the commonware-runtime abstract executor, deterministic simulation, and fault-injection testing framework.">
 
-    <link rel="stylesheet" type="text/css" href="/style.css">
+    <link rel="stylesheet" type="text/css" href="../style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1002,7 +1002,8 @@
 
         .progress-dot.active { opacity: 1; }
     </style>
-    <link rel="stylesheet" href="/commonware-book/book.css">
+    <link rel="stylesheet" href="../book.css">
+    <link rel="stylesheet" href="../book-interactive.css">
 </head>
 
 <body>
@@ -1010,9 +1011,9 @@
 <!-- ─── Sticky reading bar ──────────────────────────────────────── -->
 <header class="reading-bar" role="banner">
     <span class="reading-bar__crumb">
-        <a href="/index.html">commonware</a>
+        <a href="../index.html">commonware</a>
         <span aria-hidden="true"> / </span>
-        <a href="/commonware-book/index.html">book</a>
+        <a href="../index.html">book</a>
         <span aria-hidden="true"> / </span>
         runtime
     </span>
@@ -2511,7 +2512,7 @@ let storage = FaultyStorage::new(inner, rng, Arc::new(RwLock::new(faults)));</co
         const button = document.getElementById('theme-toggle');
         const media = window.matchMedia('(prefers-color-scheme: dark)');
         const saved = localStorage.getItem(key);
-        root.dataset.theme = saved || (media.matches ? 'dark' : 'light');
+        root.dataset.theme = saved || 'dark';
         const syncButton = () => {
             if (!button) return;
             const current = root.dataset.theme || 'light';

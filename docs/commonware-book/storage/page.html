@@ -5,18 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
   <title>commonware-storage — commonware-book</title>
   <meta name="description" content="Storage looks like a simple question until a crash, a prune, or a skeptical reader enters the picture.">
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="../favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="../style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/commonware-book/book.css">
+  <link rel="stylesheet" href="../book.css">
+  <link rel="stylesheet" href="../book-interactive.css">
 </head>
 <body>
   <header class="reading-bar" role="banner">
     <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
       <span class="crumb">
-        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / storage
+        <a href="../index.html">commonware</a> / <a href="../index.html">book</a> / storage
       </span>
       <span class="chapter-title">commonware-storage</span>
       <div class="prog">
@@ -182,6 +183,7 @@
 <ul><li>journals replay operations,</li><li>authenticated journals realign the journal and MMR if <code>commit()</code> happened without a full <code>sync()</code>,</li><li>archives and freezers reopen their durable lookup structures,</li><li>QMDB rebuilds the snapshot from the operation log,</li><li>authenticated variants restore enough Merkle state to keep proofs valid.</li></ul>
 <p>The helper in <code>qmdb/mod.rs</code> is named <code>build_snapshot_from_log</code>, and the name is unusually direct for a reason: the snapshot is not the stored truth. It is rebuilt from the stored truth.</p>
 <p>In the keyed QMDB variants, replay is not just &quot;recompute the latest value.&quot; The replay callback reports both whether the current operation is active and which older location, if any, became inactive. <code>current</code> turns that callback into bitmap state.</p>
+<p>That distinction matters for evaluation too. A storage recovery claim is only useful if it says which boundary the system crossed. Did the process stop after <code>commit()</code> but before <code>sync()</code>? Did replay have to realign the authenticated state before serving proofs? Did pruning preserve the semantic promise the proof layer still needs? The Commonware code is strongest when it reports recovery in those exact terms, because the recovery path is an explicit derivation from durable history rather than a hand-waved &quot;reopen the DB&quot; story.</p>
 <h3 id="4-3-read-path-the-view-finds-the-candidate-the-log-settles-it">4.3 Read path: the view finds the candidate, the log settles it</h3>
 <p>The read path is easy to summarize and important not to romanticize.</p>
 <p>The system does not usually walk the log first. It asks the view to narrow the search, then asks the log to settle any ambiguity the view cannot resolve.</p>
@@ -308,7 +310,7 @@
       const button = document.getElementById('theme-toggle');
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
       const saved = localStorage.getItem(key);
-      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      const initial = saved || 'dark';
       root.dataset.theme = initial;
       const syncButton = () => {
         if (!button) return;

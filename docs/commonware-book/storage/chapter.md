@@ -442,6 +442,15 @@ The replay callback reports both whether the current operation is active and
 which older location, if any, became inactive. `current` turns that callback
 into bitmap state.
 
+That distinction matters for evaluation too. A storage recovery claim is only
+useful if it says which boundary the system crossed. Did the process stop after
+`commit()` but before `sync()`? Did replay have to realign the authenticated
+state before serving proofs? Did pruning preserve the semantic promise the
+proof layer still needs? The Commonware code is strongest when it reports
+recovery in those exact terms, because the recovery path is an explicit
+derivation from durable history rather than a hand-waved "reopen the DB"
+story.
+
 ### 4.3 Read path: the view finds the candidate, the log settles it
 
 The read path is easy to summarize and important not to romanticize.

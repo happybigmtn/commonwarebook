@@ -9,9 +9,9 @@
     content="Authenticated, Encrypted Peer-to-Peer Networking for Adversarial Environments — commonware interactive book">
   <meta name="author" content="commonware">
 
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="../favicon.ico" type="image/x-icon">
 
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="../style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -846,7 +846,8 @@
       margin: 0 0.5em;
     }
   </style>
-  <link rel="stylesheet" href="/commonware-book/book.css">
+  <link rel="stylesheet" href="../book.css">
+  <link rel="stylesheet" href="../book-interactive.css">
 </head>
 
 <body>
@@ -854,8 +855,8 @@
   <!-- ── Sticky reading bar ──────────────────────────────────────── -->
   <header class="reading-bar" role="banner">
     <div class="bar-crumb">
-      <a href="/index.html">commonware</a> <span>/</span>
-      <a href="/commonware-book/index.html">book</a> <span>/</span> p2p
+      <a href="../index.html">commonware</a> <span>/</span>
+      <a href="../index.html">book</a> <span>/</span> p2p
     </div>
     <div class="bar-title">commonware-p2p</div>
     <div class="bar-progress">
@@ -864,8 +865,8 @@
         <div class="prog-fill" id="prog-fill"></div>
       </div>
       <button class="nav-btn theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">dark</button>
-      <a href="/commonware-book/runtime/page.html" class="nav-btn" id="nav-prev">&#8592; prev</a>
-      <a href="/commonware-book/consensus/page.html" class="nav-btn" id="nav-next">next &#8594;</a>
+      <a href="../runtime/page.html" class="nav-btn" id="nav-prev">&#8592; prev</a>
+      <a href="../consensus/page.html" class="nav-btn" id="nav-next">next &#8594;</a>
     </div>
   </header>
 
@@ -1984,7 +1985,7 @@ pub trait AddressableManager: Provider {
 
       <!-- ── Chapter footer ─────────────────────────────────────── -->
       <nav class="chapter-footer" aria-label="Chapter navigation">
-        <a href="/commonware-book/runtime/page.html" class="foot-prev">
+        <a href="../runtime/page.html" class="foot-prev">
           <span class="foot-dir">&#8592; previous</span>
           <span class="foot-title">The Abstract Executor</span>
           <span class="foot-sub">commonware-runtime</span>
@@ -1993,7 +1994,7 @@ pub trait AddressableManager: Provider {
           commonware-p2p<br>
           <span style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;">chapter 2 of 3</span>
         </div>
-        <a href="/commonware-book/consensus/page.html" class="foot-next">
+        <a href="../consensus/page.html" class="foot-next">
           <span class="foot-dir">next &#8594;</span>
           <span class="foot-title">commonware-consensus</span>
           <span class="foot-sub">chapter 3 &middot; ALPHA</span>
@@ -2031,9 +2032,9 @@ pub trait AddressableManager: Provider {
 
   <!-- ── Site footer ──────────────────────────────────────────────── -->
   <footer class="site-footer">
-    <a href="/">commonware</a>
+    <a href="../index.html">commonware</a>
     <span>&middot;</span>
-    <a href="/book">book</a>
+    <a href="../index.html">book</a>
     <span>&middot;</span>
     <a href="https://github.com/commonwarexyz/monorepo">GitHub</a>
     <span>&middot;</span>
@@ -2041,7 +2042,7 @@ pub trait AddressableManager: Provider {
   </footer>
 
   <!-- ── Scripts ──────────────────────────────────────────────────── -->
-  <script src="/shared.js"></script>
+  <script src="../shared.js"></script>
   <script>
     (() => {
       const root = document.documentElement;
@@ -2049,7 +2050,7 @@ pub trait AddressableManager: Provider {
       const button = document.getElementById('theme-toggle');
       const media = window.matchMedia('(prefers-color-scheme: dark)');
       const saved = localStorage.getItem(key);
-      root.dataset.theme = saved || (media.matches ? 'dark' : 'light');
+      root.dataset.theme = saved || 'dark';
       const syncButton = () => {
         if (!button) return;
         const current = root.dataset.theme || 'light';

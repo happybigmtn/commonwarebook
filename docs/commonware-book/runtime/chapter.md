@@ -393,6 +393,19 @@ The seed is not just "task order." It is a reproducible execution universe.
 This is why replay works well in practice. If seed `42` causes task A to flush just before task B
 times out, and also causes the second storage write to become partial, seed `42` will do it again.
 
+That turns deterministic execution into more than a convenience for tests. It becomes the repo's
+reproducibility protocol. The strongest Commonware tests usually do three things together:
+
+1. label the task tree with `with_label(...)` so the schedule has a readable shape,
+2. return `context.auditor().state()` so the observed interleaving leaves a compact witness,
+3. use `start_and_recover()` when recovery matters so crash boundaries are replayed, not
+   paraphrased.
+
+The ResearchClaw pass kept surfacing two generic weaknesses in systems evaluation: inconsistent
+protocols and vague failure reporting. This runtime is Commonware's answer to both. It gives the
+rest of the repository one clock, one scheduler, and one replay story, so later chapters can talk
+about failure cases as repeatable executions rather than as folklore.
+
 ---
 
 ## 5. The Real Buffer Story: Ownership, Not Bytes

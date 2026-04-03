@@ -1,8 +1,10 @@
 *.swp
 *.DS_Store
+**/__pycache__/
 target
 *.vscode
 .idea
+books/*/sources/
 examples/flood/assets
 */fuzz/artifacts
 */fuzz/corpus
@@ -11,3 +13,4 @@ examples/flood/assets
 **/quint/_apalache-out/
 **/quint/out*/
 CLAUDE.md
+.gstack/

@@ -5,18 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
   <title>commonware-deployer — commonware-book</title>
   <meta name="description" content="Deployment is really a compiler problem in disguise. The input is not a person clicking through a console. The input is intent: which binaries to run, in what regions, with what network boundaries, an">
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="../favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="../style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/commonware-book/book.css">
+  <link rel="stylesheet" href="../book.css">
+  <link rel="stylesheet" href="../book-interactive.css">
 </head>
 <body>
   <header class="reading-bar" role="banner">
     <div style="width:min(100%, var(--page-max)); margin:0 auto; padding:0.7rem 1.35rem; display:flex; align-items:center; gap:0.9rem;">
       <span class="crumb">
-        <a href="/index.html">commonware</a> / <a href="/commonware-book/index.html">book</a> / deployer
+        <a href="../index.html">commonware</a> / <a href="../index.html">book</a> / deployer
       </span>
       <span class="chapter-title">commonware-deployer</span>
       <div class="prog">
@@ -194,7 +195,7 @@
       const button = document.getElementById('theme-toggle');
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
       const saved = localStorage.getItem(key);
-      const initial = saved || (systemDark.matches ? 'dark' : 'light');
+      const initial = saved || 'dark';
       root.dataset.theme = initial;
       const syncButton = () => {
         if (!button) return;
